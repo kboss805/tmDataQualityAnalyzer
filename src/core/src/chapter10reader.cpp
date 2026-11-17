@@ -6,7 +6,6 @@
 #include "chapter10reader.h"
 
 #include <cstdlib>
-#include <cstring>
 #include <new>
 
 #include "constants.h"
@@ -34,6 +33,12 @@ Chapter10Reader::Chapter10Reader() :
     m_current_pcm_channel(-1)
 {
     m_buffer.resize(PCMConstants::kDefaultBufferSize);
+}
+
+Chapter10Reader::~Chapter10Reader()
+{
+    // Touches only this reader's tree (the decoder's statics are read during a decode alone), so it needs no lock.
+    enI106_Free_TmatsInfo(&m_tmats_info);
 }
 
 void Chapter10Reader::closeFile()
@@ -236,7 +241,8 @@ bool Chapter10Reader::processTmatsPacket(Irig106::SuI106Ch10Header& header)
     // Decode TMATS metadata into m_tmats_info for later use by applyTmatsNames().
     // Name/type application is deferred to categorizeChannels() so that all channels
     // are already in m_channel_data before the TMATS lookup runs.
-    memset(&m_tmats_info, 0, sizeof(m_tmats_info));
+    // Not zeroed first: the decoder frees whatever tree an earlier decode left here (the member starts zeroed), and
+    // zeroing it would orphan that tree.
     m_status = enI106_Decode_Tmats(&header, m_buffer.data(), &m_tmats_info);
     return m_status == I106_OK;
 }

@@ -102,6 +102,8 @@ private:
     bool ensureBufferCapacity(std::size_t required);
     /// Posts an end-of-stream sentinel to every distinct queue.
     void postSentinels();
+    /// Closes the recording if it is open, under the irig106 setup lock (the close writes the handle table).
+    void closeFile();
 
     Irig106::EnI106Status m_status;
     int                   m_file_handle = -1;

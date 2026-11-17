@@ -42,7 +42,8 @@ class Chapter10Reader
 
 public:
     Chapter10Reader();
-    ~Chapter10Reader() = default;
+    /// Frees the decoded TMATS tree, which irig106 allocates and only gives back when asked.
+    ~Chapter10Reader();
 
     // Rule of 5: Delete copy/move operations to manage resources safely
     Chapter10Reader(const Chapter10Reader&) = delete;

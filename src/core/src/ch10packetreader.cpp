@@ -48,12 +48,24 @@ Ch10PacketReader::Ch10PacketReader()
 
 Ch10PacketReader::~Ch10PacketReader()
 {
-    if (m_file_open)
-    {
-        enI106Ch10Close(m_file_handle);
-        m_file_open = false;
-    }
+    closeFile();
     freeChanInfoTable(m_channel_info);
+    // After the table, whose entries point into the tree. irig106 allocates the tree and only gives it back when
+    // asked; it touches only this reader's tree, so it needs no lock.
+    enI106_Free_TmatsInfo(&m_tmats_info);
+}
+
+void Ch10PacketReader::closeFile()
+{
+    if (!m_file_open)
+    {
+        return;
+    }
+    // Closing writes the library's handle table, the state the setup lock exists for: the close marks the slot free
+    // before its last writes to it, so an open on another thread could claim the slot and have it marked closed.
+    const auto setup_lock = lockIrig106Setup();
+    enI106Ch10Close(m_file_handle);
+    m_file_open = false;
 }
 
 void Ch10PacketReader::requestAbort()
@@ -188,6 +200,7 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
                                std::vector<ProcessingParams*>& params_list,
                                std::string& error)
 {
+    closeFile();   // a reader prepared again gives its earlier handle back first (before the lock: the close takes it)
     m_time_channel_id = time_channel_id;
     // 64-bit, so a recording over 2 GB is sized correctly; 0 (no progress) if it cannot be sized.
     std::error_code size_error;
@@ -242,7 +255,9 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
         error = "Failed to read TMATS data.";
         return false;
     }
-    memset(&m_tmats_info, 0, sizeof(m_tmats_info));
+    // The decoder frees whatever tree an earlier prepare() left (the member starts zeroed; zeroing it here would
+    // orphan that tree), so the table that points into it goes first.
+    freeChanInfoTable(m_channel_info);
     m_status = enI106_Decode_Tmats(&m_header, m_buffer.data(), &m_tmats_info);
     if (m_status != I106_OK)
     {
@@ -491,11 +506,7 @@ void Ch10PacketReader::run()
         m_report.log(std::format("WARNING: {} time gap(s) detected in recording.", time_gaps_detected));
     }
 
-    if (m_file_open)
-    {
-        enI106Ch10Close(m_file_handle);
-        m_file_open = false;
-    }
+    closeFile();
 
     m_report.progress(kPercent100);
 }

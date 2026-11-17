@@ -311,9 +311,11 @@ TMDQ_API int32_t tmdq_run_start(const tmdq_run_request* request, const tmdq_call
 TMDQ_API void    tmdq_run_cancel(tmdq_run* run);
 /// 1 from a successful start until just before `finished` is delivered, else 0.
 TMDQ_API int32_t tmdq_run_running(const tmdq_run* run);
-/// Blocks until every thread of the run has ended (so every callback has returned). Not from a callback.
+/// Blocks until every thread of the run has ended (so every callback has returned). Not from one of the run's own
+/// callbacks: that call is refused (it returns at once, with a last error), since it would wait for its caller.
 TMDQ_API void    tmdq_run_wait(tmdq_run* run);
-/// Cancels a run still in flight, waits for it, and releases it. Safe on NULL. Not from a callback.
+/// Cancels a run still in flight, waits for it, and releases it. Safe on NULL. Not from one of the run's own
+/// callbacks: that call is refused with a last error and the run is NOT released; free it again from outside.
 TMDQ_API void    tmdq_run_free(tmdq_run* run);
 
 /// Describes @p result. @return TMDQ_OK, or TMDQ_ERR_BADARG for a NULL argument or a short struct_size.
@@ -436,8 +438,11 @@ TMDQ_API int32_t tmdq_calibration_start(const tmdq_calibration_request* request,
                                         tmdq_calibration** out);
 TMDQ_API void    tmdq_calibration_cancel(tmdq_calibration* calibration);          ///< Ends with finished(0).
 TMDQ_API int32_t tmdq_calibration_running(const tmdq_calibration* calibration);  ///< 1 until just before `finished`.
-TMDQ_API void    tmdq_calibration_wait(tmdq_calibration* calibration);           ///< Not from a callback.
-TMDQ_API void    tmdq_calibration_free(tmdq_calibration* calibration);           ///< Cancels, waits, releases. Safe on NULL.
+/// As tmdq_run_wait: refused, with a last error, from one of the extraction's own callbacks.
+TMDQ_API void    tmdq_calibration_wait(tmdq_calibration* calibration);
+/// Cancels, waits, releases. Safe on NULL. As tmdq_run_free: refused, with a last error and nothing released, from
+/// one of the extraction's own callbacks.
+TMDQ_API void    tmdq_calibration_free(tmdq_calibration* calibration);
 
 /// The overall outcome. Valid once `finished` has been delivered (or tmdq_calibration_wait returned);
 /// TMDQ_ERR_STATE while the extraction is still running.

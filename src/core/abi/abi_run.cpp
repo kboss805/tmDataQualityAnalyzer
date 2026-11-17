@@ -222,8 +222,14 @@ void tmdq_run_wait(tmdq_run* run)
 {
     if (run)
     {
-        // From a thread of the run itself (the reader's, which also reports `finished`) this joins the caller, which
-        // throws rather than waits. The header forbids the call; the failure is a last error, not an escape.
+        // From one of the run's own callbacks this would join the caller (the reader's thread, which also reports
+        // `finished`) or wait for a thread that is waiting for this callback. The header forbids the call; it is
+        // refused with a last error.
+        if (run->events && run->events->delivering())
+        {
+            tmdq::setError("tmdq_run_wait was called from one of the run's own callbacks and did not wait");
+            return;
+        }
         (void)tmdq::guarded("tmdq_run_wait", [&]() -> int32_t {
             run->runner.wait();
             return TMDQ_OK;
@@ -231,7 +237,18 @@ void tmdq_run_wait(tmdq_run* run)
     }
 }
 
-void tmdq_run_free(tmdq_run* run) { delete run; }
+void tmdq_run_free(tmdq_run* run)
+{
+    // The runner's destructor joins its threads. From one of the run's own callbacks that is a join of the caller
+    // out of a destructor, which ends the process, or a wait for a thread that is waiting for this callback. The
+    // header forbids the call; it is refused with a last error and the run is left for a free from outside.
+    if (run && run->events && run->events->delivering())
+    {
+        tmdq::setError("tmdq_run_free was called from one of the run's own callbacks: the run was not released");
+        return;
+    }
+    delete run;
+}
 
 int32_t tmdq_stream_result_info(const tmdq_stream_result* result, tmdq_stream_info* out)
 {

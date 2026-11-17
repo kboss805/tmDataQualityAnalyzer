@@ -6,10 +6,11 @@
  * with a check-then-set, so two simultaneous opens can be given the same slot), the one-time
  * initialisation of that table, and the TMATS decoder's static pointers. Reading packets from a
  * handle that is already open touches only that handle, so it needs no lock - which is why this
- * covers each reader's SETUP (open, time sync, TMATS read and decode) and nothing after it.
+ * covers each reader's SETUP (open, time sync, TMATS read and decode) and its CLOSE, which gives the
+ * slot back to that table (and marks it free before its last writes to it), and nothing in between.
  *
  * The library may not be edited (it is vendored, in third_party/irig106), so the lock lives here, in the
- * code that calls it. Both readers take it; anything new that opens a recording must too.
+ * code that calls it. Both readers take it; anything new that opens or closes a recording must too.
  */
 
 #ifndef IRIG106LOCK_H
