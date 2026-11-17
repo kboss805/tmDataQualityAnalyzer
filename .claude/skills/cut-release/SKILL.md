@@ -16,7 +16,7 @@ The version number has **one** source of truth and several derived consumers. Ed
 build derive the rest, update the human-facing notes, then package. Do the steps in order.
 
 **From v3.0.0 the release is the Avalonia application** (`src/TmDq.App` over `tmdq_core.dll`), packaged by
-`deploy\avalonia\build_avalonia_package.ps1`. The Qt application and its packaging (v2.x's) were deleted in plan step
+`deploy\build_package.ps1`. The Qt application and its packaging (v2.x's) were deleted in plan step
 6.1.
 
 ## Step 1 — Decide the version
@@ -37,7 +37,7 @@ struct AppVersion {
 ```
 
 Do **not** add a version literal anywhere else. `eng/AppVersion.props` reads these three
-constants for every .NET project (never type a version in a `.csproj`), `build_avalonia_package.ps1` reads
+constants for every .NET project (never type a version in a `.csproj`), `build_package.ps1` reads
 them for the package names and passes them to Inno Setup, and the manual build stamps them into the
 manuals. If you find a hardcoded version string elsewhere, that's a bug to remove, not a place
 to update. (Test fixtures written BY a version, such as the v2.14.2 templates, keep theirs: they record
@@ -83,7 +83,7 @@ powershell -ExecutionPolicy Bypass -File eng\check_release_consistency.ps1 -Rele
 It derives the version from `AppVersion` and asserts every user-facing literal matches, that the
 changelog has a `### vX.Y.Z` section, and (in `-ReleaseMode`) that no `Unreleased` section is left
 behind. A **missing marker is a failure**, not a pass, so rewording one of those lines breaks the
-check loudly instead of silently disabling it. `build_avalonia_package.ps1` runs it before packaging and CI
+check loudly instead of silently disabling it. `build_package.ps1` runs it before packaging and CI
 runs it without `-ReleaseMode` on every PR, so drift is caught long before a release.
 
 **What the check cannot judge: whether the screenshots still show the truth.** The figures are rendered
@@ -130,7 +130,7 @@ except for the intended version/notes changes.
 
 ## Step 6 — Signing is proven automatically (nothing to do by hand)
 
-`build_avalonia_package.ps1` runs a **signing pre-flight as step 0** (`deploy\avalonia\signing.ps1`), before the build: it signs a
+`build_package.ps1` runs a **signing pre-flight as step 0** (`deploy\signing.ps1`), before the build: it signs a
 throwaway copy under a timeout and aborts if the certificate cannot produce a signature. This
 used to be a manual ritual here, and skipping it once cost a whole packaging cycle.
 
@@ -153,7 +153,7 @@ To build unsigned, pass `-SignCertSha1 ''`; the pre-flight is skipped with a not
 Run the release script from the project root under **Windows PowerShell 5.1** (`powershell`, not `pwsh`):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy\avalonia\build_avalonia_package.ps1
+powershell -ExecutionPolicy Bypass -File deploy\build_package.ps1
 ```
 
 It performs (and prints progress for) all of: the consistency check (`-ReleaseMode`) → the signing
@@ -161,7 +161,7 @@ pre-flight → `tmdq_core.dll` in Release → a self-contained **single-file** p
 (UTF-8 code page) → staging (settings, the VC++ runtime the DLL imports, the licence, the generated
 `THIRD-PARTY-NOTICES.txt`) → signing **our two binaries only** (the exe and `tmdq_core.dll`; it refuses to
 sign anything else it finds unsigned) → verifying every PE file's signature → a smoke run of the staged
-app on the PRN sample → the portable ZIP and the Inno installer (`deploy\avalonia\tmDataQualityAnalyzer.iss`,
+app on the PRN sample → the portable ZIP and the Inno installer (`deploy\tmDataQualityAnalyzer.iss`,
 also signed). It reads the version from `constants.h`, so there is no version argument.
 
 - **Signing:** uses the cert SHA-1 in `$env:SIGN_CERT_SHA1` (falls back to the bundled Certum OSS
@@ -177,7 +177,7 @@ also signed). It reads the version from `constants.h`, so there is no version ar
 
 ## Step 8 — Confirm the artifacts
 
-The script prints the final paths. Expect, in `deploy/avalonia/`:
+The script prints the final paths. Expect, in `deploy/`:
 
 - `tmDataQualityAnalyzer-vX.Y.Z_portable.zip`
 - `tmDataQualityAnalyzer-vX.Y.Z_setup.exe`
@@ -188,10 +188,10 @@ for everything. It reports honestly now, but its trustworthiness is exactly what
 check independently:
 
 ```powershell
-foreach ($t in @('deploy\avalonia\staging\app\tmDataQualityAnalyzer.exe',
-                 'deploy\avalonia\staging\app\tmdq_core.dll',
-                 "deploy\avalonia\staging\tmDataQualityAnalyzer-v$v`_portable\tmDataQualityAnalyzer.exe",
-                 "deploy\avalonia\tmDataQualityAnalyzer-v$v`_setup.exe")) {
+foreach ($t in @('deploy\staging\app\tmDataQualityAnalyzer.exe',
+                 'deploy\staging\app\tmdq_core.dll',
+                 "deploy\staging\tmDataQualityAnalyzer-v$v`_portable\tmDataQualityAnalyzer.exe",
+                 "deploy\tmDataQualityAnalyzer-v$v`_setup.exe")) {
   '{0,-8} {1}' -f (Get-AuthenticodeSignature $t).Status, (Get-Item $t).VersionInfo.FileVersion
 }
 ```
@@ -215,12 +215,12 @@ and v2.13.1 could not make it: that needed "a genuinely clean Windows target; Wi
 Home offers neither Sandbox nor Hyper-V."
 
 On Windows Pro/Enterprise with the **Windows Sandbox** feature enabled. The payload the verifier reads defaults to the
-portable ZIP beside the setup, `deploy\avalonia\staging\unsigned`, the committed PRN sample and v2.14.2's setup (the
+portable ZIP beside the setup, `deploy\staging\unsigned`, the committed PRN sample and v2.14.2's setup (the
 main checkout's `deploy\` when this is a worktree); `-Payload` overrides it, separated by semicolons because the
 recordings' names contain commas:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 -Setup "deploy\avalonia\tmDataQualityAnalyzer-v$v`_setup.exe"
+powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 -Setup "deploy\tmDataQualityAnalyzer-v$v`_setup.exe"
 ```
 
 It generates the `.wsb` (absolute host paths, which is why it is generated rather than committed),

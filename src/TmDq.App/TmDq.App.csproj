@@ -54,7 +54,7 @@
   <!-- The native core, from the native build of the same configuration (eng\build_core_dll.ps1), beside the exe in
        the build output, in what references this project (the tests), and in a publish. Kept OUT of a single-file
        bundle: a native library has to be a file on disk to load. The VC++ runtime it imports is added by the packaging
-       script (deploy\avalonia\build_avalonia_package.ps1). Missing, the app says so when it first needs the core. -->
+       script (deploy\build_package.ps1). Missing, the app says so when it first needs the core. -->
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)..\..\out\$(Configuration)\tmdq_core.dll"
           Condition="Exists('$(MSBuildThisFileDirectory)..\..\out\$(Configuration)\tmdq_core.dll')"

@@ -9,7 +9,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
   the native core. This is the only supported toolchain; CI builds with it too (`windows-2022`, checked by the job).
 - **C++ Standard**: C++20 (`std::format`, `std::span`, `inline constexpr` throughout `constants.h`).
 - **Shipping application** (from v3.0.0): the Avalonia 12 application on .NET 10 (`src/TmDq.App`) over the native
-  core (`tmdq_core.dll`), packaged by `deploy/avalonia/build_avalonia_package.ps1`. Up to v2.14.2 the application was
+  core (`tmdq_core.dll`), packaged by `deploy/build_package.ps1`. Up to v2.14.2 the application was
   Qt 6; `docs/changelog.md` records the move.
 - **Project Version**: 3.1.0 — defined once in the `AppVersion` struct in `src/core/include/constants.h`; `eng/AppVersion.props` reads it for every assembly, and the package script and the manual build read it too, so no other file carries a duplicate version literal
 
@@ -389,7 +389,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The installer never overwrites an existing user TOML settings file, on upgrade or reinstall. A settings file is written only when it is absent (`onlyifdoesntexist`), and is left behind by uninstall (`uninsneveruninstall`).
 - [x] A settings file written by any earlier version stays usable: every reader supplies its own default for a key the file does not carry, so an older file degrades to "missing keys fall back to defaults" rather than to a wrong result.
 - [x] New fields added to a shipped default therefore reach a **fresh install**, not an existing one. An upgraded install keeps the operator's file exactly as it stands.
-  - **Replaces two criteria that described a merge this project never built.** They claimed the installer saved a conflicting default as `new_x.toml` and carried the user's old values into it. Nothing implements that: the installer script (`deploy/avalonia/tmDataQualityAnalyzer.iss`) is declarative, with no `[Code]` section, and there is no `new_x`, migration, schema-version or merge logic in the core, `deploy/` or `eng/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
+  - **Replaces two criteria that described a merge this project never built.** They claimed the installer saved a conflicting default as `new_x.toml` and carried the user's old values into it. Nothing implements that: the installer script (`deploy/tmDataQualityAnalyzer.iss`) is declarative, with no `[Code]` section, and there is no `new_x`, migration, schema-version or merge logic in the core, `deploy/` or `eng/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
   - **The guarantee above is weaker but true, and the defensive readers are what make it safe** - `FrameSetup::readReceiverParams()` accepts both the current `[Receivers]` keys and the older `[Parameters]` spelling, an absent `Randomized` leaves the operator's choice alone rather than clearing it, and the template reader (`TemplateFile`) keeps each key's default for anything omitted (a new row's value, read from a default `StreamSetup`, which `StreamFilesTests` holds to the core's `ReceiverParamsFile.Defaults()`). A change that removed that tolerance would look harmless and would not be: it is load-bearing for this criterion, not incidental.
   - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. Building the merge in the installer's `[Code]` section was scoped and deliberately not taken: it would move the installer from no custom code to scripted code, which is what keeps it cheap to maintain, and no one has asked for it (the v2.14.2 entry "US8.0 now describes the installer that exists" in `docs/changelog.md`). Rebuild the sketch from this criterion if that day comes.
 
@@ -749,7 +749,7 @@ Everything builds from `tmdq.sln`, which VS Code opens by default; `.claude/CLAU
   the documentation file (not published) and a malformed doc comment is a warning. A suppression carries its reason
   (`SuppressMessage` with `Justification`).
 - **The manuals**: `eng\build_manual.ps1` renders the figures from the app (`ManualFiguresTests`) and embeds them.
-- **The release**: `deploy\avalonia\build_avalonia_package.ps1` (single-file publish, signing, the portable ZIP and the
+- **The release**: `deploy\build_package.ps1` (single-file publish, signing, the portable ZIP and the
   Inno installer); `.claude/skills/cut-release` is the procedure.
 - **A recording that finds no sync**: `py eng\ch10_triage.py <file.ch10>` walks the packets with no build and no
   irig106, checks the reader's TMATS gates, tries the sixteen combinations of the four bit transforms, and finds the
@@ -810,11 +810,11 @@ that worktrees also need.
 
 ### Deployment & Packaging
 
-- **Build automation**: `deploy/avalonia/build_avalonia_package.ps1` — the consistency check, a signing pre-flight,
+- **Build automation**: `deploy/build_package.ps1` — the consistency check, a signing pre-flight,
   the core in Release, a self-contained single-file publish, staging (settings, the VC++ runtime the core imports, the
   licence, `THIRD-PARTY-NOTICES.txt`), signing our two binaries only, a smoke run on the PRN sample, the ZIP and the
   installer.
-- **Inno Setup installer**: `deploy/avalonia/tmDataQualityAnalyzer.iss` — v2.x's AppId and folder, so it upgrades a
+- **Inno Setup installer**: `deploy/tmDataQualityAnalyzer.iss` — v2.x's AppId and folder, so it upgrades a
   v2.x install in place (its `bin\`, `UserGuide.txt` and old manual deleted, `settings\` kept), admin or per-user,
   the `.ch10` association, the "What's New" page, the optional full manual.
 - **Portable ZIP**: the same files flat, with a `portable` marker (preferences in a `tmDataQualityAnalyzer` folder beside
@@ -822,7 +822,7 @@ that worktrees also need.
 - **Release notes**: `deploy/RELEASENOTES.txt` — the installer's "What's New" page (`InfoBeforeFile`) and the GitHub
   release's text. The developer's record is `docs/changelog.md`.
 - **Portable README**: `deploy/README_portable.txt` — copied as `README.txt` into the ZIP.
-- **Clean-machine test**: `deploy/sandbox/run_sandbox_test.ps1` with `verify_avalonia_install.ps1` — Smart App Control
+- **Clean-machine test**: `deploy/sandbox/run_sandbox_test.ps1` with `verify_install.ps1` — Smart App Control
   on, an unsigned control blocked, v2.14.2 installed and upgraded.
 - **Code signing**: the certificate's SHA-1 in `SIGN_CERT_SHA1` (falls back to the Certum OSS certificate), token-backed
   (SimplySign): unlock it first.
@@ -1015,7 +1015,8 @@ projects' source and header lists against the files on disk (`NativeProjectTests
 (`RepoFilesTests`: the scripts, the installer script and the workflow ASCII-only, every .NET project's output out of a
 platform folder, both .NET test hosts merging the shared UTF-8 manifest, the workflow's time limit and read-only token,
 every kept mutant in `eng/mutants` still naming text that is in its file exactly once, every native case named
-"Suite: what it holds, in words", and every `-tc=` filter of a native mutant list still matching a case); the recordings' channels (`FileTests`); runs of
+"Suite: what it holds, in words", every `-tc=` filter of a native mutant list still matching a case, and the installer script's files and the package
+script's root still resolving from where they are); the recordings' channels (`FileTests`); runs of
 the committed recordings against numbers v2.14.2 produced, every setting reaching the job, failures, observers, cancel
 and lifetimes (`RunTests`); calibration against the core's extractor (`CalibrationTests`, an extraction disposed from its own callback included); the file formats byte for
 byte against the core (`FormatsTests`); loading the DLL (`LibraryTests`, `IsolatedLoadTests` in a child process, the

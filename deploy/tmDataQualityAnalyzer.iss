@@ -1,6 +1,6 @@
 ; Inno Setup script for the application from v3.0.0 on: the Avalonia application (plan step 5.3).
 ;
-; Built by deploy\avalonia\build_avalonia_package.ps1, which stages the files, passes the version read from
+; Built by deploy\build_package.ps1, which stages the files, passes the version read from
 ; AppVersion (src\core\include\constants.h) as /DMyAppVersion, and /DSIGN with /Ssigntool=... to sign the setup and the
 ; uninstaller. Requires Inno Setup 6.
 ;
@@ -33,13 +33,13 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-LicenseFile=..\..\LICENSE
-SetupIconFile=..\..\assets\icon.ico
+LicenseFile=..\LICENSE
+SetupIconFile=..\assets\icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 PrivilegesRequiredOverridesAllowed=dialog
 WizardStyle=modern
 MinVersion=10.0.17763
-InfoBeforeFile=..\RELEASENOTES.txt
+InfoBeforeFile=RELEASENOTES.txt
 ChangesAssociations=yes
 
 #ifdef SIGN

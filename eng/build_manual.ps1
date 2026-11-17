@@ -18,7 +18,7 @@
 #
 #   base - assets\usermanual.html, compiled into the application
 #   full - UserManual.html (the base plus docs\manual\walkthroughs.html), packaged by
-#          deploy\avalonia\build_avalonia_package.ps1
+#          deploy\build_package.ps1
 #
 # Run it after a change to what a figure shows (-NoCapture reuses the figures
 # already rendered, for a change to the prose or the version):
@@ -91,5 +91,5 @@ if ($LASTEXITCODE -ne 0) { throw "embed step failed ($LASTEXITCODE)" }
 Write-Host "`nDone. Two manuals were written (sizes listed above):"
 Write-Host "  base - assets\usermanual.html, compiled into the application. Rebuild it to pick"
 Write-Host "         it up; it is an embedded resource."
-Write-Host "  full - UserManual.html, packaged by deploy\avalonia\build_avalonia_package.ps1:"
+Write-Host "  full - UserManual.html, packaged by deploy\build_package.ps1:"
 Write-Host "         always in the portable ZIP, an optional task in the installer."

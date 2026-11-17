@@ -4,8 +4,8 @@
 #
 #   powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 [-Setup <setup.exe>] [-Payload <list>]
 #
-# With no arguments it tests the newest setup.exe in deploy\avalonia\, with the payload the verifier needs: the portable
-# ZIP beside that setup, deploy\avalonia\staging\unsigned, the committed PRN sample, and v2.x's setup.exe (the one the
+# With no arguments it tests the newest setup.exe in deploy\, with the payload the verifier needs: the portable
+# ZIP beside that setup, deploy\staging\unsigned, the committed PRN sample, and v2.x's setup.exe (the one the
 # upgrade starts from; deploy\ of this checkout, or of the main checkout when this is a worktree).
 #
 # WHY THIS EXISTS
@@ -26,7 +26,7 @@
 # =============================================================================
 
 param(
-    # Defaults to the newest setup.exe in deploy\avalonia\. Pass one explicitly to test an
+    # Defaults to the newest setup.exe in deploy\. Pass one explicitly to test an
     # older release, or an artifact downloaded from a GitHub release.
     [string]$Setup,
     [int]$TimeoutSeconds = 600,
@@ -38,7 +38,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # The script the Sandbox runs, from this folder: it tests the packages and the upgrade from v2.x.
-$Verifier  = 'verify_avalonia_install.ps1'
+$Verifier  = 'verify_install.ps1'
 
 $here      = Split-Path -Parent $MyInvocation.MyCommand.Path
 $deployDir = Split-Path -Parent $here
@@ -69,11 +69,11 @@ if ($live.Count -gt 0) {
 }
 
 if (-not $Setup) {
-    $Setup = (Get-ChildItem (Join-Path $deployDir 'avalonia\tmDataQualityAnalyzer-v*_setup.exe') -ErrorAction SilentlyContinue |
+    $Setup = (Get-ChildItem (Join-Path $deployDir 'tmDataQualityAnalyzer-v*_setup.exe') -ErrorAction SilentlyContinue |
               Sort-Object LastWriteTime | Select-Object -Last 1).FullName
 }
 if (-not $Setup -or -not (Test-Path $Setup)) {
-    throw "No setup.exe found. Run deploy\avalonia\build_avalonia_package.ps1 first, or pass -Setup <path>."
+    throw "No setup.exe found. Run deploy\build_package.ps1 first, or pass -Setup <path>."
 }
 
 if (-not $Payload -or $Payload.Count -eq 0) {
@@ -93,7 +93,7 @@ if (-not $Payload -or $Payload.Count -eq 0) {
     }
     $Payload = @(
         ($Setup -replace '_setup\.exe$', '_portable.zip'),
-        (Join-Path $deployDir 'avalonia\staging\unsigned'),
+        (Join-Path $deployDir 'staging\unsigned'),
         (Join-Path $repoRoot 'tests\data\test files\prn_testfile, sample.ch10'),
         $oldSetup.FullName
     )

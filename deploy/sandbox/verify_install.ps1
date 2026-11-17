@@ -1,11 +1,11 @@
 # =============================================================================
-# verify_avalonia_install.ps1 - clean-machine test of the Avalonia application's packages
+# verify_install.ps1 - clean-machine test of the Avalonia application's packages
 # (plan step 3.3 built it for the preview; step 5.3 made it the release's) under Smart App
 # Control, including the UPGRADE from the Qt application.
 #
 # Runs INSIDE Windows Sandbox, launched by
 #   run_sandbox_test.ps1 [-Setup <setup.exe>]
-# which copies in the payload this script reads from C:\tmdqa: the portable ZIP, deploy\avalonia\staging\unsigned, the
+# which copies in the payload this script reads from C:\tmdqa: the portable ZIP, deploy\staging\unsigned, the
 # PRN sample and v2.x's setup.exe (run_sandbox_test.ps1 -Payload overrides the list; semicolon-separated, because the
 # committed recordings' names contain commas)
 # Do not run it on a developer machine: it installs to Program Files and uninstalls again.

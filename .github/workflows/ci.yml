@@ -52,7 +52,7 @@ jobs:
           # from AppVersion, and each has shipped stale. Needs no toolchain, so it
           # runs before the build and fails fast. -ReleaseMode is deliberately NOT
           # passed: an "Unreleased" changelog section is correct between releases and
-          # is only an error at packaging time (build_avalonia_package.ps1 passes it there).
+          # is only an error at packaging time (build_package.ps1 passes it there).
           powershell -ExecutionPolicy Bypass -File eng\check_release_consistency.ps1
           if ($LASTEXITCODE -ne 0) { exit 1 }
 

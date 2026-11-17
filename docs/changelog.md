@@ -12,6 +12,39 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### deploy/avalonia/ is flattened into deploy/, and its two *_avalonia_* scripts lose the word (follow-up audit F1)
+
+The release packaging had been in `deploy/avalonia/` since v3.0.0, when the Qt packaging it sat beside was still there
+  to tell apart; there is nothing to tell apart now, and two scripts were named for the toolkit
+  (`build_avalonia_package.ps1`, `verify_avalonia_install.ps1`). Done now, not near a release, as decided on 2026-11-16.
+
+- **Moved with `git mv`:** `deploy/avalonia/build_avalonia_package.ps1` to `deploy/build_package.ps1`,
+  `deploy/avalonia/signing.ps1` and `deploy/avalonia/tmDataQualityAnalyzer.iss` to `deploy/`, and
+  `deploy/sandbox/verify_avalonia_install.ps1` to `deploy/sandbox/verify_install.ps1`. What the package script produces
+  (`staging/`, the portable ZIP, the setup) now lands in `deploy/` and is ignored by the folder's `*` rule, which lost
+  its `avalonia/` re-includes and gained the three tracked files.
+- **Paths:** the package script's `$Root` is one level up from `$Here` instead of two; the installer script's licence
+  and icon are `..\LICENSE` and `..\assets\icon.ico` (they were two levels up) and its release-notes page is
+  `RELEASENOTES.txt` (it was `..\RELEASENOTES.txt`); the sandbox harness looks for the setup and `staging\unsigned` in
+  `deploy` itself. The references in `README.md`, the guide, `.claude/CLAUDE.md`, the `cut-release` skill,
+  `.claudeignore`, two scripts in `eng/`, the workflow's comment, `TmDq.App.csproj` and two tests have the new names.
+  The changelog and `docs/records` keep the old ones: they say what the path was when they were written.
+- **Compiling the installer script found a path nothing else would have:** `InfoBeforeFile=..\RELEASENOTES.txt` was
+  relative to the old folder and, moved, pointed above the repository. It compiles now (Inno Setup 6, against a
+  throwaway staging folder, to `0.0.1`). A full package build was not run: it needs the signing token and
+  `check_release_consistency.ps1 -ReleaseMode` refuses a tree with an Unreleased section.
+- **A test so a move cannot repeat it:**
+  `RepoFilesTests.TheInstallerScriptAndThePackageScriptFindWhatTheyNameFromWhereTheyAre` checks that the files the
+  installer script names exist from its own folder and that the package script's `$Root` is the folder with `tmdq.sln`.
+- **`eng\mutate.ps1`:** `Get-Product`, which names the binary a mutant has to rebuild, took every file outside `eng/`
+  and the .NET projects for a core source and answered STALE for a file a test only reads as text. It now has no product
+  for `deploy/`, `docs/`, `.github/`, `.claude/`, nor for `tests/core/` in a managed or app run. That makes the three
+  native case-name mutants that had to be run by hand in #324 kept ones (`native-case-names.json` N3 to N5).
+- **Checked.** Mutation check, managed: `eng/mutants/deploy-paths.json` (new) **4 of 4 CAUGHT** (the release-notes path
+  as it was, the licence path as it was, an icon that is not there, a root one level too high); `native-case-names.json`
+  **5 of 5 CAUGHT**. Managed **398** passed / 1 skipped, app **686** passed / 34 not run, zero warnings; native not
+  affected. Baseline moved: managed 397 to 398.
+
 #### The test projects keep what the tests share in Support/ (follow-up audit F3)
 
 Nine helper files stood among the test classes at the root of each .NET test project (the library tests' had grown from

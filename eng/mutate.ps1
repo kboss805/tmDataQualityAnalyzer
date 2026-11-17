@@ -233,6 +233,10 @@ function Get-Product([string]$file) {
         return $testExe
     }
     if ($file -match '^eng[\/]') { return '' }   # a script a test runs as a child process: read at run time, built into nothing
+    # Files a test only reads as text: the repository's scripts, installer script, documents and workflow, and the native
+    # tests' sources when the suite is a managed one (RepoFilesTests reads their case names). Nothing is built from them.
+    if ($file -match '^(deploy|docs|\.github|\.claude)[\/]') { return '' }
+    if ($file -match '^tests[\/]core[\/]' -and $suite -ne 'native') { return '' }
     if ($suite -eq 'native') { return $testExe }
     return $coreDll
 }
