@@ -35,9 +35,9 @@
 
   <ItemGroup>
     <!-- The library tests' retrying delete, for the temporary files these tests write too. -->
-    <Compile Include="..\TmDq.Core.Tests\TempFiles.cs" Link="TempFiles.cs" />
+    <Compile Include="..\TmDq.Core.Tests\Support\TempFiles.cs" Link="Support\TempFiles.cs" />
     <!-- and the one place that finds the repository root and its committed recordings. -->
-    <Compile Include="..\TmDq.Core.Tests\RepoPaths.cs" Link="RepoPaths.cs" />
+    <Compile Include="..\TmDq.Core.Tests\Support\RepoPaths.cs" Link="Support\RepoPaths.cs" />
   </ItemGroup>
 
   <!-- The test exe selects the UTF-8 active code page, as the application and the other test hosts do (the shared

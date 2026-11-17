@@ -12,6 +12,25 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The test projects keep what the tests share in Support/ (follow-up audit F3)
+
+Nine helper files stood among the test classes at the root of each .NET test project (the library tests' had grown from
+  seven to nine with the last two changes), so a new test's first look at the folder was a long list of files with no way
+  to tell a test from what it uses. They are in a `Support/` folder in each project now, moved with `git mv` so the
+  history follows.
+
+- **Library tests:** `CalibrationDigest`, `Collector`, `Env`, `FormatsDigest`, `ProcessMemoryCollection`, `RepoPaths`,
+  `SelfDisposingObserver`, `SeriesDigest`, `TempFiles`. **App tests:** `Fixtures`, `Frames`, `Menus`,
+  `NativeCoreCollection`, `PeResources`, `PlotFixtures`, `Repo`, `StreamFakes`, `TestAppBuilder`. The test classes stay
+  at the root, and the data (`Soak/`, `Templates/`) in folders of its own.
+- **Namespaces are unchanged:** a Support file keeps its project's namespace, so no test changed (a using for a folder
+  would have touched every file for nothing; `.editorconfig` does not ask for the namespace to follow the folder). Only
+  the app tests' two links to the library tests' `TempFiles` and `RepoPaths` have the new paths, and the `write-test`
+  skill names the new ones.
+- **Checked.** A move of files with no change to a line of code: no mutation check. Managed 397 passed / 1 skipped and
+  app 686 passed / 34 not run, both unchanged, zero warnings; the native suite is not affected. The guide's Testing
+  section says where what the tests share is.
+
 #### C++ tooling: .clang-format, .clang-tidy, the naming rule, include order, test-case names (follow-up audit C3, C5, C7)
 
 The core had no formatter or analyser configuration (the `.clang-tidy` of #1 was deleted in #43, and `.vscode` ran clangd with `--fallback-style=none` because there was no `.clang-format`), its C++ naming

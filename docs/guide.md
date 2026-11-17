@@ -935,6 +935,14 @@ more checks run by hand:
 A new native test file goes in `tests/core/tmdq_core_tests.vcxproj` (`NativeProjectTests` fails until it
 is); a new .NET test needs nothing but its class.
 
+In each .NET test project the test classes (`*Tests.cs`) are at the root, and what they share is in `Support/`: the
+library tests' `Env`, `RepoPaths`, `TempFiles`, `Collector` and the digests the recordings' expected numbers are in
+(`CalibrationDigest`, `FormatsDigest`, `SeriesDigest`), the collections (`ProcessMemoryCollection`) and the observer fakes;
+the application tests' `Fixtures`, `PlotFixtures`, `StreamFakes`, `Menus`, `Frames`, `Repo`, `PeResources`,
+`TestAppBuilder` and `NativeCoreCollection`. The app tests link `TempFiles` and `RepoPaths` from the library tests. A
+Support file keeps its project's namespace, so a test uses it by its bare name; the test data (`Soak/`, `Templates/`)
+stays in folders of its own.
+
 ### Continuous Integration
 
 `.github/workflows/ci.yml` is one job, `ci`, on GitHub-hosted `windows-2022` (Visual Studio 2022, as releases are
