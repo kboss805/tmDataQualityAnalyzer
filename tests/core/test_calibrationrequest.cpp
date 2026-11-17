@@ -70,9 +70,9 @@ OldResult oldInlineCode(const CalibrationInputs& setup, const std::string& appRo
     std::string receiverParams = setup.receiverParamsToml.string();
     if (receiverParams.empty())
     {
-        const std::string defaultRcvrParams = appRoot + "/" + UIConstants::kSettingsDirName + "/" +
-                                              UIConstants::kReceiverParamsDirName + "/" +
-                                              UIConstants::kDefaultTomlFilename;
+        const std::string defaultRcvrParams = appRoot + "/" + SettingsConstants::kSettingsDirName + "/" +
+                                              SettingsConstants::kReceiverParamsDirName + "/" +
+                                              SettingsConstants::kDefaultTomlFilename;
         std::error_code ec;
         if (fs::exists(textfile::pathFromUtf8(defaultRcvrParams), ec))
         {

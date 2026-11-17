@@ -47,9 +47,9 @@ Decide two things first, because they gate which steps apply:
    `Randomized`); Data Rate and Sample Rate are per-session and stay out; calibration profiles are
    never serialised. A file without the new key keeps the operator's choice (US8.0: readers default
    what a file does not carry).
-7. **The job** — `src/core/include/model/streamjobbuilder.h` (`StreamJobConfig`) and `src/core/src/streamjobbuilder.cpp`,
+7. **The job** — `src/core/include/streamjobbuilder.h` (`StreamJobConfig`) and `src/core/src/streamjobbuilder.cpp`,
    into `ProcessingParams` (and `FrameSetup` if it affects the word map). **A raw-affecting setting goes
-   through `applyAcquisition`** (`src/core/include/model/framesync.h`), which the calibration extractor shares, so
+   through `applyAcquisition`** (`src/core/include/framesync.h`), which the calibration extractor shares, so
    extraction sees it too; then carry it in the calibration request (`calibrationrequest.cpp`,
    `abi_calibration.cpp`, `Calibration.cs`, `ExtractCalibrationViewModel`).
 8. **The effect** — `src/core/src/frameprocessor.cpp`. Honour the invariants (the **tm-code-review**

@@ -16,17 +16,17 @@ std::string format(int baseDay, double baseTimeOffset, double elapsed, bool incl
 {
     double total = baseTimeOffset + elapsed;
 
-    int day = baseDay + static_cast<int>(total / UIConstants::kSecondsPerDay);
-    total = std::fmod(total, static_cast<double>(UIConstants::kSecondsPerDay));
+    int day = baseDay + static_cast<int>(total / TimeConstants::kSecondsPerDay);
+    total = std::fmod(total, static_cast<double>(TimeConstants::kSecondsPerDay));
     if (total < 0.0)
     {
-        total += UIConstants::kSecondsPerDay;
+        total += TimeConstants::kSecondsPerDay;
         day--;
     }
 
-    const int hours   = static_cast<int>(total) / UIConstants::kSecondsPerHour;
-    const int minutes = (static_cast<int>(total) % UIConstants::kSecondsPerHour) / UIConstants::kSecondsPerMinute;
-    const int seconds = static_cast<int>(total) % UIConstants::kSecondsPerMinute;
+    const int hours   = static_cast<int>(total) / TimeConstants::kSecondsPerHour;
+    const int minutes = (static_cast<int>(total) % TimeConstants::kSecondsPerHour) / TimeConstants::kSecondsPerMinute;
+    const int seconds = static_cast<int>(total) % TimeConstants::kSecondsPerMinute;
 
     std::string result = std::format("{:03}:{:02}:{:02}:{:02}", day, hours, minutes, seconds);
 

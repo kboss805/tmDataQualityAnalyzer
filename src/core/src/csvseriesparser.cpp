@@ -245,7 +245,7 @@ CsvParseResult CsvSeriesParser::parse(const std::filesystem::path& path)
             result.baseTimeOffset = time_seconds;
         }
 
-        const double elapsed = ((day - first_day) * UIConstants::kSecondsPerDay) + (time_seconds - first_time);
+        const double elapsed = ((day - first_day) * TimeConstants::kSecondsPerDay) + (time_seconds - first_time);
 
         for (int i = 0; i < param_count; ++i)
         {
@@ -307,6 +307,6 @@ bool CsvSeriesParser::parseCombinedTimestamp(std::string_view stamp, int& out_da
     }
 
     out_day     = day;
-    out_seconds = (hours * UIConstants::kSecondsPerHour) + (minutes * UIConstants::kSecondsPerMinute) + seconds;
+    out_seconds = (hours * TimeConstants::kSecondsPerHour) + (minutes * TimeConstants::kSecondsPerMinute) + seconds;
     return true;
 }

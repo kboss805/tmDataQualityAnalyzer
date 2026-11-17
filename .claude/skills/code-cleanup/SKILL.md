@@ -73,7 +73,7 @@ look for types nothing uses.
 **Functions/classes/constants**: grep the symbol name across the whole tree and count
 non-declaration hits. One hit (the declaration) or hits only inside its own `.cpp` means nothing
 outside calls it — check for a documented reason (above) before flagging. The constants namespaces
-in `constants.h` (`PCMConstants`, `UIConstants`, `ChartConstants`, ...) are worth a pass on their own: the
+in `constants.h` (`PCMConstants`, `TimeConstants`, `ReceiverConstants`, `SettingsConstants`, `ChartConstants`, ...) are worth a pass on their own: the
 v2.8.0 cleanup found ~20 unreferenced constants and 37 unused Qt includes that had accumulated over
 time, so this class of drift is real and recurring here, not hypothetical.
 

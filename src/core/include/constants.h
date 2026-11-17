@@ -1,6 +1,6 @@
 /**
  * @file constants.h
- * @brief Application-wide constants for PCM frame parameters and UI defaults.
+ * @brief Application-wide constants: PCM frame parameters, time, receiver SNR and the settings folder.
  */
 
 #ifndef CONSTANTS_H
@@ -78,28 +78,30 @@ namespace PCMConstants {
     /// @}
 }
 
-/// @brief Constants for UI configuration, validation limits, and output formatting.
-namespace UIConstants {
+/// @brief Time: the conversions between its units, and the sample periods a stream is processed at.
+namespace TimeConstants {
     /// @name Time conversion
     /// @{
     inline constexpr int kSecondsPerDay    = 86400; ///< Seconds in a day.
     inline constexpr int kSecondsPerHour   = 3600;  ///< Seconds in an hour.
     inline constexpr int kSecondsPerMinute = 60;    ///< Seconds in a minute.
     /// @}
-    inline constexpr int kDefaultSlopeIndex           = 3;     ///< Default voltage slope index (0-5V range).
-    inline constexpr std::array<const char*, 3> kChannelPrefixes = {"L", "R", "C"}; ///< Channel prefix labels (L/R/C).
-    inline constexpr int kNumKnownPrefixes = static_cast<int>(kChannelPrefixes.size()); ///< Number of known channel prefixes.
-
 
     /// @name Sample period options (seconds)
     /// @{
     inline constexpr double kSamplePeriod1s    = 1.0;  ///< 1 second sample period.
     inline constexpr double kSamplePeriod100ms = 0.1;  ///< 100 ms sample period.
     inline constexpr double kSamplePeriod10ms  = 0.01; ///< 10 ms sample period.
-    inline constexpr int kDefaultSamplePeriodIndex = 0; ///< Default sample period combo index (1 s).
+    inline constexpr int kDefaultSamplePeriodIndex = 0; ///< Default sample period index (1 s).
     /// @}
+}
 
-    /// @name Voltage scale bounds (indexed by scale combo box)
+/// @brief Receiver SNR: the channel prefixes, the voltage scale options and the polarity and slope defaults.
+namespace ReceiverConstants {
+    inline constexpr std::array<const char*, 3> kChannelPrefixes = {"L", "R", "C"}; ///< Channel prefix labels (L/R/C).
+    inline constexpr int kNumKnownPrefixes = static_cast<int>(kChannelPrefixes.size()); ///< Number of known channel prefixes.
+
+    /// @name Voltage scale bounds (indexed by the slope option)
     /// @{
     inline constexpr std::array<double, 4> kSlopeVoltageLower = {-10.0, -5.0, 0.0, 0.0}; ///< Lower voltage bound per scale option.
     inline constexpr std::array<double, 4> kSlopeVoltageUpper = {10.0, 5.0, 10.0, 5.0};  ///< Upper voltage bound per scale option.
@@ -107,16 +109,16 @@ namespace UIConstants {
     inline constexpr int kMaxSlopeIndex = static_cast<int>(kSlopeVoltageLower.size()) - 1; ///< Maximum valid voltage slope index.
     /// @}
 
+    inline constexpr int kDefaultSlopeIndex    = 3; ///< Default voltage slope index (0-5V range).
+    inline constexpr int kDefaultPolarityIndex = 0; ///< Default polarity value (0 = Positive).
+}
 
-    inline constexpr int kDefaultPolarityIndex = 0;  ///< Default polarity value (0 = Positive).
-
-    /// @name The settings folder
-    /// @{
+/// @brief The settings folder and what it holds, named relative to the application's root.
+namespace SettingsConstants {
     inline constexpr const char* kSettingsDirName         = "settings";     ///< Settings directory name relative to app root.
     inline constexpr const char* kDefaultTomlFilename     = "default.toml"; ///< Default TOML configuration filename, used in each settings subdirectory below.
     inline constexpr const char* kReceiverParamsDirName   = "receiver_params";   ///< Receiver Parameters subdirectory name (relative to settings dir).
     inline constexpr const char* kRcvrCalsDirName         = "rcvr_cals";         ///< Receiver/SNR step calibration subdirectory name (relative to settings dir).
-    /// @}
 }
 
 /// @brief Constants for non-linear step calibration extraction (US5.3).

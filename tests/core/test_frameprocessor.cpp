@@ -894,8 +894,8 @@ TEST_CASE("FrameProcessor: a shorter period gives more samples")
         return fp.result().timesSec.size();
     };
 
-    const std::size_t n1s  = countAt(UIConstants::kSamplePeriod1s);
-    const std::size_t n10ms = countAt(UIConstants::kSamplePeriod10ms);
+    const std::size_t n1s  = countAt(TimeConstants::kSamplePeriod1s);
+    const std::size_t n10ms = countAt(TimeConstants::kSamplePeriod10ms);
     CHECK_MESSAGE(n1s > 0, "a 1 s period run should produce samples");
     CHECK_MESSAGE(n10ms > n1s, "a 10 ms period (" << n10ms << ") should give more samples than 1 s (" << n1s << ")");
 }

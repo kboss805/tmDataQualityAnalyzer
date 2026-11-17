@@ -63,9 +63,9 @@ bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, co
     // mean 100 ms in silence, which no host could have meant (the application clamps what it reads).
     switch (cfg.samplePeriodIndex)
     {
-        case 0: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod1s;    break;
-        case 1: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod100ms; break;
-        case 2: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod10ms;  break;
+        case 0: out_job.params.samplePeriodSec = TimeConstants::kSamplePeriod1s;    break;
+        case 1: out_job.params.samplePeriodSec = TimeConstants::kSamplePeriod100ms; break;
+        case 2: out_job.params.samplePeriodSec = TimeConstants::kSamplePeriod10ms;  break;
         default:
             error = stream_desc + ": Sample period index is invalid.";
             return false;
@@ -94,7 +94,7 @@ bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, co
         error = stream_desc + ": Scale (dB/V) must be a positive number.";
         return false;
     }
-    if (cfg.slopeIndex < 0 || cfg.slopeIndex > UIConstants::kMaxSlopeIndex)
+    if (cfg.slopeIndex < 0 || cfg.slopeIndex > ReceiverConstants::kMaxSlopeIndex)
     {
         error = stream_desc + ": Slope index is invalid.";
         return false;

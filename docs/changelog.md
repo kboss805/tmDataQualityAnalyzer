@@ -12,6 +12,38 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The core's headers in one folder, and UIConstants split by subject (layout plan PR 6; audit S1, S5)
+
+The last of the source-layout PRs. Behaviour is the same.
+
+- **S1: `src/core/include/` is one folder.** The 5 headers of `dto/` and the 26 of `model/` moved up beside
+  `constants.h`,
+  `containerutil.h`, `textformat.h` and `textparse.h`. Every core file already included a header by its bare name (both
+  folders were include directories), so no `#include` changed; what changed is the two include directories gone from
+  `tmdq_core.vcxproj` and `tmdq_core_tests.vcxproj`, the 31 `ClInclude` paths, `eng/gen_compile_flags.py`, and the
+  layout
+  test (`TheDllListsEveryHeader`), which now expects the one folder. `dto/` and `model/` said what a header's name
+  already
+  said, and the MVVM split the names borrowed no longer exists in the core. Run `py eng/gen_compile_flags.py` in each
+  worktree: the two folders are gone from the flags.
+- **S5: `UIConstants` held no UI constant** (#244 removed its 28 window constants and left the name). Its 18 constants
+  are in
+  three namespaces by subject: `TimeConstants` (seconds per day, hour and minute; the three sample periods and the
+  default
+  period's index), `ReceiverConstants` (the channel prefixes, the voltage bounds and the slope and polarity defaults)
+  and
+  `SettingsConstants` (the settings folder and the names under it). The comments that still spoke of combo boxes now say
+  what the value is. All 83 uses (32 in the product, 51 in the tests) name their new namespace; the app's tests read
+  constants by name, not by namespace, and are unaffected.
+- **Checked.** No mutation check: nothing here changes what the code does, and the compiler holds it. A header moved to
+  the folder above (31 of them), every one included by its bare name before and after, so a missed project path or
+  include directory is a build error; and 83 uses of 18 constants were renamed by the namespace that now holds each,
+  with `test_constants.cpp` still pinning every value. `-Rebuild` of the DLL (Debug) and of the native tests (Release):
+  zero warnings, no Qt, imports on the allow-list. Native **498** test cases passed / 1 skipped, managed **381** passed
+  / 1 skipped, app **675** passed / 34 not run, zero warnings, no manual figure changed. Baseline moved: managed 380 to
+  381 (`TheCoreHeadersAreOneFolderAndAreIncludedByTheirBareNames`, which fails if `include/` gets a subfolder again).
+  `compile_flags.txt` regenerated (`py eng/gen_compile_flags.py`).
+
 #### TmDq.Core: the native plumbing in Interop/, a type to a file, and a SafeHandle for each kind of handle (layout plan PR 5; audit S8)
 
 The fifth of the source-layout PRs: the binding's files arranged the way the application's now are, and the one change

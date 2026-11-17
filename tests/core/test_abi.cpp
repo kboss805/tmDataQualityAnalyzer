@@ -151,9 +151,9 @@ struct Case
     bool        randomized = false;
     bool        inverted = false;
     double      rateMbps = 0.0;
-    int         periodIndex = UIConstants::kDefaultSamplePeriodIndex;
-    int         polarityIndex = UIConstants::kDefaultPolarityIndex;
-    int         slopeIndex = UIConstants::kDefaultSlopeIndex;
+    int         periodIndex = TimeConstants::kDefaultSamplePeriodIndex;
+    int         polarityIndex = ReceiverConstants::kDefaultPolarityIndex;
+    int         slopeIndex = ReceiverConstants::kDefaultSlopeIndex;
     double      scale = PCMConstants::kDefaultScaleDdBPerV;
     int         numReceivers = PCMConstants::kDefaultNumReceivers;
     int         receiverChannels = PCMConstants::kDefaultReceiverChannels;
@@ -2265,7 +2265,7 @@ TEST_CASE("Abi: everySettingOfAStreamReachesTheJob")
     add("randomized", lockCase(f), [](Case& c) { c.randomized = true; }, project);
     add("inverted", lockCase(f), [](Case& c) { c.inverted = true; }, project);
     add("data rate", lockCase(f), [](Case& c) { c.rateMbps = 0.4; }, project);
-    add("sample period", lockCase(f), [](Case& c) { c.periodIndex = UIConstants::kDefaultSamplePeriodIndex + 1; }, project);
+    add("sample period", lockCase(f), [](Case& c) { c.periodIndex = TimeConstants::kDefaultSamplePeriodIndex + 1; }, project);
     add("scale", receiverCase(f), [](Case& c) { c.scale = c.scale * 2.0; }, project);
     add("polarity", receiverCase(f), [](Case& c) { c.polarityIndex = c.polarityIndex == 0 ? 1 : 0; }, project);
     add("slope", receiverCase(f), [](Case& c) { c.slopeIndex = c.slopeIndex - 1; }, project);

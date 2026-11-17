@@ -555,9 +555,9 @@ bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, co
 
     switch (cfg.samplePeriodIndex)
     {
-        case 0: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod1s;    break;
-        case 1: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod100ms; break;
-        case 2: out_job.params.samplePeriodSec = UIConstants::kSamplePeriod10ms;  break;
+        case 0: out_job.params.samplePeriodSec = TimeConstants::kSamplePeriod1s;    break;
+        case 1: out_job.params.samplePeriodSec = TimeConstants::kSamplePeriod100ms; break;
+        case 2: out_job.params.samplePeriodSec = TimeConstants::kSamplePeriod10ms;  break;
         default:
             // CHANGED (audit X4): an index that is not 0, 1 or 2 was 100 ms in silence; it is refused.
             error = stream_desc + ": Sample period index is invalid.";
@@ -574,8 +574,8 @@ bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, co
     std::string map_warning;
     if (cfg.receiverParamsToml.empty())
     {
-        const fs::path default_rcvr_params = fs::path(m_app_root) / UIConstants::kSettingsDirName /
-                                             UIConstants::kReceiverParamsDirName / UIConstants::kDefaultTomlFilename;
+        const fs::path default_rcvr_params = fs::path(m_app_root) / SettingsConstants::kSettingsDirName /
+                                             SettingsConstants::kReceiverParamsDirName / SettingsConstants::kDefaultTomlFilename;
         std::error_code ec;
         if (fs::exists(default_rcvr_params, ec) && out_job.frameSetup->tryLoadingFile(default_rcvr_params, words_in_minor_frame))
         {
@@ -624,7 +624,7 @@ bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, co
         error = stream_desc + ": Scale (dB/V) must be a positive number.";
         return false;
     }
-    if (slope_idx < 0 || slope_idx > UIConstants::kMaxSlopeIndex)
+    if (slope_idx < 0 || slope_idx > ReceiverConstants::kMaxSlopeIndex)
     {
         error = stream_desc + ": Slope index is invalid.";
         return false;

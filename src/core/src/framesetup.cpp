@@ -116,8 +116,8 @@ void FrameSetup::addParameter(const std::string& name, int word)
 
 void FrameSetup::applyLinearCalibration(int polarity_index, int slope_index, double scale_dB_per_V)
 {
-    const double voltage_lower = UIConstants::kSlopeVoltageLower[slope_index] * scale_dB_per_V;
-    const double voltage_upper = UIConstants::kSlopeVoltageUpper[slope_index] * scale_dB_per_V;
+    const double voltage_lower = ReceiverConstants::kSlopeVoltageLower[slope_index] * scale_dB_per_V;
+    const double voltage_upper = ReceiverConstants::kSlopeVoltageUpper[slope_index] * scale_dB_per_V;
     const bool   negative_polarity = (polarity_index == 1);
 
     for (ParameterInfo& param : m_parameters)
@@ -250,9 +250,9 @@ bool FrameSetup::saveReceiverParamsFile(const std::filesystem::path& path,
 
 std::string FrameSetup::channelPrefix(int channel_index)
 {
-    if (channel_index < UIConstants::kNumKnownPrefixes)
+    if (channel_index < ReceiverConstants::kNumKnownPrefixes)
     {
-        return UIConstants::kChannelPrefixes[channel_index];
+        return ReceiverConstants::kChannelPrefixes[channel_index];
     }
     return "CH" + std::to_string(channel_index + 1);
 }
@@ -333,8 +333,8 @@ void FrameSetup::writeWordMap(TomlDocument& doc) const
 
 std::filesystem::path defaultReceiverParamsFile(const std::string& appRoot)
 {
-    return textfile::pathFromUtf8(appRoot + "/" + UIConstants::kSettingsDirName + "/" +
-                                  UIConstants::kReceiverParamsDirName + "/" + UIConstants::kDefaultTomlFilename);
+    return textfile::pathFromUtf8(appRoot + "/" + SettingsConstants::kSettingsDirName + "/" +
+                                  SettingsConstants::kReceiverParamsDirName + "/" + SettingsConstants::kDefaultTomlFilename);
 }
 
 bool resolveReceiverWordMap(FrameSetup& setup, const std::filesystem::path& explicitFile,
