@@ -58,7 +58,7 @@ Decide two things first, because they gate which steps apply:
 ## Tests, at every layer (the **write-test** skill)
 
 - **native:** `test_streamjob.cpp` (the builder carries it), `test_frameprocessor.cpp` (it changes the
-  output: the strongest test), `test_abi.cpp` (the struct and its conversion), and `test_framesyncfile.cpp`
+  output: the strongest test), `test_abi_run.cpp` (the struct and its conversion), and `test_framesyncfile.cpp`
   if it persists;
 - **managed:** the layout pin and a run through `ProcessingRun` that it changes;
 - **app:** `StreamSetupViewModelTests` (shown, validated, kept), `StreamRulesTests` (Apply to all and the

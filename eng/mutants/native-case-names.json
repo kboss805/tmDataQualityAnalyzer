@@ -23,7 +23,7 @@
     },
     {
       "id": "N3",
-      "file": "tests/core/test_abi.cpp",
+      "file": "tests/core/test_abi_contract.cpp",
       "old": "TEST_CASE(\"Abi: the struct layouts are pinned\")",
       "new": "TEST_CASE(\"Abi: theStructLayoutsArePinned\")",
       "expect": "caught",

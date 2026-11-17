@@ -12,6 +12,31 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### test_abi.cpp is six files, one for each part of the ABI (follow-up audit Q5, native half)
+
+`tests/core/test_abi.cpp` had grown to 4,213 lines: 960 of fixtures and helpers, then 63 cases for seven ABI sources,
+  under banners that already marked where each part began. It is split along those banners; no case, name or line of a
+  test body changed.
+
+- **`test_abi_support.h`** holds the includes, the fixtures (`Scratch`, `StepCal`, `Case`, `Request`, `CalRequest` and
+  the rest) and the helpers that run the core directly and read what the ABI makes. They are in an anonymous namespace
+  and every function is `inline`, so each part has its own copy and MSVC reports none unused. Each part file opens with
+  a line saying which ABI source it exercises, then includes the header.
+- **The parts:** `test_abi_contract.cpp` (struct layouts, version and revision, host structs, the file functions: 6
+  cases), `test_abi_run.cpp` (24), `test_abi_calibration.cpp` (the step file and the calibration: 13),
+  `test_abi_formats.cpp` (the frame sync file, template matching, the CSV, clock stamps and the receiver parameters
+  file: 10), `test_abi_series.cpp` (4) and `test_abi_chart.cpp` (the chart's geometry and a series' index: 6). All 63
+  cases keep their "Abi: " names, so no `-tc=` filter changed; the project file lists the six, and the guide, two
+  skills, `.claude/CLAUDE.md` and `native-case-names.json` N3's file name follow.
+- **Checked.** Native, rebuilt from scratch: **503** cases and **431,932** assertions in Release (Debug 503 passed too),
+  the same numbers as before, zero warnings, no Qt import; managed 398 passed / 1 skipped; app not affected. A split
+  changes no test, so no new mutant: the kept lists that exercise the ABI tests were run over the moved tests instead.
+  `abi-boundary-guards.json` and `plot-envelope-index.json`: 26 of 33 CAUGHT, the survivors the ones the lists mark
+  equivalent, and **four verdicts differ from their lists' expectations, identically on the unchanged main** (so they
+  are not the split's): G1 and G2 SURVIVE where the list says caught (since #315 a wait from the run's or calibration's
+  own callback is refused before the guard they remove), and N3 and D3 do not compile (a warning as an error; the
+  renumbered outcome's static assertion, which the list may expect). They need re-anchoring in a change of their own.
+
 #### A run no longer copies every stream's arrays to say how many samples it has (follow-up audit S16)
 
 `StreamsRun`'s observer called `StreamResult.ToProcessed()` on every stream that completed: a copy of the times, the

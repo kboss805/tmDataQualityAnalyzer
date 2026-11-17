@@ -121,7 +121,12 @@
   <!-- doctest's main (compiled once, here) and one test_<suite>.cpp for each ported suite. -->
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="test_abi.cpp" />
+    <ClCompile Include="test_abi_calibration.cpp" />
+    <ClCompile Include="test_abi_chart.cpp" />
+    <ClCompile Include="test_abi_contract.cpp" />
+    <ClCompile Include="test_abi_formats.cpp" />
+    <ClCompile Include="test_abi_run.cpp" />
+    <ClCompile Include="test_abi_series.cpp" />
     <ClCompile Include="test_calibrationextractor.cpp" />
     <ClCompile Include="test_calibrationrequest.cpp" />
     <ClCompile Include="test_chartgeometry.cpp" />
@@ -172,7 +177,7 @@
   </ItemGroup>
 
   <!-- The C ABI, src\core\abi\*.cpp: every source tmdq_core.vcxproj builds besides the core, compiled in here so
-       test_abi.cpp calls tmdq_* as a host would, without loading the DLL. NativeProjectTests checks the two lists agree. -->
+       the test_abi_*.cpp files call tmdq_* as a host would, without loading the DLL. NativeProjectTests checks the two lists agree. -->
   <ItemGroup>
     <ClCompile Include="..\..\src\core\abi\abi_calibration.cpp" />
     <ClCompile Include="..\..\src\core\abi\abi_chart.cpp" />
