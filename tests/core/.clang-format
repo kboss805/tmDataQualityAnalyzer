@@ -1,0 +1,4 @@
+# The tests are written denser than the product: one-line helpers and assignments that are not aligned in columns.
+BasedOnStyle: InheritParentConfig
+IndentCaseLabels: false
+AlignConsecutiveAssignments: None

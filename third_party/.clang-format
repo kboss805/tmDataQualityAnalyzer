@@ -1,0 +1,2 @@
+# Vendored code is formatted as its authors wrote it (third_party/irig106 is never edited; see docs/guide.md).
+DisableFormat: true

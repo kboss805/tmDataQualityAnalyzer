@@ -1,0 +1,25 @@
+{
+  "suite": "managed",
+  "args": [
+    "-class",
+    "TmDq.Core.Tests.RepoFilesTests"
+  ],
+  "mutants": [
+    {
+      "id": "N1",
+      "file": "eng/mutants/plot-envelope-index.json",
+      "old": "-tc=ChartGeometry*,Abi: a series*",
+      "new": "-tc=ChartGeometry*,Abi: aSeries*",
+      "expect": "caught",
+      "note": "a filter that names a case by its old identifier matches nothing"
+    },
+    {
+      "id": "N2",
+      "file": "eng/mutants/abi-boundary-guards.json",
+      "old": "\"-tc=Abi: *\"",
+      "new": "\"-tc=Abi: nothing is named so*\"",
+      "expect": "caught",
+      "note": "a filter whose pattern matches no case"
+    }
+  ]
+}

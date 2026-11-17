@@ -59,7 +59,7 @@
 #include <utility>
 #include <vector>
 
-class TomlDocument
+class TomlDocument   // NOLINT(bugprone-exception-escape): the default constructor makes empty containers
 {
 public:
     /// An empty, valid document, ready for setValue() + save().

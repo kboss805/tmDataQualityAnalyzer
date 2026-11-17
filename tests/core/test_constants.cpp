@@ -36,12 +36,12 @@ std::filesystem::path shippedSetting(const char* folder, const char* file)
 
 // --- the cases ported in plan step 2.4, each under its old name ------------------------------------------------------
 
-TEST_CASE("Constants: pcmMaxChannelCount")
+TEST_CASE("Constants: PCM max channel count")
 {
     CHECK(PCMConstants::kMaxChannelCount == 0x10000);
 }
 
-TEST_CASE("Constants: pcmDefaultFrameSync")
+TEST_CASE("Constants: PCM default frame sync")
 {
     // PRN15. Both halves are pinned because they are only meaningful as a pair: a pattern with the wrong frame length
     // never locks, and nothing else in the build would catch them drifting apart.
@@ -49,47 +49,47 @@ TEST_CASE("Constants: pcmDefaultFrameSync")
     CHECK(PCMConstants::kDefaultFrameSyncLockBits == 32767);
 }
 
-TEST_CASE("Constants: pcmCommonWordLen")
+TEST_CASE("Constants: PCM common word len")
 {
     CHECK(PCMConstants::kCommonWordLen == 16);
 }
 
-TEST_CASE("Constants: pcmNumMinorFrames")
+TEST_CASE("Constants: PCM num minor frames")
 {
     CHECK(PCMConstants::kNumMinorFrames == 1);
 }
 
-TEST_CASE("Constants: pcmChannelTypeIdentifiers")
+TEST_CASE("Constants: PCM channel type identifiers")
 {
     CHECK(is(PCMConstants::kChannelTypeTime, "TIMEIN"));
     CHECK(is(PCMConstants::kChannelTypePcm, "PCMIN"));
 }
 
-TEST_CASE("Constants: uiDefaultSlopeIndex")
+TEST_CASE("Constants: default slope index")
 {
     CHECK(ReceiverConstants::kDefaultSlopeIndex == 3);
 }
 
-TEST_CASE("Constants: uiSamplePeriods")
+TEST_CASE("Constants: sample periods")
 {
     CHECK(TimeConstants::kSamplePeriod1s == 1.0);
     CHECK(TimeConstants::kSamplePeriod100ms == 0.1);
     CHECK(TimeConstants::kSamplePeriod10ms == 0.01);
 }
 
-TEST_CASE("Constants: uiChannelPrefixes")
+TEST_CASE("Constants: channel prefixes")
 {
     CHECK(is(ReceiverConstants::kChannelPrefixes[0], "L"));
     CHECK(is(ReceiverConstants::kChannelPrefixes[1], "R"));
     CHECK(is(ReceiverConstants::kChannelPrefixes[2], "C"));
 }
 
-TEST_CASE("Constants: uiNumKnownPrefixes")
+TEST_CASE("Constants: num known prefixes")
 {
     CHECK(ReceiverConstants::kNumKnownPrefixes == 3);   // derived from the array's length
 }
 
-TEST_CASE("Constants: appVersionValues")
+TEST_CASE("Constants: app version values")
 {
     // No version is typed here (it changes at every release, and the managed suite's VersionTests hold the number to
     // the packaging's), so what can fail is a version that is not one: negative parts, or the 0.0.0 of an unset one.
@@ -99,7 +99,7 @@ TEST_CASE("Constants: appVersionValues")
     CHECK(AppVersion::kMajor + AppVersion::kMinor + AppVersion::kPatch > 0);
 }
 
-TEST_CASE("Constants: appVersionToString")
+TEST_CASE("Constants: app version to string")
 {
     // Built here from the three numbers and nothing else, so no version is typed in this test either.
     const std::string expected = std::to_string(AppVersion::kMajor) + "." + std::to_string(AppVersion::kMinor) + "." +
@@ -107,34 +107,34 @@ TEST_CASE("Constants: appVersionToString")
     CHECK(AppVersion::toString() == expected);
 }
 
-TEST_CASE("Constants: pcmMaxRawSampleValue")
+TEST_CASE("Constants: PCM max raw sample value")
 {
     CHECK(PCMConstants::kMaxRawSampleValue == static_cast<uint16_t>(0xFFFF));
 }
 
-TEST_CASE("Constants: pcmDefaultBufferSize")
+TEST_CASE("Constants: PCM default buffer size")
 {
     CHECK(PCMConstants::kDefaultBufferSize == 65536UL);
 }
 
-TEST_CASE("Constants: pcmProgressReportInterval")
+TEST_CASE("Constants: PCM progress report interval")
 {
     CHECK(PCMConstants::kProgressReportIntervalMs == 100);
 }
 
-TEST_CASE("Constants: uiTimeConversionConstants")
+TEST_CASE("Constants: time conversion constants")
 {
     CHECK(TimeConstants::kSecondsPerDay == 86400);
     CHECK(TimeConstants::kSecondsPerHour == 3600);
     CHECK(TimeConstants::kSecondsPerMinute == 60);
 }
 
-TEST_CASE("Constants: uiPolarityConstants")
+TEST_CASE("Constants: polarity constants")
 {
     CHECK(ReceiverConstants::kDefaultPolarityIndex == 0);
 }
 
-TEST_CASE("Constants: uiDeploymentConstants")
+TEST_CASE("Constants: deployment constants")
 {
     CHECK(is(SettingsConstants::kSettingsDirName, "settings"));
     CHECK(is(SettingsConstants::kDefaultTomlFilename, "default.toml"));
@@ -142,35 +142,35 @@ TEST_CASE("Constants: uiDeploymentConstants")
     CHECK(is(SettingsConstants::kRcvrCalsDirName, "rcvr_cals"));
 }
 
-TEST_CASE("Constants: pcmFrameSyncMaskConstants")
+TEST_CASE("Constants: PCM frame sync mask constants")
 {
     CHECK(is(PCMConstants::kDefaultFrameSyncMask, "FFFFFFFF"));
 }
 
-TEST_CASE("Constants: pcmFrameLengthBoundsConstants")
+TEST_CASE("Constants: PCM frame length bounds constants")
 {
     CHECK(PCMConstants::kMinFrameLengthBits == 64);
 }
 
-TEST_CASE("Constants: pcmMaxPacketBufferSize")
+TEST_CASE("Constants: PCM max packet buffer size")
 {
     // Guard against malformed Ch10 headers; 100 MB cap.
     CHECK(static_cast<long long>(PCMConstants::kMaxPacketBufferSize) == 100LL * 1024 * 1024);
 }
 
-TEST_CASE("Constants: uiDefaultSamplePeriodIndex")
+TEST_CASE("Constants: default sample period index")
 {
     // Default is 1 s (index 0 in the 1 s / 100 ms / 10 ms combo).
     CHECK(TimeConstants::kDefaultSamplePeriodIndex == 0);
 }
 
-TEST_CASE("Constants: uiMaxSlopeIndex")
+TEST_CASE("Constants: max slope index")
 {
     // Four voltage-range options (0-indexed); max valid index is 3.
     CHECK(ReceiverConstants::kMaxSlopeIndex == 3);
 }
 
-TEST_CASE("Constants: uiSlopeVoltageBounds")
+TEST_CASE("Constants: slope voltage bounds")
 {
     // Voltage bounds for each slope index (US2.1, voltage range options).
     CHECK(ReceiverConstants::kSlopeVoltageLower[0] == -10.0);

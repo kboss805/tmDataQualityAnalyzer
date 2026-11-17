@@ -24,7 +24,7 @@ each suite has its house style and helpers. Build and run with the **build-and-t
 
 ## The native suite (doctest)
 
-- **A case:** `TEST_CASE("<Suite>: <what it holds, as a sentence>")` with `CHECK`/`REQUIRE`, `INFO`
+- **A case:** `TEST_CASE("<Suite>: <what it holds, as words>")` (`RepoFilesTests` holds the form, and that every `-tc=` filter of a kept mutant list still matches a case) with `CHECK`/`REQUIRE`, `INFO`
   for context in loops, `SUBCASE` sparingly. Doubles compare with an explicit tolerance or
   `doctest::Approx`.
 - **A new file must be added to `tests/core/tmdq_core_tests.vcxproj`** (`<ClCompile

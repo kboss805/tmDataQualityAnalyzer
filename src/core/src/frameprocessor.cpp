@@ -6,8 +6,8 @@
 #include "frameprocessor.h"
 
 #include <chrono>
-#include <format>
 #include <cstdint>
+#include <format>
 #include <vector>
 
 #include "irig106ch10.h"       // IWYU pragma: keep
@@ -26,7 +26,6 @@ using namespace Irig106;
 //                          PCM BIT-LEVEL HELPERS                             //
 ////////////////////////////////////////////////////////////////////////////////
 
-// Static method
 void FrameProcessor::derandomizeBitstream(uint8_t* data, uint64_t total_bits, uint16_t& lfsr)
 {
     // Constants for RNRZ-L derandomization
@@ -58,7 +57,6 @@ void FrameProcessor::derandomizeBitstream(uint8_t* data, uint64_t total_bits, ui
     }
 }
 
-// Static method
 void FrameProcessor::invertBits(uint8_t* data, uint32_t length)
 {
     for (uint32_t i = 0; i < length; i++)
@@ -631,4 +629,3 @@ void FrameProcessor::recordTimeSample(double current_time_sample,
         param->sample_sum = 0;
     }
 }
-// End of file!

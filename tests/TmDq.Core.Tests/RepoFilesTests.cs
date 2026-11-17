@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace TmDq.Core.Tests;
@@ -159,6 +160,73 @@ public class RepoFilesTests
         }
         Assert.True(mutants >= 170, $"only {mutants} mutants were read");
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
+    }
+
+    [Fact]
+    public void EveryNativeTestCaseIsNamedForItsSuiteAndSaysWhatItHoldsInWords()
+    {
+        // The native cases are named "<Suite>: <what it holds, as words>" (the write-test skill): the name is what a failure
+        // and a mutation check's filter report. A third of them were identifiers (Abi: theStructLayoutsArePinned,
+        // Constants: uiSamplePeriods) or had no suite (the follow-up audit's C7).
+        List<string> names = NativeTestCaseNames();
+        var problems = names.Where(n => !Regex.IsMatch(n, @"^[A-Za-z][A-Za-z0-9 ]*: \S+ \S+")).ToList();
+        Assert.True(names.Count >= 500, $"only {names.Count} test cases were read");
+        Assert.True(problems.Count == 0, "not '<Suite>: <words>': " + string.Join(" | ", problems));
+    }
+
+    [Fact]
+    public void EveryTestCaseFilterOfAKeptNativeMutantListStillMatchesACase()
+    {
+        // A filter that matches nothing runs no test, so the mutants of its list all SURVIVE or all say nothing ran. Renaming
+        // a case (the audit's C7 did, 90 of them) must re-anchor the filters that name it, in the same change.
+        List<string> names = NativeTestCaseNames();
+        var problems = new List<string>();
+        int filters = 0;
+        foreach (string list in Directory.GetFiles(Path.Combine(RepoPaths.Root, "eng", "mutants"), "*.json"))
+        {
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(list));
+            JsonElement root = document.RootElement;
+            if (root.GetProperty("suite").GetString() != "native")
+            {
+                continue;
+            }
+
+            var argSets = new List<JsonElement>();
+            if (root.TryGetProperty("args", out JsonElement top)) argSets.Add(top);
+            foreach (JsonElement mutant in root.GetProperty("mutants").EnumerateArray())
+            {
+                if (mutant.TryGetProperty("args", out JsonElement own)) argSets.Add(own);
+            }
+
+            foreach (string arg in argSets.SelectMany(a => a.EnumerateArray()).Select(a => a.GetString()!).Where(a => a.StartsWith("-tc=", StringComparison.Ordinal)).Distinct())
+            {
+                foreach (string pattern in arg[4..].Split(','))
+                {
+                    filters++;
+                    // doctest's wildcard: '*' and '?', and the case of the letters does not count.
+                    var wildcard = new Regex("^" + Regex.Escape(pattern).Replace(@"\*", ".*").Replace(@"\?", ".") + "$", RegexOptions.IgnoreCase);
+                    if (!names.Any(wildcard.IsMatch)) problems.Add($"{Path.GetFileName(list)}: -tc={pattern}");
+                }
+            }
+        }
+
+        Assert.True(filters >= 10, $"only {filters} filters were read");
+        Assert.True(problems.Count == 0, "matches no test case: " + string.Join(" | ", problems));
+    }
+
+    private static List<string> NativeTestCaseNames()
+    {
+        var names = new List<string>();
+        foreach (string file in Directory.GetFiles(Path.Combine(RepoPaths.Root, "tests", "core"), "*.cpp"))
+        {
+            foreach (string line in File.ReadAllLines(file))
+            {
+                Match m = Regex.Match(line, @"^\s*TEST_CASE(?:_TEMPLATE)?\(""([^""]*)""");
+                if (m.Success) names.Add(m.Groups[1].Value);
+            }
+        }
+
+        return names;
     }
 
     [Theory]

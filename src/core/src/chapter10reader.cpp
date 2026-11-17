@@ -268,7 +268,7 @@ void Chapter10Reader::applyTmatsNames()
 
             if (data_source->szTrackNumber != nullptr && channel_enabled)
             {
-                int track_number = atoi(data_source->szTrackNumber);
+                int track_number = atoi(data_source->szTrackNumber);   // NOLINT(bugprone-unchecked-string-to-number-conversion): TMATS gives digits; text is 0
                 m_channel_data.try_emplace(track_number, track_number);
                 ChannelData& channel = m_channel_data.at(track_number);
 
@@ -375,7 +375,7 @@ double Chapter10Reader::getTmatsDataRateBps(int channel_id) const
         {
             if (data_source->szTrackNumber != nullptr)
             {
-                int track = atoi(data_source->szTrackNumber);
+                int track = atoi(data_source->szTrackNumber);   // NOLINT(bugprone-unchecked-string-to-number-conversion): compared with a channel id, so text (0) matches none
                 if (track == channel_id && data_source->psuPRecord != nullptr)
                 {
                     const char* sz = data_source->psuPRecord->szBitsPerSec;

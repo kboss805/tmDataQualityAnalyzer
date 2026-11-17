@@ -1,3 +1,8 @@
+/**
+ * @file calibrationrequest.cpp
+ * @brief Implementation of buildCalibrationRequest - the Extract Calibration dialog's settings as an extraction request.
+ */
+
 #include "calibrationrequest.h"
 
 #include <system_error>

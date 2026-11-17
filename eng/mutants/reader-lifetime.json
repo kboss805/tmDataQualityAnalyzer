@@ -96,7 +96,7 @@
       "old": "    if (run && run->events && run->events->delivering())\n    {\n        tmdq::setError(\"tmdq_run_free",
       "new": "    if (run && run->events && !run->events->delivering())\n    {\n        tmdq::setError(\"tmdq_run_free",
       "args": [
-        "-tc=*FinishedCallback*"
+        "-tc=*own finished callback*"
       ],
       "expect": "caught",
       "note": "a free from outside is refused, one from a callback is not"
@@ -107,7 +107,7 @@
       "old": "        tmdq::setError(\"tmdq_run_free was called from one of the run's own callbacks: the run was not released\");\n        return;",
       "new": "        return;",
       "args": [
-        "-tc=*FinishedCallback*"
+        "-tc=*own finished callback*"
       ],
       "expect": "caught",
       "note": "the refused free says nothing"
@@ -118,7 +118,7 @@
       "old": "        if (run->events && run->events->delivering())\n        {",
       "new": "        if (run->events && false)\n        {",
       "args": [
-        "-tc=*FinishedCallback*"
+        "-tc=*own finished callback*"
       ],
       "expect": "caught",
       "note": "the wait from a callback is not refused"
@@ -129,7 +129,7 @@
       "old": "    if (calibration && calibration->events && calibration->events->delivering())\n    {\n        tmdq::setError(\"tmdq_calibration_free was called from one of the extraction's own callbacks: the extraction was not released\");\n        return;\n    }\n    delete calibration;",
       "new": "    if (calibration && calibration->events && calibration->events->delivering())\n    {\n        tmdq::setError(\"tmdq_calibration_free was called from one of the extraction's own callbacks: the extraction was not released\");\n    }\n    delete calibration;",
       "args": [
-        "-tc=*FinishedCallback*"
+        "-tc=*own finished callback*"
       ],
       "expect": "caught",
       "note": "the calibration free says it refused and frees anyway"
@@ -140,7 +140,7 @@
       "old": "        if (calibration->events && calibration->events->delivering())\n        {",
       "new": "        if (calibration->events && false)\n        {",
       "args": [
-        "-tc=*FinishedCallback*"
+        "-tc=*own finished callback*"
       ],
       "expect": "caught",
       "note": "the calibration wait from a callback is not refused"

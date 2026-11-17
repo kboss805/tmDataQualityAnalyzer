@@ -33,11 +33,13 @@ PROJECT_INCLUDES = [
     "src/core/abi",
 ]
 
-# Their preprocessor defines. The ABI's export macro (TMDQ_ABI_BUILD in the DLL, TMDQ_ABI_STATIC in the tests) is
-# left out: either one parses the same.
+# Their preprocessor defines. The ABI's export macro is TMDQ_ABI_BUILD in the DLL and TMDQ_ABI_STATIC in the tests;
+# one of them must be defined, or the header declares every function dllimport and clang reports each definition in
+# src/core/abi as a redeclaration without it (clang-diagnostic-inconsistent-dllimport, in the editor and in clang-tidy).
+# The DLL's is used for every file: it parses the tests' sources the same.
 DEFINES = [
     "UNICODE", "_UNICODE", "WIN32", "WIN64", "_ENABLE_EXTENDED_ALIGNED_STORAGE",
-    "DOCTEST_CONFIG_USE_STD_HEADERS",
+    "DOCTEST_CONFIG_USE_STD_HEADERS", "TMDQ_ABI_BUILD",
 ]
 
 

@@ -7,9 +7,9 @@
 // could break without any caller noticing.
 
 #include <cmath>
-#include <limits>
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -28,7 +28,7 @@ TomlDocument loadDoc(const fs::path& path)
 
 } // namespace
 
-TEST_CASE("TomlDocument reads sections and keys in file order")
+TEST_CASE("TomlDocument: reads sections and keys in file order")
 {
     TempDir tmp;
     const fs::path path = tmp.file("order.toml");
@@ -214,7 +214,7 @@ TEST_CASE("TomlDocument: a repeated key overwrites")
     CHECK(loadDoc(path).integer("A/K") == 2);
 }
 
-TEST_CASE("TomlDocument reads a UTF-8 BOM and CRLF")
+TEST_CASE("TomlDocument: reads a UTF-8 BOM and CRLF")
 {
     // A file saved by Notepad: a UTF-8 BOM and CRLF line endings. Without BOM handling
     // the first key would be read as "\xEF\xBB\xBFTop" and silently go missing.
@@ -228,7 +228,7 @@ TEST_CASE("TomlDocument reads a UTF-8 BOM and CRLF")
     CHECK(doc.sectionsInFileOrder() == Strings{"S"});
 }
 
-TEST_CASE("TomlDocument reads UTF-16 with a BOM")
+TEST_CASE("TomlDocument: reads UTF-16 with a BOM")
 {
     // Older Notepad's "Unicode" encoding. The reader this one replaced detected the BOM
     // and decoded it, so a settings file saved that way worked, and it must go on working.
@@ -368,7 +368,7 @@ TEST_CASE("TomlDocument: the boolean rule")
     CHECK(!doc.boolean("B/Missing", false));
 }
 
-TEST_CASE("TomlDocument writes the exact file format")
+TEST_CASE("TomlDocument: writes the exact file format")
 {
     // The bytes on disk, not just a round trip: top-level keys first and unheaded, one
     // blank line between sections, booleans and integers bare, everything else quoted

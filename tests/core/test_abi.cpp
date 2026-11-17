@@ -9,18 +9,18 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <cmath>
 #include <filesystem>
 #include <format>
 #include <limits>
 #include <map>
 #include <memory>
-#include <random>
 #include <mutex>
+#include <random>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -28,29 +28,29 @@
 #include <unordered_map>
 #include <vector>
 
-#include "doctest.h"
 #include "abi_events.h"
 #include "abi_internal.h"
-#include "tmdq_abi.h"
 #include "calibrationextractor.h"
 #include "calibrationrequest.h"
 #include "chapter10reader.h"
 #include "chartgeometry.h"
 #include "clocktime.h"
+#include "constants.h"
 #include "csvseriesparser.h"
 #include "csvserieswriter.h"
+#include "doctest.h"
 #include "framesetup.h"
-#include "framesyncfile.h"
-#include "templatematcher.h"
-#include "constants.h"
-#include "pipelinerunner.h"
-#include "seriesbuilder.h"
-#include "processedstreamdata.h"
 #include "framesync.h"
+#include "framesyncfile.h"
+#include "pipelinerunner.h"
+#include "processedstreamdata.h"
+#include "seriesbuilder.h"
 #include "stepdetector.h"
 #include "streamjobbuilder.h"
-#include "textfile.h"
+#include "templatematcher.h"
 #include "test_support.h"
+#include "textfile.h"
+#include "tmdq_abi.h"
 
 using namespace tmdq_test;
 
@@ -1019,7 +1019,7 @@ bool sameCalibration(const DirectCalibration& a, const DirectCalibration& b)
 // The shape of the contract
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Abi: theStructLayoutsArePinned")
+TEST_CASE("Abi: the struct layouts are pinned")
 {
     // What the managed side must reproduce, field by field (Pack = 8, natural alignment). An offset moving
     // here is an ABI break, so it is a deliberate edit to this test and a new revision, never a side effect.
@@ -1320,7 +1320,7 @@ TEST_CASE("Abi: theStructLayoutsArePinned")
     CHECK(int(TMDQ_MODE_FRAME_SYNC_LOCK) == int(StreamMode::FrameSyncLockStats));
 }
 
-TEST_CASE("Abi: theVersionAndRevisionAreReported")
+TEST_CASE("Abi: the version and revision are reported")
 {
     CHECK(tmdq_abi_version() == 2);
     CHECK(tmdq_abi_revision() == 3);   // 1: the receiver-parameters file (4.1a); 2: the chart's geometry (4.3a); 3: a series' index
@@ -1329,7 +1329,7 @@ TEST_CASE("Abi: theVersionAndRevisionAreReported")
     REQUIRE(tmdq_last_error() != nullptr);
 }
 
-TEST_CASE("Abi: aStructFromANewerHostIsAcceptedAndOneFromAnOlderHostIsRefused")
+TEST_CASE("Abi: a struct from a newer host is accepted and one from an older host is refused")
 {
     const StepCal f = loadStepCal();
 
@@ -1416,7 +1416,7 @@ TEST_CASE("Abi: aStructFromANewerHostIsAcceptedAndOneFromAnOlderHostIsRefused")
 // The file
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Abi: aFileListsItsChannelsLikeTheReader")
+TEST_CASE("Abi: a file lists its channels like the reader")
 {
     for (const char* name : { "prn_testfile, sample.ch10", "step_cal, example.ch10" })
     {
@@ -1469,7 +1469,7 @@ TEST_CASE("Abi: aFileListsItsChannelsLikeTheReader")
     tmdq_file_close(file);
 }
 
-TEST_CASE("Abi: aFileThatCannotBeOpenedSaysWhy")
+TEST_CASE("Abi: a file that cannot be opened says why")
 {
     tmdq_file* file = reinterpret_cast<tmdq_file*>(std::uintptr_t{1});   // must be overwritten
     const std::string missing = tempUtf8() + "/tst_abi_no_such_recording.ch10";
@@ -1503,7 +1503,7 @@ TEST_CASE("Abi: aFileThatCannotBeOpenedSaysWhy")
     tmdq_file_close(other);
 }
 
-TEST_CASE("Abi: badArgumentsToTheFileFunctionsAreRefused")
+TEST_CASE("Abi: bad arguments to the file functions are refused")
 {
     tmdq_file* file = reinterpret_cast<tmdq_file*>(std::uintptr_t{1});   // must be overwritten, even by a refusal
     CHECK(tmdq_file_open(nullptr, &file) == int(TMDQ_ERR_BADARG));
@@ -1535,7 +1535,7 @@ TEST_CASE("Abi: badArgumentsToTheFileFunctionsAreRefused")
 // Runs
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Abi: aRunOfSeveralStreamsMatchesWhatTheCoreMakes")
+TEST_CASE("Abi: a run of several streams matches what the core makes")
 {
     const StepCal f = loadStepCal();
 
@@ -1582,7 +1582,7 @@ TEST_CASE("Abi: aRunOfSeveralStreamsMatchesWhatTheCoreMakes")
     REQUIRE(info.missed_frames == nullptr);
 }
 
-TEST_CASE("Abi: aRunReportsInTheDocumentedOrder")
+TEST_CASE("Abi: a run reports in the documented order")
 {
     const StepCal f = loadStepCal();
 
@@ -1631,7 +1631,7 @@ TEST_CASE("Abi: aRunReportsInTheDocumentedOrder")
     REQUIRE_MESSAGE(seen.any("log:"), events.front());
 }
 
-TEST_CASE("Abi: waitingOnARunFromItsOwnFinishedCallbackIsAnErrorNotAnException")
+TEST_CASE("Abi: waiting on a run from its own finished callback is an error not an exception")
 {
     // `finished` is delivered on the thread tmdq_run_wait would join, so the call can never succeed; the header forbids
     // it. A host that does it anyway is told through the last error: an exception out of an exported function would
@@ -1653,7 +1653,7 @@ TEST_CASE("Abi: waitingOnARunFromItsOwnFinishedCallbackIsAnErrorNotAnException")
     CHECK(seen.finishedSuccess == 1);   // and the run itself was not disturbed
 }
 
-TEST_CASE("Abi: freeingARunFromItsOwnFinishedCallbackIsRefusedAndTheRunIsStillThere")
+TEST_CASE("Abi: freeing a run from its own finished callback is refused and the run is still there")
 {
     // The free joins the run's threads from a destructor; from `finished` that is a join of the caller, which ends the
     // process. The header forbids the call; a host that makes it is told through the last error, and the run is left
@@ -1677,7 +1677,7 @@ TEST_CASE("Abi: freeingARunFromItsOwnFinishedCallbackIsRefusedAndTheRunIsStillTh
     CHECK(tmdq_run_running(run) == 0);
 }
 
-TEST_CASE("Abi: onlyARunsOwnCallbackIsRefusedAndOnlyWhileItIsRunning")
+TEST_CASE("Abi: only a run's own callback is refused and only while it is running")
 {
     const StepCal f = loadStepCal();
     const std::thread::id caller = std::this_thread::get_id();
@@ -1719,7 +1719,7 @@ TEST_CASE("Abi: onlyARunsOwnCallbackIsRefusedAndOnlyWhileItIsRunning")
     CHECK_MESSAGE(seen2.waitError.empty(), seen2.waitError);
 }
 
-TEST_CASE("Abi: aNonLinearProfileReachesTheJob")
+TEST_CASE("Abi: a non-linear profile reaches the job")
 {
     const StepCal f = loadStepCal();
 
@@ -1768,7 +1768,7 @@ TEST_CASE("Abi: aNonLinearProfileReachesTheJob")
     REQUIRE_MESSAGE(differences(seen2.byJob().at(0), a).empty(), "an invalid profile must leave the word linear");
 }
 
-TEST_CASE("Abi: settingsTheCoreRejectsAreRefusedWithTheCoresMessage")
+TEST_CASE("Abi: settings the core rejects are refused with the core's message")
 {
     const StepCal f = loadStepCal();
 
@@ -1800,7 +1800,7 @@ TEST_CASE("Abi: settingsTheCoreRejectsAreRefusedWithTheCoresMessage")
     REQUIRE(!seen.any("finished:"));
 }
 
-TEST_CASE("Abi: aRecordingThatCannotBeUsedFailsToPrepare")
+TEST_CASE("Abi: a recording that cannot be used fails to prepare")
 {
     const StepCal f = loadStepCal();
 
@@ -1825,7 +1825,7 @@ TEST_CASE("Abi: aRecordingThatCannotBeUsedFailsToPrepare")
     REQUIRE(!std::string(tmdq_last_error()).empty());
 }
 
-TEST_CASE("Abi: badArgumentsToTheRunFunctionsAreRefused")
+TEST_CASE("Abi: bad arguments to the run functions are refused")
 {
     const StepCal f = loadStepCal();
 
@@ -1907,7 +1907,7 @@ TEST_CASE("Abi: badArgumentsToTheRunFunctionsAreRefused")
     tmdq_run_free(quiet);
 }
 
-TEST_CASE("Abi: cancellingEndsARunUnsuccessfully")
+TEST_CASE("Abi: cancelling ends a run unsuccessfully")
 {
     const StepCal prn = loadPrnSample();
 
@@ -1935,7 +1935,7 @@ TEST_CASE("Abi: cancellingEndsARunUnsuccessfully")
     CHECK(tmdq_run_running(run) == 0);
 }
 
-TEST_CASE("Abi: freeingARunInFlightCancelsAndWaits")
+TEST_CASE("Abi: freeing a run in flight cancels and waits")
 {
     const StepCal prn = loadPrnSample();
 
@@ -1958,7 +1958,7 @@ TEST_CASE("Abi: freeingARunInFlightCancelsAndWaits")
     seen.reset();
 }
 
-TEST_CASE("Abi: aResultOutlivesItsRunAndIsFreedFromAnyThread")
+TEST_CASE("Abi: a result outlives its run and is freed from any thread")
 {
     const StepCal f = loadStepCal();
 
@@ -1996,7 +1996,7 @@ TEST_CASE("Abi: aResultOutlivesItsRunAndIsFreedFromAnyThread")
     std::thread([result] { tmdq_stream_result_free(result); }).join();
 }
 
-TEST_CASE("Abi: aCallbackThatThrowsDoesNotBreakTheRun")
+TEST_CASE("Abi: a callback that throws does not break the run")
 {
     const StepCal f = loadStepCal();
 
@@ -2017,7 +2017,7 @@ TEST_CASE("Abi: aCallbackThatThrowsDoesNotBreakTheRun")
     REQUIRE(seen.count("stream:1") == 1);
 }
 
-TEST_CASE("Abi: twoRunsAtOnceAgreeWithOneAlone")
+TEST_CASE("Abi: two runs at once agree with one alone")
 {
     const StepCal f = loadStepCal();
 
@@ -2054,7 +2054,7 @@ TEST_CASE("Abi: twoRunsAtOnceAgreeWithOneAlone")
     }
 }
 
-TEST_CASE("Abi: aSuccessfulCallClearsTheLastError")
+TEST_CASE("Abi: a successful call clears the last error")
 {
     const StepCal f = loadStepCal();
 
@@ -2098,7 +2098,7 @@ TEST_CASE("Abi: aSuccessfulCallClearsTheLastError")
     REQUIRE(!std::string(tmdq_last_error()).empty());
 }
 
-TEST_CASE("Abi: theExceptionGuardTurnsAThrowIntoAStatus")
+TEST_CASE("Abi: the exception guard turns a throw into a status")
 {
     // The one place a failure the library did not foresee is caught, so it is tried directly.
     tmdq::setError("stale");
@@ -2120,7 +2120,7 @@ TEST_CASE("Abi: theExceptionGuardTurnsAThrowIntoAStatus")
     REQUIRE(!std::string(tmdq_last_error()).empty());
 }
 
-TEST_CASE("Abi: theByteOrderOfTheFileReachesTheJob")
+TEST_CASE("Abi: the byte order of the file reaches the job")
 {
     const StepCal f = loadStepCal();
 
@@ -2156,7 +2156,7 @@ TEST_CASE("Abi: theByteOrderOfTheFileReachesTheJob")
     REQUIRE_MESSAGE(differences(seenSwapped.byJob().at(0), swapped.at(0)).empty(), differences(seenSwapped.byJob().at(0), swapped.at(0)));
 }
 
-TEST_CASE("Abi: aReceiverParametersFileAndTheAppRootReachTheJob")
+TEST_CASE("Abi: a receiver parameters file and the app root reach the job")
 {
     const StepCal f = loadStepCal();
 
@@ -2203,7 +2203,7 @@ TEST_CASE("Abi: aReceiverParametersFileAndTheAppRootReachTheJob")
     REQUIRE_MESSAGE(differences(seenNone.byJob().at(0), wantNone.at(0)).empty(), differences(seenNone.byJob().at(0), wantNone.at(0)));
 }
 
-TEST_CASE("Abi: theFirstProfileOfAWordWins")
+TEST_CASE("Abi: the first profile of a word wins")
 {
     const StepCal f = loadStepCal();
 
@@ -2232,7 +2232,7 @@ TEST_CASE("Abi: theFirstProfileOfAWordWins")
     REQUIRE(!differences(swapped.byJob().at(0), want.at(0)).empty());
 }
 
-TEST_CASE("Abi: waitAloneIsEnoughToSeeTheEnd")
+TEST_CASE("Abi: wait alone is enough to see the end")
 {
     const StepCal f = loadStepCal();
 
@@ -2252,7 +2252,7 @@ TEST_CASE("Abi: waitAloneIsEnoughToSeeTheEnd")
     REQUIRE(seen.finishedCount == 1);
 }
 
-TEST_CASE("Abi: optionalTextMayBeLeftNull")
+TEST_CASE("Abi: optional text may be left null")
 {
     const StepCal f = loadStepCal();
 
@@ -2273,7 +2273,7 @@ TEST_CASE("Abi: optionalTextMayBeLeftNull")
     REQUIRE_MESSAGE(differences(seen.byJob().at(0), want.at(0)).empty(), differences(seen.byJob().at(0), want.at(0)));
 }
 
-TEST_CASE("Abi: theLinesBuildingJobsProducedReachLogFirst")
+TEST_CASE("Abi: the lines building jobs produced reach log first")
 {
     const StepCal f = loadStepCal();
 
@@ -2311,7 +2311,7 @@ TEST_CASE("Abi: theLinesBuildingJobsProducedReachLogFirst")
     }
 }
 
-TEST_CASE("Abi: everySettingOfAStreamReachesTheJob")
+TEST_CASE("Abi: every setting of a stream reaches the job")
 {
     const StepCal f = loadStepCal();
 
@@ -2373,7 +2373,7 @@ TEST_CASE("Abi: everySettingOfAStreamReachesTheJob")
     }
 }
 
-TEST_CASE("Abi: readingAHostStructNeverStraysBeyondTheKnownOne")
+TEST_CASE("Abi: reading a host struct never strays beyond the known one")
 {
     // A newer host's longer struct is read only as far as this library knows it; the bytes after it, in the
     // destination, are never touched.
@@ -2398,7 +2398,7 @@ TEST_CASE("Abi: readingAHostStructNeverStraysBeyondTheKnownOne")
     REQUIRE(!tmdq::readStruct(static_cast<const tmdq_channel_info*>(nullptr), sizeof(tmdq_channel_info), dest.info));
 }
 
-TEST_CASE("Abi: theStepFileIsReadLikeTheCore")
+TEST_CASE("Abi: the step file is read like the core")
 {
     const std::string path = rootUtf8() + "/settings/rcvr_cals/default.toml";
     std::vector<StepDefinition> want;
@@ -2440,7 +2440,7 @@ TEST_CASE("Abi: theStepFileIsReadLikeTheCore")
     tmdq_steps_free(nullptr);
 }
 
-TEST_CASE("Abi: theInitialStepFilePathIsWrittenSnprintfStyle")
+TEST_CASE("Abi: the initial step file path is written snprintf-style")
 {
     const std::string root = rootUtf8();
     const std::string want = StepDetector::initialStepConfigPath(root, std::string());
@@ -2476,7 +2476,7 @@ TEST_CASE("Abi: theInitialStepFilePathIsWrittenSnprintfStyle")
     CHECK(tmdq_step_config_initial_path(root.c_str(), nullptr, big.data(), -1) == -1);
 }
 
-TEST_CASE("Abi: aCalibrationMatchesWhatTheExtractorMakes")
+TEST_CASE("Abi: a calibration matches what the extractor makes")
 {
     const StepCal f = loadStepCal();
 
@@ -2525,7 +2525,7 @@ TEST_CASE("Abi: aCalibrationMatchesWhatTheExtractorMakes")
     REQUIRE_MESSAGE(differences(runSeen.byJob().at(0), direct.at(0)).empty(), differences(runSeen.byJob().at(0), direct.at(0)));
 }
 
-TEST_CASE("Abi: everySettingOfACalibrationReachesTheExtractor")
+TEST_CASE("Abi: every setting of a calibration reaches the extractor")
 {
     const StepCal f = loadStepCal();
 
@@ -2589,7 +2589,7 @@ TEST_CASE("Abi: everySettingOfACalibrationReachesTheExtractor")
     }
 }
 
-TEST_CASE("Abi: aCalibrationSettingTheExtractorCannotUseIsRefused")
+TEST_CASE("Abi: a calibration setting the extractor cannot use is refused")
 {
     const StepCal f = loadStepCal();
 
@@ -2621,7 +2621,7 @@ TEST_CASE("Abi: aCalibrationSettingTheExtractorCannotUseIsRefused")
     REQUIRE(seen.snapshot().empty());
 }
 
-TEST_CASE("Abi: badArgumentsToTheCalibrationFunctionsAreRefused")
+TEST_CASE("Abi: bad arguments to the calibration functions are refused")
 {
     const StepCal f = loadStepCal();
 
@@ -2684,7 +2684,7 @@ TEST_CASE("Abi: badArgumentsToTheCalibrationFunctionsAreRefused")
     REQUIRE(tmdq_calibration_channel_result(guard.handle, 0, &ch) == int(TMDQ_OK));
 }
 
-TEST_CASE("Abi: aCalibrationThatCannotStartReportsThroughTheSink")
+TEST_CASE("Abi: a calibration that cannot start reports through the sink")
 {
     const StepCal f = loadStepCal();
 
@@ -2723,7 +2723,7 @@ TEST_CASE("Abi: aCalibrationThatCannotStartReportsThroughTheSink")
     REQUIRE_MESSAGE(calibrationDifferences(guard2.handle, noSteps).empty(), calibrationDifferences(guard2.handle, noSteps));
 }
 
-TEST_CASE("Abi: resultsAreRefusedWhileACalibrationRunsAndCancelEndsIt")
+TEST_CASE("Abi: results are refused while a calibration runs and cancel ends it")
 {
     const StepCal f = loadStepCal();
 
@@ -2754,7 +2754,7 @@ TEST_CASE("Abi: resultsAreRefusedWhileACalibrationRunsAndCancelEndsIt")
     CHECK(std::string(info.error_utf8) == std::string());
 }
 
-TEST_CASE("Abi: freeingACalibrationInFlightCancelsAndWaits")
+TEST_CASE("Abi: freeing a calibration in flight cancels and waits")
 {
     const StepCal f = loadStepCal();
 
@@ -2771,7 +2771,7 @@ TEST_CASE("Abi: freeingACalibrationInFlightCancelsAndWaits")
     seen.reset();
 }
 
-TEST_CASE("Abi: waitAloneIsEnoughToSeeACalibrationEnd")
+TEST_CASE("Abi: wait alone is enough to see a calibration end")
 {
     const StepCal f = loadStepCal();
 
@@ -2791,7 +2791,7 @@ TEST_CASE("Abi: waitAloneIsEnoughToSeeACalibrationEnd")
     tmdq_calibration_wait(guard.handle);   // and again is harmless
 }
 
-TEST_CASE("Abi: waitingOnACalibrationFromItsOwnFinishedCallbackIsAnErrorNotAnException")
+TEST_CASE("Abi: waiting on a calibration from its own finished callback is an error not an exception")
 {
     // As for a run: `finished` comes from the thread the wait would join, and the failure is a last error.
     const StepCal f = loadStepCal();
@@ -2813,7 +2813,7 @@ TEST_CASE("Abi: waitingOnACalibrationFromItsOwnFinishedCallbackIsAnErrorNotAnExc
     CHECK(seen.finishedSuccess == 1);
 }
 
-TEST_CASE("Abi: freeingACalibrationFromItsOwnFinishedCallbackIsRefusedAndItsResultIsStillThere")
+TEST_CASE("Abi: freeing a calibration from its own finished callback is refused and its result is still there")
 {
     // As for a run. What shows the extraction was not released is that its result can still be read afterwards.
     const StepCal f = loadStepCal();
@@ -2839,7 +2839,7 @@ TEST_CASE("Abi: freeingACalibrationFromItsOwnFinishedCallbackIsRefusedAndItsResu
     CHECK(info.channel_count == 48);
 }
 
-TEST_CASE("Abi: aThresholdThatHadToBeRelaxedIsReported")
+TEST_CASE("Abi: a threshold that had to be relaxed is reported")
 {
     const StepCal f = loadStepCal();
 
@@ -2871,7 +2871,7 @@ TEST_CASE("Abi: aThresholdThatHadToBeRelaxedIsReported")
     CHECK(reported == relaxed);
 }
 
-TEST_CASE("Abi: aFrameSyncFileIsReadLikeTheCore")
+TEST_CASE("Abi: a frame sync file is read like the core")
 {
     Scratch dir;
     std::vector<std::string> paths;
@@ -2931,7 +2931,7 @@ TEST_CASE("Abi: aFrameSyncFileIsReadLikeTheCore")
     tmdq_frame_sync_file_free(nullptr);
 }
 
-TEST_CASE("Abi: aFrameSyncFileIsWrittenLikeTheCore")
+TEST_CASE("Abi: a frame sync file is written like the core")
 {
     Scratch dir;
     struct Args { const char* pattern; const char* mask; int bits; int inverted; int randomized; };
@@ -2974,7 +2974,7 @@ TEST_CASE("Abi: aFrameSyncFileIsWrittenLikeTheCore")
     CHECK(tmdq_frame_sync_file_write(nullptr, "AB", "", 800, 0, 0) == int(TMDQ_ERR_BADARG));
 }
 
-TEST_CASE("Abi: templateMatchingAgreesWithTheCore")
+TEST_CASE("Abi: template matching agrees with the core")
 {
     auto run = [](const std::vector<int>& t, const std::vector<int>& f) {
         tmdq_match* match = nullptr;
@@ -3050,7 +3050,7 @@ TEST_CASE("Abi: templateMatchingAgreesWithTheCore")
     tmdq_match_free(nullptr);
 }
 
-TEST_CASE("Abi: aCsvIsParsedLikeTheCore")
+TEST_CASE("Abi: a CSV is parsed like the core")
 {
     // Two real exports of v2.x, trimmed to their header and a few rows (tests/fixtures): a wide one of one stream's
     // receiver channels, and a sparse one of four streams' lock and missed frames, one row to a stream. Committed, so the
@@ -3143,7 +3143,7 @@ TEST_CASE("Abi: aCsvIsParsedLikeTheCore")
     tmdq_csv_free(nullptr);
 }
 
-TEST_CASE("Abi: aCsvIsWrittenLikeTheCore")
+TEST_CASE("Abi: a CSV is written like the core")
 {
     Scratch dir;
 
@@ -3223,7 +3223,7 @@ TEST_CASE("Abi: aCsvIsWrittenLikeTheCore")
     REQUIRE(!std::string(tmdq_last_error()).empty());
 }
 
-TEST_CASE("Abi: clockStampsAgreeWithTheCore")
+TEST_CASE("Abi: clock stamps agree with the core")
 {
     std::mt19937 rng(20261023);
     int checked = 0;
@@ -3260,7 +3260,7 @@ TEST_CASE("Abi: clockStampsAgreeWithTheCore")
     CHECK(tmdq_clock_time_format(120, 0.0, 0.0, 1, buf, -1) == -1);
 }
 
-TEST_CASE("Abi: aStreamBecomesTheSeriesTheCoreBuilds")
+TEST_CASE("Abi: a stream becomes the series the core builds")
 {
     std::mt19937 rng(20261024);
     int withLock = 0, withMissed = 0, withChannels = 0, empty = 0, nan = 0;
@@ -3356,7 +3356,7 @@ TEST_CASE("Abi: aStreamBecomesTheSeriesTheCoreBuilds")
     tmdq_stream_result_free(again);
 }
 
-TEST_CASE("Abi: theTimeBaseMovesLikeTheCore")
+TEST_CASE("Abi: the time base moves like the core")
 {
     std::mt19937 rng(20261024);
     auto info = [](const tmdq_time_base* b) {
@@ -3456,7 +3456,7 @@ TEST_CASE("Abi: theTimeBaseMovesLikeTheCore")
     tmdq_time_base_free(nullptr);
 }
 
-TEST_CASE("Abi: streamKeysIdentifyTheSameStream")
+TEST_CASE("Abi: stream keys identify the same stream")
 {
     ProcessedStreamData a;
     a.sourceId = 1;
@@ -3515,7 +3515,7 @@ TEST_CASE("Abi: streamKeysIdentifyTheSameStream")
         tmdq_stream_result_free(r);
 }
 
-TEST_CASE("Abi: importedStreamOrdersAreAssignedLikeTheCore")
+TEST_CASE("Abi: imported stream orders are assigned like the core")
 {
     std::mt19937 rng(20261024);
     static const char* const labels[] = { "A", "B", "", "R\xC3\xA9", "same" };
@@ -3633,7 +3633,7 @@ std::string describe(const tmdq_receiver_params& p) { return describe(coreParams
 
 } // namespace
 
-TEST_CASE("Abi: aReceiverParametersFileIsReadLikeTheCore")
+TEST_CASE("Abi: a receiver parameters file is read like the core")
 {
     // Every read rule, each in a file of its own, against the core called directly, from two starting points (the
     // application's defaults, and values no file below gives, so a field read from the wrong key shows).
@@ -3690,7 +3690,7 @@ TEST_CASE("Abi: aReceiverParametersFileIsReadLikeTheCore")
     CHECK(describe(none) == describe(ReceiverParams()));
 }
 
-TEST_CASE("Abi: aReceiverParametersFileIsSavedLikeTheCore")
+TEST_CASE("Abi: a receiver parameters file is saved like the core")
 {
     // Each case saved through the ABI and through FrameSetup::saveReceiverParamsFile: the same verdict, the same
     // error text and the same bytes. Then what was saved reads back as the scalars that were saved.
@@ -3768,7 +3768,6 @@ TEST_CASE("Abi: aReceiverParametersFileIsSavedLikeTheCore")
     }
 
     // The map is the source's when it loads: RASA's word map, not the default one, is what the file now carries.
-    const std::string text = slurp(s.filePath("rasa-map-abi.toml"));
     FrameSetup back;
     REQUIRE(back.tryLoadingFile(textfile::pathFromUtf8(s.filePath("rasa-map-abi.toml")), 50));
     FrameSetup original;
@@ -3787,7 +3786,7 @@ TEST_CASE("Abi: aReceiverParametersFileIsSavedLikeTheCore")
     CHECK(std::string(tmdq_last_error()) == "Could not write 'blocked.toml'.");
 }
 
-TEST_CASE("Abi: theWordsInAMinorFrameAreTheCores")
+TEST_CASE("Abi: the words in a minor frame are the core's")
 {
     for (int bits : {-17, -1, 0, 1, 15, 16, 17, 31, 32, 33, 64, 790, 800, 801, 2047, 32767, 32768, 65536})
     {
@@ -3798,7 +3797,7 @@ TEST_CASE("Abi: theWordsInAMinorFrameAreTheCores")
     CHECK(tmdq_words_in_minor_frame(801) == 51);
 }
 
-TEST_CASE("Abi: badArgumentsToTheReceiverParameterFunctionsAreRefused")
+TEST_CASE("Abi: bad arguments to the receiver parameter functions are refused")
 {
     Scratch s;
     const std::string path = writeFile(s.filePath("p.toml"), "[Parameters]\r\nScale=5\r\n");
@@ -3866,7 +3865,7 @@ bool bitsEqual(double a, double b) { return std::memcmp(&a, &b, sizeof a) == 0; 
 
 } // namespace
 
-TEST_CASE("Abi: aSeriesGeometryIsTheCores")
+TEST_CASE("Abi: a series geometry is the core's")
 {
     // Generated series and views, through the ABI and straight through the core: the segments, every band's points
     // and the decimation flag, bit for bit, and each transform.
@@ -3949,7 +3948,7 @@ TEST_CASE("Abi: aSeriesGeometryIsTheCores")
     CHECK(banded > 100);
 }
 
-TEST_CASE("Abi: theTicksAndTheRangeCheckAreTheCores")
+TEST_CASE("Abi: the ticks and the range check are the core's")
 {
     std::mt19937 rng(17);
     auto uniform = [&](double a, double b) { return std::uniform_real_distribution<double>(a, b)(rng); };
@@ -3983,7 +3982,7 @@ TEST_CASE("Abi: theTicksAndTheRangeCheckAreTheCores")
     CHECK(tmdq_chart_time_ticks(0.0, 116.0, 5, 0.0, nullptr, 0) == 4);   // measuring only
 }
 
-TEST_CASE("Abi: aTickCountNoAxisCouldHaveIsRefused")
+TEST_CASE("Abi: a tick count no axis could have is refused")
 {
     // The count sizes an allocation, so it is bounded before anything is built: a host's mistaken or hostile count
     // would otherwise ask for gigabytes (and an exception from that must not leave the library either).
@@ -4006,7 +4005,7 @@ TEST_CASE("Abi: aTickCountNoAxisCouldHaveIsRefused")
     CHECK(std::string(tmdq_last_error()).empty());
 }
 
-TEST_CASE("Abi: badArgumentsToTheChartFunctionsAreRefused")
+TEST_CASE("Abi: bad arguments to the chart functions are refused")
 {
     const double xs[] = {0.0, 1.0, 2.0};
     const double ys[] = {1.0, 2.0, 3.0};
@@ -4081,7 +4080,7 @@ TEST_CASE("Abi: badArgumentsToTheChartFunctionsAreRefused")
 // A series' index (revision 3)
 // ---------------------------------------------------------------------------
 
-TEST_CASE("Abi: aSeriesIndexGivesTheCoresIndexedGeometry")
+TEST_CASE("Abi: a series index gives the core's indexed geometry")
 {
     // Generated ordered series, dense enough to be drawn from their envelope, through the ABI with an index and
     // straight through the core with one: bit for bit.
@@ -4154,7 +4153,7 @@ TEST_CASE("Abi: aSeriesIndexGivesTheCoresIndexedGeometry")
     CHECK(decimated > 100);
 }
 
-TEST_CASE("Abi: aSeriesIndexIsUsedOnlyWhenItFitsAndBadArgumentsAreRefused")
+TEST_CASE("Abi: a series index is used only when it fits and bad arguments are refused")
 {
     std::vector<double> xs(1024), ys(1024, 100.0), zeros(1024, 0.0);
     for (int i = 0; i < 1024; ++i) xs[static_cast<std::size_t>(i)] = i * 0.125;

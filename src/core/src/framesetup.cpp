@@ -15,6 +15,7 @@
 #include "textparse.h"
 #include "tomldocument.h"
 
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization): a handful of short strings; failing to allocate them at start is fatal anyway
 const std::vector<std::string> FrameSetup::kSettingsGroups = {
     // Non-parameter metadata sections, skipped by tryLoadingFile(). "EMPTY"
     // lets a word map explicitly list an unused/placeholder word (e.g. the

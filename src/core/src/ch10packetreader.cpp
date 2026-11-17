@@ -46,7 +46,7 @@ Ch10PacketReader::Ch10PacketReader()
     m_buffer.resize(PCMConstants::kDefaultBufferSize);
 }
 
-Ch10PacketReader::~Ch10PacketReader()
+Ch10PacketReader::~Ch10PacketReader()   // NOLINT(bugprone-exception-escape): only a mutex that cannot be locked throws
 {
     closeFile();
     freeChanInfoTable(m_channel_info);
@@ -130,7 +130,7 @@ EnI106Status Ch10PacketReader::assembleAttributesFromTMATS(SuTmatsInfo* tmats_in
                 continue;
             }
 
-            int iTrackNumber = atoi(psuRDataSrc->szTrackNumber);
+            int iTrackNumber = atoi(psuRDataSrc->szTrackNumber);   // NOLINT(bugprone-unchecked-string-to-number-conversion): checked below
             // atoi() yields 0 on non-numeric text and can be negative for a
             // malformed track string; a negative index would read out of bounds
             // below, so skip such a data source rather than indexing with it.
