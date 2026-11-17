@@ -15,7 +15,7 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 #### The test projects keep what the tests share in Support/ (follow-up audit F3)
 
 Nine helper files stood among the test classes at the root of each .NET test project (the library tests' had grown from
-  seven to nine with the last two changes), so a new test's first look at the folder was a list of 50 files with no way
+  seven to nine with the last two changes), so a new test's first look at the folder was a long list of files with no way
   to tell a test from what it uses. They are in a `Support/` folder in each project now, moved with `git mv` so the
   history follows.
 
