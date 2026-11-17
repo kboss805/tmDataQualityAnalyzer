@@ -197,6 +197,22 @@ public sealed class ProcessingTests
     }
 
     [Fact]
+    public void AFileSizeIsWrittenTheSameInEveryCulture()
+    {
+        // The log's "File size:" line: a decimal point whatever the machine's culture, as v2.14.2 wrote it.
+        System.Globalization.CultureInfo before = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+        try
+        {
+            Assert.Equal(("77.3 MB", "1.0 KB"), (MainWindowViewModel.SizeText(81013684L), MainWindowViewModel.SizeText(1023L)));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = before;
+        }
+    }
+
+    [Fact]
     public void AChannelCountOfNoneSaysNone()
     {
         Assert.Equal(new[] { "none", "1", "12" }, new[] { 0, 1, 12 }.Select(MainWindowViewModel.CountText));

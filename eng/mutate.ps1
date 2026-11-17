@@ -35,6 +35,12 @@
         once.
       * Old and new text take the file's own line endings, so a list does not depend on how git checked
         the file out.
+      * After the last mutant the suite is built once more from the restored sources. The files are
+        restored after every mutant, but what the last one was built into (tmdq_core.dll in out\Release,
+        a test exe) stays in the tree: a suite run next in the worktree once failed against a mutant.
+      * Each kept list in eng\mutants must go on matching: the managed suite (RepoFilesTests) fails when
+        a mutant's old text is no longer in its file exactly once. Re-anchor it in the change that moved
+        the text.
 
     The list is JSON:
         {
@@ -304,6 +310,7 @@ if (-not $NoBaseline) {
 # ---- the mutants --------------------------------------------------------------------------------------------
 $counts = [ordered]@{ caught = 0; survived = 0; compile = 0; 'no verdict' = 0 }
 $unmet = @()
+$applied = 0
 foreach ($m in $mutants) {
     $path = Join-Path $root $m.file
     $text = $utf8.GetString($pristine[$m.file])
@@ -318,6 +325,7 @@ foreach ($m in $mutants) {
         $index = $text.IndexOf($old)
         $mutated = $text.Substring(0, $index) + $new + $text.Substring($index + $old.Length)
         try {
+            $applied++
             [IO.File]::WriteAllBytes($path, $utf8.GetBytes($mutated))
             $stamp = (Get-Item $path).LastWriteTimeUtc
             $b = Build-Suite
@@ -367,8 +375,16 @@ foreach ($f in $pristine.Keys) {
         Say "!! $f differs from its pristine bytes"; exit 4
     }
 }
+# The sources are back, but the binaries in the tree are still the last mutant's: build them again from the restored
+# sources, so the next suite run in this worktree is not a run against a mutant.
+$closing = $null
+if ($applied -gt 0) { $closing = Build-Suite }
 Say ''
 Say ((($counts.Keys | ForEach-Object { "$_ $($counts[$_])" }) -join ', ') + ", of $($mutants.Count)")
+if ($closing -and -not $closing.Ok) {
+    Say "!! the closing build from the restored sources failed, so the tree still holds a mutant's binaries: $($closing.Detail)"
+    exit 4
+}
 if ($unmet.Count -gt 0) { Say ("expectations not met: " + ($unmet -join ', ')); exit 5 }
 if ($counts['no verdict'] -gt 0) { exit 1 }
 exit 0

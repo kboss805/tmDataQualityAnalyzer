@@ -45,8 +45,8 @@
     {
       "id": "L1",
       "file": "src/TmDq.App/Services/IHelpActions.cs",
-      "old": "    public interface IHelpActions",
-      "new": "    public static class HelpNote { } public interface IHelpActions",
+      "old": "public interface IHelpActions",
+      "new": "public static class HelpNote { } public interface IHelpActions",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.LayerTests"],
       "expect": "caught",
       "note": "a class filed in Services, as DialogConfigurator and HelpManual were"

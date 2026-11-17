@@ -899,7 +899,9 @@ more checks run by hand:
   machine, each CSV held byte for byte to what v2.14.2 exported (`Soak/soak.json`). Most recordings are not committed,
   so CI never runs it. `docs/records/soak.md` is the record of how it was set up.
 - **Mutation checks** (`eng\mutate.ps1`, in a worktree): every behaviour change is checked against single-defect
-  mutants, and a surviving mutant is a test to write or a line to remove.
+  mutants, and a surviving mutant is a test to write or a line to remove. The lists kept in `eng/mutants` are
+  regression checks: `RepoFilesTests` fails when a change moves the text one of their mutants names, and the list is
+  re-anchored in that change.
 
 A new native test file goes in `tests/core/tmdq_core_tests.vcxproj` (`NativeProjectTests` fails until it
 is); a new .NET test needs nothing but its class.
@@ -974,7 +976,8 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 **The C# library** (`tests/TmDq.Core.Tests`): the struct layout against the native side (`LayoutTests`); the native
 projects' source and header lists against the files on disk (`NativeProjectTests`); the repository's own files
 (`RepoFilesTests`: the scripts, the installer script and the workflow ASCII-only, every .NET project's output out of a
-platform folder, both .NET test hosts merging the shared UTF-8 manifest, the workflow's time limit and read-only token); the recordings' channels (`FileTests`); runs of
+platform folder, both .NET test hosts merging the shared UTF-8 manifest, the workflow's time limit and read-only token,
+and every kept mutant in `eng/mutants` still naming text that is in its file exactly once); the recordings' channels (`FileTests`); runs of
 the committed recordings against numbers v2.14.2 produced, every setting reaching the job, failures, observers, cancel
 and lifetimes (`RunTests`); calibration against the core's extractor (`CalibrationTests`); the file formats byte for
 byte against the core (`FormatsTests`); loading the DLL (`LibraryTests`, `IsolatedLoadTests` in a child process, the

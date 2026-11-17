@@ -141,8 +141,7 @@
       "id": "H12",
       "file": "src/TmDq.Core/StreamResult.cs",
       "old": "        ObjectDisposedException.ThrowIf(_handle.IsClosed, this);\n    }",
-      "new": "        ObjectDisposedException.ThrowIf(false, this);
-    }",
+      "new": "        ObjectDisposedException.ThrowIf(false, this);\n    }",
       "args": [
         "-class",
         "TmDq.Core.Tests.RunTests"
