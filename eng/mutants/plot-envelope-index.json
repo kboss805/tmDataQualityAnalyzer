@@ -9,7 +9,7 @@
       "old": "index->size() == n)", "new": "index->size() != 0)",
       "expect": "caught", "note": "an index built over another number of values used" },
     { "id": "N3", "file": "src/core/src/chartgeometry.cpp",
-      "old": "if (sortedX && index && index->size() == n)", "new": "if (false && sortedX && index && index->size() == n)",
+      "old": "if (sortedX && index && index->size() == n)", "new": "if (sortedX && index && index->size() == n + 1)",
       "expect": "caught", "note": "the index never used: every envelope walked" },
     { "id": "N4", "file": "src/core/src/chartgeometry.cpp",
       "old": "(first + kBlock - 1) / kBlock * kBlock", "new": "first / kBlock * kBlock",
