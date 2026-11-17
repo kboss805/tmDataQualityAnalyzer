@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace TmDq.Core.Tests;
@@ -171,6 +173,26 @@ public class CalibrationTests
             unresolved += v;
         }
         Assert.True(Parse(f[18]) == unresolved, $"{at}: sum of unresolved dB");
+    }
+
+    [Fact]
+    public async Task ACalibrationDisposedFromItsOwnCallbackStillReportsItsEndAndIsReleasedOnceTheCallbackHasReturned()
+    {
+        // As HandleTests does for a processing run: the native free is refused on the extraction's own callback thread.
+        WeakReference observer = ExtractionThatDisposesItself();
+        await HandleTests.AssertReleased(observer);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference ExtractionThatDisposesItself()
+    {
+        var observer = new SelfDisposingObserver();
+        CalibrationRun run = CalibrationRun.Start(Request(), observer);
+        observer.Run = run;
+        Assert.True(observer.WaitFinished(), "the extraction did not finish after it was disposed from a callback");
+        Assert.NotNull(observer.Success);
+        Assert.Null(run.ObserverException);
+        return new WeakReference(observer);
     }
 
     [Fact]

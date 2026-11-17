@@ -565,7 +565,9 @@ call's arguments (strings, a copy of a list, an array of pointers, a boxed struc
 never unwinds a native thread), and `Handles`: a `SafeHandle` for each kind of native handle (run, calibration run, stream
 result, series set, series index, time base), so one kind cannot be passed for another, a handle is released exactly once,
 when it is disposed and the last call using it has returned, and a call on a released one throws
-`ObjectDisposedException` rather than reaching a freed pointer. A run's handle owns its `ObserverBridge`, freed with it.
+`ObjectDisposedException` rather than reaching a freed pointer. A run's handle owns its `ObserverBridge`, freed with it, after the native free has waited for every thread that calls back: a release
+asked for from one of the observer's own callbacks (`OnFinished` disposing its run), which the library refuses on that thread, is
+queued to the thread pool and done once the callback has returned (`ObserverBridge.IsDelivering` knows the thread).
 `Library` loads `tmdq_core.dll` (the app passes the one beside it, or
 `TMDQ_CORE_DLL`: `NativeCore`) and refuses one whose ABI version or revision it does not know.
 
@@ -979,10 +981,11 @@ projects' source and header lists against the files on disk (`NativeProjectTests
 platform folder, both .NET test hosts merging the shared UTF-8 manifest, the workflow's time limit and read-only token,
 and every kept mutant in `eng/mutants` still naming text that is in its file exactly once); the recordings' channels (`FileTests`); runs of
 the committed recordings against numbers v2.14.2 produced, every setting reaching the job, failures, observers, cancel
-and lifetimes (`RunTests`); calibration against the core's extractor (`CalibrationTests`); the file formats byte for
+and lifetimes (`RunTests`); calibration against the core's extractor (`CalibrationTests`, an extraction disposed from its own callback included); the file formats byte for
 byte against the core (`FormatsTests`); loading the DLL (`LibraryTests`, `IsolatedLoadTests` in a child process, the
 suite's one skip); `ChartGeometryTests`, `ReceiverParamsTests`, `SeriesTests`, `ArenaTests`, `HandleTests` (a handle released once, when it is disposed and the last call using it has
-returned; a Dispose while another thread waits on a run); and `TempFilesTests`, the
+returned; a Dispose while another thread waits on a run, and a run disposed from its own callback, which still reports its end and is
+released afterwards), `ObserverBridgeTests` (which thread is inside a callback, nested and after a throw); and `TempFilesTests`, the
 helper every test cleans up and reads back through, which waits out a virus scanner's moment's hold.
 
 **The application** (`tests/TmDq.App.Tests`, on the headless platform with Skia drawing):
