@@ -513,7 +513,10 @@ profile, so a batch processes with the linear calibration.
   `ClipMaximum`, bound in the window the same way.
 - **The run** (`Models/Processing`: `StreamsRun`, `NativeCore`; `ViewModels/Dialogs/ProcessingViewModel` and its window;
   `Models/Logging/SessionLog` and `Views/Controls/LogView`): the core's run on its own threads, the modal progress dialog whose
-  Cancel stops every stream, and the log.
+  Cancel stops every stream, and the log. A run's outcome (`RunOutcome`) holds the core's own result of each stream that
+  completed, which the plot builds its series from, and a `StreamSummary` of each (job index, label, sample and channel
+  counts: what the log line and the status line say); no stream's arrays are copied to managed memory (`ToProcessed` is the
+  binding's, for tests, and `LayerTests` fails if the app calls it).
 - **Startup and the smoke report** (`Startup`, `Models/Processing/FirstChannelRun`): a recording path on the command
   line opens that recording, as a file association does. With `TMDQ_SMOKE_REPORT=<file>` set as well, the application skips
   Configure Streams, runs the recording's first PCM channel with the Frame Sync Lock defaults (`FirstChannelRun`), writes

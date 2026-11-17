@@ -9,9 +9,14 @@ using TmDq.Core;
 
 namespace TmDq.App.Models.Processing;
 
-/// <summary>What a run produced: every stream that completed, in table order (a copy, and the core's own result, which
-/// the plot builds its series from), and every error reported. Disposing it releases the core's results.</summary>
-public sealed record RunOutcome(IReadOnlyList<ProcessedStream> Streams, IReadOnlyList<StreamResult> Results,
+/// <summary>What the log and the status line need of a stream that completed: which it is and how many samples and
+/// channels it has. A few numbers, not the arrays: those stay in the core's result (<see cref="RunOutcome.Results"/>),
+/// which the plot builds its series from and a reader of the samples reads in place.</summary>
+public sealed record StreamSummary(int JobIndex, string Label, int SampleCount, int ChannelCount);
+
+/// <summary>What a run produced: a summary of every stream that completed, in table order, the core's own result of each
+/// (the same order), and every error reported. Disposing it releases the core's results.</summary>
+public sealed record RunOutcome(IReadOnlyList<StreamSummary> Streams, IReadOnlyList<StreamResult> Results,
                                 IReadOnlyList<string> Errors) : IDisposable
 {
     public void Dispose()
@@ -107,8 +112,8 @@ public static class StreamsRun
             if (run.ObserverException is { } failure)
                 observer.OnError("A report from the core could not be handled: " + failure.Message);
         }
-        var completed = observer.Results.OrderBy(r => r.Copy.JobIndex).ToList();
-        List<ProcessedStream> streams = completed.Select(r => r.Copy).ToList();
+        var completed = observer.Results.OrderBy(r => r.Summary.JobIndex).ToList();
+        List<StreamSummary> streams = completed.Select(r => r.Summary).ToList();
         if (streams.Count == 0)
         {
             cancel.ThrowIfCancellationRequested();
@@ -151,9 +156,9 @@ public static class StreamsRun
     };
 
     /// <summary>The line logged for a stream that completed, in v2.14.2's words.</summary>
-    private static string Completed(ProcessedStream s) =>
-        $"  {s.Label}: {s.TimesSec.Length.ToString(CultureInfo.InvariantCulture)} samples, " +
-        $"{s.Channels.Count.ToString(CultureInfo.InvariantCulture)} channel(s)";
+    private static string Completed(StreamSummary s) =>
+        $"  {s.Label}: {s.SampleCount.ToString(CultureInfo.InvariantCulture)} samples, " +
+        $"{s.ChannelCount.ToString(CultureInfo.InvariantCulture)} channel(s)";
 
     /// <summary>Gathers one run's reports; its log goes through a <see cref="RunLogOrder"/>.</summary>
     private sealed class Collector : IRunObserver
@@ -170,8 +175,8 @@ public static class StreamsRun
 
         public List<string> Errors { get; } = new();
 
-        /// <summary>Each completed stream: a managed copy, and the core's result, kept for the plot.</summary>
-        public List<(ProcessedStream Copy, StreamResult Result)> Results { get; } = new();
+        /// <summary>Each completed stream: its summary, and the core's result, kept for the plot.</summary>
+        public List<(StreamSummary Summary, StreamResult Result)> Results { get; } = new();
 
         public void OnLog(string message) => Log.Line(message);
 
@@ -185,9 +190,11 @@ public static class StreamsRun
 
         public void OnStreamCompleted(StreamResult result)
         {
-            ProcessedStream p = result.ToProcessed();
-            lock (Results) Results.Add((p, result));
-            Log.Line(Completed(p));
+            // Nothing of the arrays is copied: the result keeps them in native memory for the plot, and what is said of the
+            // stream here is a line and a count.
+            var summary = new StreamSummary(result.JobIndex, result.Label, result.SampleCount, result.ChannelCount);
+            lock (Results) Results.Add((summary, result));
+            Log.Line(Completed(summary));
         }
     }
 }

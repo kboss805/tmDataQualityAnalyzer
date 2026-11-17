@@ -337,8 +337,8 @@ public sealed class ConfigureStreamsTests
     [Fact]
     public void TheStatusSaysHowManyStreamsWereProcessedAndHowManyWereNot()
     {
-        var lockStream = new ProcessedStream(13, "A", 0, 0, StreamMode.FrameSyncLock, new[] { 0.0 }, new[] { 50.0 }, new[] { 0.0 }, Array.Empty<ChannelData>());
-        var snr = lockStream with { Mode = StreamMode.ReceiverChannelInfo, PcmChannelId = 14 };
+        var lockStream = new StreamSummary(0, "A", 1, 0);
+        var snr = new StreamSummary(1, "B", 1, 3);
         // A sentence: that it finished and how many streams; the numbers of each stream are on the plot and in the log.
         Assert.Equal("Finished processing f.ch10: 1 stream.",
                      MainWindowViewModel.Describe("f.ch10", new RunOutcome(new[] { lockStream }, Array.Empty<StreamResult>(), Array.Empty<string>())));
@@ -355,7 +355,7 @@ public sealed class ConfigureStreamsTests
     public void TheStatusIsWrittenTheSameInEveryCulture()
     {
         // The line ends the smoke report: its numbers are written the same whatever the culture.
-        var lockStream = new ProcessedStream(13, "A", 0, 0, StreamMode.FrameSyncLock, new[] { 0.0 }, new[] { 33.3 }, new[] { 0.0 }, Array.Empty<ChannelData>());
+        var lockStream = new StreamSummary(0, "A", 1, 0);
         var outcome = new RunOutcome(new[] { lockStream }, Array.Empty<StreamResult>(), Array.Empty<string>());
         System.Globalization.CultureInfo before = System.Globalization.CultureInfo.CurrentCulture;
         System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");

@@ -208,7 +208,7 @@ public sealed class WalkingSkeletonTests
         Ch10File file = await StreamsRun.OpenAsync(Prn);
         using RunOutcome outcome = await StreamsRun.RunAsync(FirstChannelRun.Request(Prn, file), recorder,
                                                              cancel: TestContext.Current.CancellationToken);
-        Assert.Equal(116, outcome.Streams[0].LockPercent.Length);
+        Assert.Equal(116, outcome.Results[0].LockPercent.Length);
         // The core's reader reports 100 once at the end of every run; the view model sets 100 itself as well, so
         // only this shows the core's reports reach the caller.
         Assert.Contains(100, reports);
