@@ -26,16 +26,16 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Lock Percentage Over Time**: Measures per-stream frame synchronization lock and plots it against actual file time
 - **Acquire / Lock Scanner**: Bit-serial sync scanner that confirms a configurable number of in-phase syncs before declaring lock, then drops and re-acquires lock when a true sync is missed
 - **PRN-Robust Matching**: While locked, off-phase sync matches produced by pseudo-random data words are rejected so they cannot corrupt the lock figure (eliminates spurious lock dips on clean randomized streams)
-- **Bit-Span Lock Metric**: Lock % is computed from the actual number of frame-sized bit slots traversed versus frames detected; time is used only to delimit the averaging window, so the figure does not depend on an exact data rate
-- **Configurable Frame Parameters**: Frame sync pattern (hex), sync mask (hex), bits per frame, RNRZ-L randomization on/off, data rate (Mbps, or Auto from TMATS), and averaging window (1/10/100 Hz)
+- **Bit-Span Lock Metric**: Lock % is the share of the bits actually scanned in a window that lay in a locked stretch, counted bit by bit; time is used only to delimit the averaging window, so the figure does not depend on an exact data rate
+- **Configurable Frame Parameters**: Frame sync pattern (hex), sync mask (hex), bits per frame, RNRZ-L randomization on/off, data rate (Mbps, or Auto from TMATS), and average period (1 s, 100 ms or 10 ms)
 
 ### Receiver AGC (SNR) Processing
 
-- **Averaging Window**: 1 Hz, 10 Hz, or 100 Hz output sample rates
+- **Average Period**: 1 s, 100 ms or 10 ms output sample periods
 - **AGC Processing**: Extract calibrated receiver-channel AGC/SNR values with V-to-dB conversion
 - **Calibration**: Configurable polarity, voltage slope/range, scale (dB/V), receiver count, and channels per receiver
 - **Receiver Parameters TOML**: Word map and calibration loaded from a TOML configuration file
-- **Non-Linear Step Calibration**: Build a per-channel raw→dB calibration profile from a calibration .ch10 file plus a `[[Step]]` step-config TOML ("Extract Calibration…" in the Receiver SNR setup); applied during processing via piecewise-linear interpolation between steps, clamping to the nearest end-step dB for values past the calibrated range (so out-of-cal receivers read the ceiling/floor instead of diverging), and falling back to linear slope/offset for channels that don't calibrate. A receiver that saturates partway through the sweep is calibrated over the steps it could still measure, and the summary names each receiver with the reason any of them fell back. Plateau detection is polarity-agnostic and automatically excludes a signal-generator turn-on transient and any operator down-ramp; optional **Clip Start / Clip End** controls let you trim leading/trailing seconds before detection. Runtime-only; the extracted profile is not saved to disk.
+- **Non-Linear Step Calibration**: Build a per-channel raw→dB calibration profile from a calibration .ch10 file plus a `[[Step]]` step-config TOML ("Apply Cal" in the Receiver SNR setup, which opens the Extract Calibration dialog); applied during processing via piecewise-linear interpolation between steps, clamping to the nearest end-step dB for values past the calibrated range (so out-of-cal receivers read the ceiling/floor instead of diverging), and falling back to linear slope/offset for channels that don't calibrate. A receiver that saturates partway through the sweep is calibrated over the steps it could still measure, and the summary names each receiver with the reason any of them fell back. Plateau detection is polarity-agnostic and automatically excludes a signal-generator turn-on transient and any operator down-ramp; optional **Clip Start / Clip End** controls let you trim leading/trailing seconds before detection. Runtime-only; the extracted profile is not saved to disk.
 
 ### Multi-Stream Processing
 
@@ -59,7 +59,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 ### Plot & Visualization
 
-- **Interactive Plot Window**: Plot showing frame sync lock (%) and/or receiver AGC (dB) series with mouse wheel zoom, click-drag pan (open/closed-hand grab cursor), auto-scale axes, per-series visibility toggles, and an auto-assigned color palette
+- **Interactive Plot Window**: Plot showing frame sync lock (%) and/or receiver AGC (dB) series with mouse wheel zoom, click-drag pan (a hand cursor over the data), auto-scale axes, per-series visibility toggles, and an auto-assigned color palette
 - **Color Coding**: Frame Sync Lock series use purple/blue/green primaries (one per stream) and Receiver SNR series use red/orange/yellow primaries (one per receiver); additional streams, receivers, and channels are derived as progressively lighter shades so related series stay grouped
 - **Customize Plot Series Dialog**: A tabbed dialog selects which series are visible — a Frame Sync Lock tab (one toggle per stream) and a Receiver SNR tab that presents each stream as a collapsible tree of receivers with L/R/C channel checkboxes, tri-state group toggles, and Expand/Collapse All; streams with many receivers split across two columns
 - **Distraction-Free Plot**: The chart fills the entire plot area - there are no control rows around it. Every control lives in a **right-click context menu** on the chart (Set Plot Title, Plot File, View Mode, Customize View, Show Legend, Readout, X Axis, Y Axes, Reset View), in a single on-chart chip bar, or on a key while the chart has focus
@@ -80,8 +80,9 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 ### Application & UI
 
-- **Single Hamburger Menu**: Every command lives in one ☰ menu in the window's title bar, grouped into Process, Import/Export, Settings, and Help sections
+- **Single Hamburger Menu**: Every command lives in one ☰ menu in the window's title bar, in four submenus: File, Import/Export, Settings (the themes) and Help
 - **Custom Title Bar**: The window's own title bar with minimize/maximize/close buttons; native Windows drag, resize, snap layouts and double-click-maximize are preserved
+- **Status Bar**: A strip along the bottom of the window says in one short sentence what happened last (a file being processed, a run finished, a CSV imported, a template saved, or why something could not be done), marked with a tick, a warning sign or a cross; the log keeps the detail
 - **Toggleable Sidebar**: Show or hide the log sidebar from the title bar or with **Ctrl+B**; the choice persists across sessions
 - **Dark & Light Themes**: Fluent dark and light themes, chosen under ☰ menu > Settings; every window, dialog and the plot follow it
 - **Built-in User Manual**: An HTML user manual opens in the default browser from ☰ menu > Help > **User Manual**

@@ -12,6 +12,35 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The manual and the README say what the application does now (follow-up audit)
+
+Prose only; no product source changed. The follow-up audit read both against the code and the `.axaml` files.
+
+- **The menu.** The manual (and the full manual's walkthroughs) described a menu "grouped into Process, Import/Export
+  and Settings sections" with Help "a submenu at the bottom", and the walkthroughs said "≡ → Open…" and "≡ → Export…".
+  The menu is four submenus since #285: File, Import/Export, Settings and Help. The manual and the README now say so,
+  and the walkthroughs name the submenu ("≡ → File → Open…", "≡ → Import/Export → Export…").
+- **The status bar** had no mention in either: the strip along the bottom, one short sentence for what happened last,
+  marked with a tick, a warning sign or a cross. Added to the manual's window tour and to the README's Application & UI.
+- **Lock %.** The README and the walkthroughs still defined it by "frame-sized bit slots traversed versus frames
+  detected", the formula the code dropped; it is the share of the bits scanned in a window that lay in a locked stretch
+  (`docs/framesync_logic.md` section 6 already said so).
+- **Names that changed.** The Receiver SNR setup's button is "Apply Cal" (it opens the Extract Calibration dialog), not
+  "Extract Calibration…"; the averaging control is "Average Period" with 1 s, 100 ms and 10 ms, not "1/10/100 Hz"; the
+  chart's cursor is a hand, not an open/closed-hand grab.
+- **Settings between sessions.** The manual said the first run takes the theme, the sidebar and the rest "from TM Data
+  Quality Analyzer 2.x's settings". It has not since v3.1.0 (the import was dropped); it now says the first run starts
+  from the defaults.
+- **The full manual's figures** were re-embedded (`enguild_manual.ps1 -NoCapture`). Nine of its figures were the 14 px
+  ones: the manuals had been regenerated before #288's rebase and then reverted to main's copy, while
+  `docs/manual_images` held the 13 px renders. No figure was re-rendered.
+- **Checked.** Every changed statement was re-read against the `.axaml` (menu, button and control names), `PlotChart.cs`
+  (cursors), `MainWindowViewModel.cs` (what the status bar reports) and `docs/framesync_logic.md`.
+  `eng\check_release_consistency.ps1` agrees on 3.1.0. Managed **389** passed / 1 skipped, app **677** passed / 34 not
+  run, zero warnings, no baseline moved. Not done: the other documentation items the audit listed (`docs/claude.md`'s
+  `StreamJobBuilder` as a type, the code-cleanup skill's clause about the toolkit's generators, the missing "or header"
+  in the new-core-source rule, `eng/env.ps1`'s "or mt").
+
 #### The kept mutant lists match their files again, and a test keeps them matching (follow-up audit)
 
 A list kept in `eng/mutants` is a regression check only while each mutant's `old` text is still in its file exactly
