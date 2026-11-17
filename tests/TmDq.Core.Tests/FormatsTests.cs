@@ -15,6 +15,7 @@ namespace TmDq.Core.Tests;
 /// a corpus that reaches the odd inputs: byte-order marks, UTF-16, legacy keys, padding, signs, overflow,
 /// malformed rows and times.
 /// </summary>
+[Collection(ProcessMemoryCollection.Name)]
 public class FormatsTests
 {
     public FormatsTests()

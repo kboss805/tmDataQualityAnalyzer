@@ -15,6 +15,7 @@ namespace TmDq.Core.Tests;
 /// from the core run directly (PipelineRunner, the code behind both applications) with a digest that is
 /// recomputed here in the same order, so equal inputs give equal floating-point results.
 /// </summary>
+[Collection(ProcessMemoryCollection.Name)]
 public class RunTests
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromMinutes(3);

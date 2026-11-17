@@ -12,6 +12,7 @@ namespace TmDq.Core.Tests;
 /// returned, so a call that races a Dispose never reaches a freed handle and a call after it is refused. What each
 /// wrapper does after its Dispose (throw, or do nothing) is held by the suites of the types themselves.
 /// </summary>
+[Collection(ProcessMemoryCollection.Name)]
 public class HandleTests
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromMinutes(3);

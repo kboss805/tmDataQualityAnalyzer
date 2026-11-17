@@ -12,6 +12,24 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The tests that read the process's memory no longer run beside other tests (follow-up audit)
+
+`ParsedCsvsGiveTheirNativeMemoryBack` (#321) was the first of a family: five tests, in `ArenaTests`, `FormatsTests`,
+  `HandleTests` (two) and `RunTests`, take the process's private memory before and after a loop and fail when it grew by
+  more than a leak would. That number is the whole process's, and xunit runs test classes in parallel, so whatever else
+  allocates while one of them runs is counted as its leak. Two tests added for an unrelated change were enough to move
+  the schedule: `RunTests.DisposedResultsGiveTheirNativeMemoryBack` then failed on every full run (55, 62, 71 and 71 MiB
+  grown against its 40 MiB, four runs of four), while passing alone, with its own class and on the code without the two
+  tests. It is a leak of nothing: the same suite against the same DLL passed in the other tree.
+
+- **`ProcessMemoryCollection`** (`DisableParallelization`) holds the four classes. xunit runs a collection like that
+  alone, after the parallel ones, so nothing allocates beside these tests. Their other tests move with them (a class is
+  one collection); the cost is about 8 seconds of the suite's 30.
+- **Checked.** The managed suite 396 passed / 1 skipped three times in a row with the change; with the two tests that
+  exposed it added (a tree with 398), it failed four of four before and passes three of three with the change. No
+  product source changed, so there is no mutation check, and the native and app suites are not affected. No baseline
+  moved.
+
 #### A run disposed from its own callback is released once the callback has returned (follow-up audit)
 
 An observer that disposes its run from `OnFinished` (or any callback) asked the binding to release it on the very thread
