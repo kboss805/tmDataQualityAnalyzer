@@ -12,6 +12,40 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The composition root has a test (follow-up audit)
+
+`App.OnFrameworkInitializationCompleted` is where the application is put together, and nothing ran it: the headless
+  tests build their view models with fakes, and the method does its work only under a desktop lifetime. Deleting `Help =
+  ...` left a menu entry that did nothing, and deleting the theme hook a theme toggle that changed no window, with all
+  three suites green.
+
+- **`App.Compose(window, smokeReport, appRoot, appData)`** is the body of that method, moved as it was: the platform's
+  side of each service, the preferences (the smoke test's in memory, so it leaves nothing on the machine), the theme
+  they ask for, the theme's switch, the window's data context and its plot's prompts. It returns the view model;
+  `OnFrameworkInitializationCompleted` calls it with the executable's folder and `%APPDATA%`, then sets the main window
+  and the command-line recording's hook. The two folders are parameters, where the body read `AppContext.BaseDirectory`
+  and the special folder itself, so a test can give it its own. Public, as the rest of the application's types are,
+  rather than an `InternalsVisibleTo`.
+- **`CompositionRootTests`** (7 cases, `NativeCoreCollection`): every service the menu needs is wired (Open, Import CSV,
+  Apply Template, the manual and About available; Export available once a CSV is imported); the window has the view
+  model and its plot the prompts; the preferences file is read from its folder and the theme (and the sidebar) follow
+  it, in both themes, from the opposite one; the file is written in `%APPDATA%` and, with a `portable` file beside the
+  executable, beside it; the theme menu changes the application's theme and is remembered; and the smoke test creates no
+  preferences folder and processes the PRN sample with no Configure Streams to answer (`ExitProcessed`, "ok
+  samples=116").
+- **Not held, and said so.** `eng/mutants/composition-root.json` records three services nothing observes through the
+  view model: the image exporter (it needs a shown plot and a file dialog's answer), the progress dialog (a run does not
+  need it, and the smoke run must not wait for one) and the application root the batch reads its settings folder from
+  (**SURVIVED**, kept as such). The normal run's `DialogConfigurator` is reached only through a Configure Streams
+  dialog, which the smoke path's hang shows is not answered headlessly.
+- **`eng\mutate.ps1` waits for a hung suite's process to be gone** after killing it. The mutant that makes the smoke run
+  ask Configure Streams hangs the suite (13 of the 16 are **CAUGHT**, that one by the 420 s timeout), and the next
+  mutant's build then failed to delete the test exe the killed process still held.
+- **Checked.** Mutation check, `eng\mutate.ps1`, app (`eng/mutants/composition-root.json`, 16 mutants): 13 **CAUGHT**
+  (each of the nine services and hooks removed, the smoke test given the wrong preferences or the wrong configurator,
+  the theme not applied at start and not switched) and 3 **SURVIVED** as above. App **686** passed / 34 not run, managed
+  **389** passed / 1 skipped, zero warnings; native not affected. Baseline moved: app 679 to 686.
+
 #### Apply Template is busy while it checks the files, and the follow-up audit's small leftovers
 
 - **The defect.** `ApplyTemplateAsync` checks the chosen recordings off the UI thread with no dialog up, and did not
