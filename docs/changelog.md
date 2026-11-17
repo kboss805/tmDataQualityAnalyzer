@@ -12,6 +12,29 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### A run no longer copies every stream's arrays to say how many samples it has (follow-up audit S16)
+
+`StreamsRun`'s observer called `StreamResult.ToProcessed()` on every stream that completed: a copy of the times, the
+  lock percentages, the missed frames and every receiver channel, for what the product then read of it: the label, the
+  number of samples and channels (a log line), the job index (the order) and the count of streams (the status line). The
+  plot builds its series from the core's own result, which the outcome kept as well, so the data was copied to managed
+  memory and never read there. `StreamResult.SampleCount` and `ChannelCount` were there for this and unused.
+
+- **`StreamSummary(JobIndex, Label, SampleCount, ChannelCount)`** is what the outcome carries now: `RunOutcome.Streams`
+  is a list of them (in table order, as before), and `Results` still holds the core's result of each. The log line and
+  the status line read the same numbers and say the same words.
+- **Tests read the native result in place** (`outcome.Results[i]`, whose arrays are views) where they read the copies:
+  the plot's, the processing log's and the walking skeleton's. The `Describe` tests build summaries. A new test holds
+  the summaries against the core's result (in job order, with its counts);
+  `LayerTests.TheAppNeverCopiesAStreamResultToManagedMemory` fails if any source of the app calls `.ToProcessed(`.
+  `ToProcessed` stays on the binding, for tests (the follow-up audit's D7), and one processing test now disposes its
+  outcome, which it had not. `run-log-order.json` M4 names the moved line and is re-anchored (CAUGHT again).
+- **Checked.** Mutation check, `eng\mutate.ps1`, app, `eng/mutants/stream-summary.json` (new): **5 of 5 CAUGHT** (the
+  copy reintroduced, the two counts swapped, the order reversed, a log line saying samples for channels, a summary
+  without its label). App **691** passed / 34 not run, managed and native not affected, zero warnings. No speed claim:
+  the copy is the size of the run's results (some 34 MB at the worst realistic), and nothing was timed. Baseline moved:
+  app 689 to 691.
+
 #### The plot has one zoom rule, and its legend and chart listen to what they depend on (follow-up audit S12, S14)
 
 Two things in the plot's views were kept in two places or answered more than they had to. **S12:** the wheel zoom

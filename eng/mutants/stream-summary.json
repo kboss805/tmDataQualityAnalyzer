@@ -1,0 +1,57 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.ProcessingTests",
+    "-class",
+    "TmDq.App.Tests.PlotTests",
+    "-class",
+    "TmDq.App.Tests.LayerTests",
+    "-class",
+    "TmDq.App.Tests.ConfigureStreamsTests",
+    "-class",
+    "TmDq.App.Tests.WalkingSkeletonTests"
+  ],
+  "mutants": [
+    {
+      "id": "S1",
+      "file": "src/TmDq.App/Models/Processing/StreamsRun.cs",
+      "old": "            // Nothing of the arrays is copied: the result keeps them in native memory for the plot, and what is said of the\n            // stream here is a line and a count.\n",
+      "new": "            _ = result.ToProcessed();\n",
+      "expect": "caught",
+      "note": "every stream's arrays are copied to managed memory again, for a log line"
+    },
+    {
+      "id": "S2",
+      "file": "src/TmDq.App/Models/Processing/StreamsRun.cs",
+      "old": "new StreamSummary(result.JobIndex, result.Label, result.SampleCount, result.ChannelCount)",
+      "new": "new StreamSummary(result.JobIndex, result.Label, result.ChannelCount, result.SampleCount)",
+      "expect": "caught",
+      "note": "the sample and channel counts swapped"
+    },
+    {
+      "id": "S3",
+      "file": "src/TmDq.App/Models/Processing/StreamsRun.cs",
+      "old": "var completed = observer.Results.OrderBy(r => r.Summary.JobIndex).ToList();",
+      "new": "var completed = observer.Results.OrderByDescending(r => r.Summary.JobIndex).ToList();",
+      "expect": "caught",
+      "note": "streams in reverse table order"
+    },
+    {
+      "id": "S4",
+      "file": "src/TmDq.App/Models/Processing/StreamsRun.cs",
+      "old": "$\"{s.ChannelCount.ToString(CultureInfo.InvariantCulture)} channel(s)\";",
+      "new": "$\"{s.SampleCount.ToString(CultureInfo.InvariantCulture)} channel(s)\";",
+      "expect": "caught",
+      "note": "a stream's log line says its samples for its channels"
+    },
+    {
+      "id": "S5",
+      "file": "src/TmDq.App/Models/Processing/StreamsRun.cs",
+      "old": "new StreamSummary(result.JobIndex, result.Label,",
+      "new": "new StreamSummary(result.JobIndex, \"\",",
+      "expect": "caught",
+      "note": "a summary without its label"
+    }
+  ]
+}

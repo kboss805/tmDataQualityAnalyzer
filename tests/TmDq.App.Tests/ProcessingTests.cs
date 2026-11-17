@@ -268,8 +268,8 @@ public sealed class ProcessingTests
         // A Receiver SNR stream: the core's job builder writes a line for it while the run is started.
         RunRequest request = StepCalRequest(StepCalSnr());
         var log = new RecordingLog();
-        RunOutcome outcome = await StreamsRun.RunAsync(request, null, log, TestContext.Current.CancellationToken);
-        ProcessedStream s = Assert.Single(outcome.Streams);
+        using RunOutcome outcome = await StreamsRun.RunAsync(request, null, log, TestContext.Current.CancellationToken);
+        StreamResult s = Assert.Single(outcome.Results);
         List<string> lines = log.Texts;
 
         Assert.Equal("  RCVR: no non-linear calibration profiles configured — using linear calibration.", lines[0]);
@@ -281,9 +281,9 @@ public sealed class ProcessingTests
         Assert.Single(run, l => l == "Reading Chapter 10 file...");
         Assert.Single(run, l => l == "[CH 26 RCVR] processing...");
         // A stream's result is reported after that stream's last line.
-        int completed = run.IndexOf($"  RCVR: {s.TimesSec.Length} samples, {s.Channels.Count} channel(s)");
+        int completed = run.IndexOf($"  RCVR: {s.SampleCount} samples, {s.ChannelCount} channel(s)");
         Assert.True(completed > run.IndexOf("[CH 26 RCVR] processing..."), "the stream's line is missing or out of place");
-        Assert.True(s.TimesSec.Length > 0 && s.Channels.Count > 0);
+        Assert.True(s.SampleCount > 0 && s.ChannelCount > 0);
         Assert.DoesNotContain(log.Lines, l => l.Error);
     }
 

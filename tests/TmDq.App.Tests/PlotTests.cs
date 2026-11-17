@@ -155,8 +155,9 @@ public sealed class PlotTests
         Assert.True(plot.Series[0].SortedX);               // so the chart walks only the samples in view
         Assert.Equal(116, plot.Series[0].X.Length);
         Assert.Equal(0.0, plot.Series[0].X[0]);
-        Assert.Equal(outcome.Streams[0].LockPercent, plot.Series[0].Y);
-        Assert.Equal(outcome.Streams[0].TimesSec[^1] - outcome.Streams[0].TimesSec[0], plot.XMax, 9);
+        double[] times = outcome.Results[0].TimesSec.ToArray();
+        Assert.Equal(outcome.Results[0].LockPercent.ToArray(), plot.Series[0].Y);
+        Assert.Equal(times[^1] - times[0], plot.XMax, 9);
         Assert.Equal((0.0, plot.XMax), (plot.XViewMin, plot.XViewMax));
         Assert.True(plot.LeftAxisVisible);
         Assert.False(plot.RightAxisVisible);
@@ -165,7 +166,7 @@ public sealed class PlotTests
         Assert.Equal(PlotViewModel.DefaultTitle, plot.Title);
 
         // The X axis reads as the recording's clock, and the ticks are snapped to it.
-        double first = outcome.Streams[0].TimesSec[0];
+        double first = times[0];
         int day = DateTime.UnixEpoch.AddSeconds(first).DayOfYear;   // IRIG time counts from 1970
         Assert.Equal(first % 86400.0, plot.TimeOrigin, 6);               // the clock time of x = 0
         Assert.Equal(ClockTime.Format(day, plot.TimeOrigin, 30.0), plot.FormatTime(30.0));
@@ -182,6 +183,16 @@ public sealed class PlotTests
         plot.AddStream(outcome.Results[0]);
         Assert.Equal(new[] { "first", "first", "second", "second" }, plot.Series.Select(s => s.StreamLabel));
         Assert.Equal(new[] { false, true, false, true }, plot.Series.Select(s => s.Visible));   // missed frames shown
+    }
+
+    [AvaloniaFact]
+    public void TheOutcomeSummarisesEachStreamInJobOrderFromTheCoresOwnResult()
+    {
+        using RunOutcome outcome = Run(Prn, 0, PrnStream(13) with { Label = "first" }, PrnStream(13) with { Label = "second" });
+        // A line and a count each, in table order, and the numbers are the core's result's own: nothing was copied to say them.
+        Assert.Equal(new[] { new StreamSummary(0, "first", 116, 0), new StreamSummary(1, "second", 116, 0) }, outcome.Streams);
+        Assert.Equal(outcome.Results.Select(r => r.JobIndex), outcome.Streams.Select(s => s.JobIndex));
+        Assert.Equal(outcome.Results.Select(r => r.SampleCount), outcome.Streams.Select(s => s.SampleCount));
     }
 
     [AvaloniaFact]
@@ -202,7 +213,7 @@ public sealed class PlotTests
     {
         using RunOutcome prn = Run(Prn, 0, PrnStream(13));
         using RunOutcome cal = Run(StepCal, 1, StepCalSnr());
-        double prnStart = prn.Streams[0].TimesSec[0], calStart = cal.Streams[0].TimesSec[0];
+        double prnStart = prn.Results[0].TimesSec[0], calStart = cal.Results[0].TimesSec[0];
         (RunOutcome early, RunOutcome late) = prnStart < calStart ? (prn, cal) : (cal, prn);
 
         using var plot = new PlotViewModel();
@@ -213,12 +224,12 @@ public sealed class PlotTests
 
         // The later source now starts as far along as it started after the earlier one; the earlier one at zero.
         double gap = Math.Abs(prnStart - calStart);
-        PlotSeries lateSeries = plot.Series.First(s => s.SourceId == late.Streams[0].SourceId);
-        PlotSeries earlySeries = plot.Series.First(s => s.SourceId == early.Streams[0].SourceId);
+        PlotSeries lateSeries = plot.Series.First(s => s.SourceId == late.Results[0].SourceId);
+        PlotSeries earlySeries = plot.Series.First(s => s.SourceId == early.Results[0].SourceId);
         Assert.Equal(0.0, earlySeries.X[0], 9);
         Assert.Equal(gap, lateSeries.X[0], 6);
         Assert.True(lateSeries.Version > 0, "the moved series were not marked as moved");
-        Assert.Equal(new[] { early.Streams[0].SourceId }, reported);   // the two recordings do not overlap
+        Assert.Equal(new[] { early.Results[0].SourceId }, reported);   // the two recordings do not overlap
         Assert.True(plot.LeftAxisVisible && plot.RightAxisVisible);
     }
 

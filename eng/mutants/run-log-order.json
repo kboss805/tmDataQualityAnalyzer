@@ -45,7 +45,7 @@
     {
       "id": "M4",
       "file": "src/TmDq.App/Models/Processing/StreamsRun.cs",
-      "old": "            Log.Line(Completed(p));",
+      "old": "            Log.Line(Completed(summary));",
       "new": "",
       "expect": "caught",
       "note": "a completed stream gets no line"

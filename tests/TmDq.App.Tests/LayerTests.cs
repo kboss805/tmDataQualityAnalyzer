@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -71,6 +72,21 @@ public sealed class LayerTests
 
     /// <summary>The reading can see: a view's base type, a type a method's code alone names (a platform picker's
     /// <c>StorageProvider</c> is reached only inside its methods), and the layers hold the types they should.</summary>
+    [Fact]
+    public void TheAppNeverCopiesAStreamResultToManagedMemory()
+    {
+        // A stream's arrays stay in the core's result: the plot builds its series from it, and a reader reads it in place.
+        // The app once copied every stream (ToProcessed) for a log line and a count (the follow-up audit's S16), which a
+        // summary of three numbers replaced. ToProcessed is the binding's, for tests.
+        string[] files = Directory.EnumerateFiles(Repo.Project("TmDq.App"), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
+                        !f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            .ToArray();
+        Assert.True(files.Length > 80, $"only {files.Length} source files were read");
+        string[] copying = files.Where(f => File.ReadAllText(f).Contains(".ToProcessed(", StringComparison.Ordinal)).ToArray();
+        Assert.True(copying.Length == 0, "copies a stream result: " + string.Join(", ", copying));
+    }
+
     [Fact]
     public void TheReadingSeesSignaturesAndCode()
     {
