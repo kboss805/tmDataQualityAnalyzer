@@ -14,7 +14,7 @@ description: >-
 # Build and test — tmDataQualityAnalyzer
 
 Three layers, each built and tested by its own script, from the repository root, in **PowerShell**.
-The scripts import Visual Studio 2022 themselves (`eng\env.ps1`) when `msbuild` or `mt` is not
+The scripts import Visual Studio 2022 themselves (`eng\env.ps1`) when `msbuild` is not
 on PATH; nothing needs to be set up first. The baselines are in `.claude/CLAUDE.md` — read them
 there, not from memory.
 

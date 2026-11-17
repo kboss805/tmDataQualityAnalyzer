@@ -595,7 +595,7 @@ when it is disposed and the last call using it has returned, and a call on a rel
    called by both the job builder and the calibration extractor, whose profiles are matched to the run's words.
 8. **framesync** (`framesync.h`) - the shared decode of a pattern and mask, and `applyAcquisition`, which builds every
    raw-affecting field of a run's parameters (the main run and the calibration extractor both go through it).
-9. **StreamJobBuilder** (`streamjobbuilder`) - turns one stream's settings into a processing job: validates the pattern,
+9. **Stream job builder** (`streamjobbuilder`, the function `buildStreamJob`) - turns one stream's settings into a processing job: validates the pattern,
    mask and frame length, builds the word map (through `resolveReceiverWordMap`), applies the linear calibration and attaches step-calibration profiles, or says why it refuses.
 10. **StepDetector** (`stepdetector`) - *US5.3*: parses the `[[Step]]` step file and finds the step plateaus in a raw
     series, building a per-channel `CalibrationProfile`.
@@ -645,7 +645,7 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
   `textformat.h` for fixed-point text that rounds a tie away from zero and `textparse.h` for the forgiving number rules the
   settings files are read with; and a header to each class, struct or enum of the core, none of them in a subfolder, so a
   header is included by its bare name),
-  sources in `src/`, the ABI in `abi/`; the doctest suite in `tests/core/`. A new core source goes in `tmdq_core.vcxproj`,
+  sources in `src/`, the ABI in `abi/`; the doctest suite in `tests/core/`. A new core source, and a new header, go in `tmdq_core.vcxproj`,
   and a new ABI source in both native projects; `NativeProjectTests` fails until they list it.
 - **.NET**: `src/TmDq.Core` (the binding) and `src/TmDq.App`, each with a `.Tests` project of the same name
   under `tests/`; `eng/` holds the props and targets that `Directory.Build.props` and `Directory.Build.targets`, at
@@ -858,7 +858,7 @@ The `add-stream-setting` skill is the checklist. In short:
 2. Surface it in the setup dialog's view model, in Apply to all if it should propagate, and in the template file.
 3. If it must round-trip to a TOML file, add it to the core's format (`framesyncfile` or the receiver-parameters file,
    through `TomlDocument`), respecting the TOML boundary in `.claude/CLAUDE.md`.
-4. Carry it into `ProcessingParams` (and `FrameSetup` if it affects the word map) in `StreamJobBuilder`, and through
+4. Carry it into `ProcessingParams` (and `FrameSetup` if it affects the word map) in `buildStreamJob` (`streamjobbuilder.cpp`), and through
    `applyAcquisition` if it affects raw values (the calibration extractor must see it too).
 5. Consume it in `FrameProcessor::process()`.
 

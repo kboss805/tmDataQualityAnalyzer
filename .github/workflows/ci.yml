@@ -88,8 +88,8 @@ jobs:
         shell: powershell
         run: |
           # The core, built by MSBuild (tmdq.sln), then checked: zero warnings, and the DLL's
-          # imports on an allow-list. The scripts dot-source env.ps1 only when msbuild / mt are
-          # missing; msvc-dev-cmd put them on PATH.
+          # imports on an allow-list. The scripts dot-source env.ps1 only when msbuild is
+          # missing; msvc-dev-cmd put it on PATH.
           # PS 5.1 turns native-tool stderr into a terminating NativeCommandError, so failures
           # are gated by explicit $LASTEXITCODE checks.
           $ErrorActionPreference = 'Continue'

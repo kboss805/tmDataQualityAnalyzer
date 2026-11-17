@@ -22,10 +22,10 @@ themselves). Use the **PowerShell** tool.
   [-Configuration Debug|Release] [-Rebuild]` builds `src/core/` (MSBuild) into
   `out/<config>/tmdq_core.dll`, then fails on any compiler warning or on an import outside a short
   allow-list (the C runtime, `KERNEL32`, `WS2_32`, `USER32`). CI runs it for Debug and Release. **A new core source
-  goes in `tmdq_core.vcxproj`**, and a new ABI source (`src/core/abi/*.cpp`) in it AND in
+  and a new header go in `tmdq_core.vcxproj`**, and a new ABI source (`src/core/abi/*.cpp`) in it AND in
   `tests/core/tmdq_core_tests.vcxproj` (`test_abi.cpp` compiles the ABI into the native test executable
-  and calls it as a host would); `NativeProjectTests` (managed suite) fails until every `src/core/src` source, ABI source
-  and test file is listed. **A change that deletes or renames a header is verified only by a `-Rebuild`.**
+  and calls it as a host would); `NativeProjectTests` (managed suite) fails until every `src/core/src` source, header,
+  ABI source and test file is listed. **A change that deletes or renames a header is verified only by a `-Rebuild`.**
 - **Native core tests (doctest):** `powershell -ExecutionPolicy Bypass -File eng\test_native.ps1
   [-Configuration Debug|Release] [-Rebuild] [-NoBuild] [<doctest args>]` builds `tests/core`
   (MSBuild; the framework is the single header in `third_party/doctest`) with **zero warnings and no Qt import**, then runs it.

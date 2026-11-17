@@ -34,12 +34,17 @@ Prose only; no product source changed. The follow-up audit read both against the
 - **The full manual's figures** were re-embedded (`enguild_manual.ps1 -NoCapture`). Nine of its figures were the 14 px
   ones: the manuals had been regenerated before #288's rebase and then reverted to main's copy, while
   `docs/manual_images` held the 13 px renders. No figure was re-rendered.
+- **Four smaller statements** the audit listed. `docs/claude.md` named `StreamJobBuilder` as a type in two places; it is
+  the module `streamjobbuilder` and its function `buildStreamJob`. The code-cleanup skill still told a sweep to allow
+  for members CommunityToolkit.Mvvm generates, which nothing uses since #310. The rule for a new core source
+  (`.claude/CLAUDE.md`, `docs/claude.md`) now says a new header goes in `tmdq_core.vcxproj` too, which
+  `NativeProjectTests.TheDllListsEveryHeader` enforces. And `eng/env.ps1`, the workflow's comment and the build-and-test
+  skill said the scripts import the MSVC environment "when msbuild or mt is not on PATH"; no script has tested for `mt`
+  since the .NET projects found it themselves (#262).
 - **Checked.** Every changed statement was re-read against the `.axaml` (menu, button and control names), `PlotChart.cs`
   (cursors), `MainWindowViewModel.cs` (what the status bar reports) and `docs/framesync_logic.md`.
   `eng\check_release_consistency.ps1` agrees on 3.1.0. Managed **389** passed / 1 skipped, app **677** passed / 34 not
-  run, zero warnings, no baseline moved. Not done: the other documentation items the audit listed (`docs/claude.md`'s
-  `StreamJobBuilder` as a type, the code-cleanup skill's clause about the toolkit's generators, the missing "or header"
-  in the new-core-source rule, `eng/env.ps1`'s "or mt").
+  run, zero warnings, no baseline moved.
 
 #### The kept mutant lists match their files again, and a test keeps them matching (follow-up audit)
 
