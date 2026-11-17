@@ -884,7 +884,7 @@ that worktrees also need.
 
 1. Pin the current behaviour with a doctest case first, then change it.
 2. A new function a host needs goes through the ABI (`src/core/abi/tmdq_abi.h`, a new revision) and its binding in
-   `src/TmDq.Core`, with a native case in `test_abi.cpp` and a managed test.
+   `src/TmDq.Core`, with a native case in the `test_abi_*.cpp` file of its ABI source and a managed test.
 3. Mutation-check the change (`eng\mutate.ps1`), and after a change to processing, the plot's series or the CSV
    writer, run the soak (`eng\run_soak.ps1`).
 
@@ -1013,7 +1013,8 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 - **TextFormat** (`test_textformat`) - fixed-point formatting with ties rounded away from zero, as v2.14 printed it.
 - **Constants** (`test_constants`) - every constant something outside the code depends on, read against the shipped
   files that carry the same value.
-- **Abi** (`test_abi`) - the C ABI compiled into the test executable and called as a host would: every struct's size
+- **Abi** (`test_abi_contract`, `_run`, `_calibration`, `_formats`, `_series` and `_chart`, one for each part of the ABI, over
+  `test_abi_support.h`, which holds the fixtures and the helpers they share) - the C ABI compiled into the test executable and called as a host would: every struct's size
   and offsets, versioning both ways, each function against the core called directly (runs, calibration, the formats,
   series construction, the receiver-parameters file, the chart's geometry and a series' index), the callbacks' order
   and threads, cancel and free in flight, a wait or a free from the run's own `finished` callback (refused with a last

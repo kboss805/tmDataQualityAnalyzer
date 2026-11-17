@@ -23,7 +23,7 @@ themselves). Use the **PowerShell** tool.
   `out/<config>/tmdq_core.dll`, then fails on any compiler warning or on an import outside a short
   allow-list (the C runtime, `KERNEL32`, `WS2_32`, `USER32`). CI runs it for Debug and Release. **A new core source
   and a new header go in `tmdq_core.vcxproj`**, and a new ABI source (`src/core/abi/*.cpp`) in it AND in
-  `tests/core/tmdq_core_tests.vcxproj` (`test_abi.cpp` compiles the ABI into the native test executable
+  `tests/core/tmdq_core_tests.vcxproj` (the `test_abi_*.cpp` files compile the ABI into the native test executable
   and calls it as a host would); `NativeProjectTests` (managed suite) fails until every `src/core/src` source, header,
   ABI source and test file is listed. **A change that deletes or renames a header is verified only by a `-Rebuild`.**
 - **Native core tests (doctest):** `powershell -ExecutionPolicy Bypass -File eng\test_native.ps1

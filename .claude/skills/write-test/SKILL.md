@@ -34,7 +34,7 @@ each suite has its house style and helpers. Build and run with the **build-and-t
   `repoFile("tests/fixtures/...")` (`test_support.h`, which also holds `asciiOnly`, `utf16le` and the `step_cal` fixture,
   `loadStepCalFixture()`: add a helper there when a second test file needs it, never a second copy). A missing committed file is a failure, never a
   skip: the recordings are in the repository.
-- **The ABI** is compiled into the test executable (`test_abi.cpp` calls `tmdq_*` as a host would),
+- **The ABI** is compiled into the test executable (the `test_abi_*.cpp` files call `tmdq_*` as a host would),
   so a new ABI function gets its native case there, and its struct layout a pin.
 - **Reimplementing or moving code:** keep the old implementation, restated over std types, as an
   oracle in the test, and compare the two over generated input (`docs/guide.md`, Working Method). Most suites here do;
