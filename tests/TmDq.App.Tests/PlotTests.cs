@@ -628,7 +628,7 @@ public sealed class PlotTests
         double under = s.Chart.PixelToX(px);
         s.Window.MouseWheel(s.At(px, a.Center.Y), new Vector(0, 1), RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal(100.0 * PlotChart.WheelZoomStep, plot.XViewMax - plot.XViewMin, 6);
+        Assert.Equal(100.0 * PlotViewModel.WheelZoomFactor, plot.XViewMax - plot.XViewMin, 6);
         Assert.Equal(under, s.Chart.PixelToX(px), 6);                      // the time under the cursor stays put
         Assert.False(plot.CanZoomBack);                                     // a continuous gesture is not remembered
         s.Window.MouseWheel(s.At(px, a.Center.Y), new Vector(0, -1), RawInputModifiers.None);

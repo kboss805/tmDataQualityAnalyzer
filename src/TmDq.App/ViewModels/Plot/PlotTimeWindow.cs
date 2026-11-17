@@ -130,15 +130,26 @@ internal sealed class PlotTimeWindow
         Apply(lower + shift, upper + shift, _formatTime(lower + shift), _formatTime(upper + shift));
     }
 
+    /// <summary>
+    /// The window a zoom by <paramref name="factor"/> (below 1 zooms in) about <paramref name="anchor"/> gives: the time at
+    /// the anchor stays where it is, in the window as a fraction of its width. Null when it would be narrower than a band
+    /// zoom may be. The one rule of both zooms: the wheel's (the anchor is the time under the pointer) and the keys' (the
+    /// window's centre).
+    /// </summary>
+    public (double Lower, double Upper)? ZoomedAbout(double anchor, double factor)
+    {
+        double lower = anchor - (anchor - ViewMin) * factor;
+        double upper = anchor + (ViewMax - anchor) * factor;
+        return upper - lower < PlotViewModel.MinZoomSpanSeconds ? null : (lower, upper);
+    }
+
     /// <summary>Scales the window about its centre (below 1 zooms in): + and -. Never narrower than a band zoom may be.</summary>
     public void Zoom(double factor)
     {
-        double lower = ViewMin, upper = ViewMax, span = upper - lower;
+        double span = ViewMax - ViewMin;
         if (span <= 0.0) return;
-        double centre = lower + span / 2.0, newSpan = span * factor;
-        if (newSpan < PlotViewModel.MinZoomSpanSeconds) return;
-        double newLower = centre - newSpan / 2.0, newUpper = centre + newSpan / 2.0;
-        Apply(newLower, newUpper, _formatTime(newLower), _formatTime(newUpper));
+        if (ZoomedAbout(ViewMin + span / 2.0, factor) is not (double lower, double upper)) return;
+        Apply(lower, upper, _formatTime(lower), _formatTime(upper));
     }
 
     /// <summary>

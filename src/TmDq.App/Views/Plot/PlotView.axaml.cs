@@ -102,16 +102,14 @@ public sealed partial class PlotView : UserControl
         if (change.Property != PlotProperty) return;
         if (_watched is not null)
         {
-            _watched.SeriesChanged -= OnPlotChanged;
-            _watched.RangesChanged -= OnPlotChanged;
+            _watched.SeriesChanged -= OnSeriesChanged;
             _watched.PropertyChanged -= OnPlotPropertyChanged;
         }
         _watched = Plot;
         Chart.Plot = Plot;
         if (_watched is not null)
         {
-            _watched.SeriesChanged += OnPlotChanged;
-            _watched.RangesChanged += OnPlotChanged;
+            _watched.SeriesChanged += OnSeriesChanged;
             _watched.PropertyChanged += OnPlotPropertyChanged;
         }
         MakeCommands();
@@ -124,9 +122,16 @@ public sealed partial class PlotView : UserControl
         Root.DataContext = Plot is { } plot ? new PlotCommands(plot, Prompts) : null;
     }
 
-    private void OnPlotPropertyChanged(object? sender, PropertyChangedEventArgs e) => ShowLegend();
+    // The legend lists the series shown of the metric in view, and is shown or not as the user chose: it depends on the
+    // series (their set, names, colours and visibility, and the lock axis's view, which all raise SeriesChanged) and on
+    // LegendVisible, and on neither the window nor the axes. A pan or a zoom step raises RangesChanged and CanZoomBack,
+    // and rebuilt every row twice.
+    private void OnPlotPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PlotViewModel.LegendVisible)) ShowLegend();
+    }
 
-    private void OnPlotChanged(object? sender, EventArgs e) => ShowLegend();
+    private void OnSeriesChanged(object? sender, EventArgs e) => ShowLegend();
 
     /// <summary>The legend for the plot as it is now.</summary>
     private void ShowLegend()

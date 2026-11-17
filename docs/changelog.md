@@ -12,6 +12,39 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The plot has one zoom rule, and its legend and chart listen to what they depend on (follow-up audit S12, S14)
+
+Two things in the plot's views were kept in two places or answered more than they had to. **S12:** the wheel zoom
+  computed its new window and refused a narrow one in `PlotChart`, and the keyboard zoom did the same in
+  `PlotTimeWindow`, with its step on the view model and the wheel's on the chart. **S14:** `PlotView` rebuilt every
+  legend row for `SeriesChanged`, `RangesChanged` and every `PropertyChanged`, which is twice a step of a pan
+  (`RangesChanged`, then `CanZoomBack`) for a legend that depends on neither, and the chart painted its data layer again
+  for any property, so the L key repainted every line.
+
+- **One zoom rule.** `PlotTimeWindow.ZoomedAbout(anchor, factor)` gives the window a zoom leaves (the anchor's place in
+  it kept) or null when it would be narrower than `MinZoomSpanSeconds`; `PlotViewModel.WindowZoomedAbout` reaches it,
+  and `WheelZoomFactor` (0.85) sits beside `KeyZoomFactor`. The keys call it about the window's centre, the wheel about
+  the pointer's time; the chart keeps the pixel maths, the direction, `Moving()` and the continuous setter. The keys'
+  arithmetic now runs in the wheel's order, so a result can differ from before in the last bit of a double (the key
+  tests compare to 12 digits) and the refusal at the 1 microsecond limit is decided on the computed ends, not on span
+  times factor.
+- **The legend** listens to `SeriesChanged` (the series, their names, colours and visibility, and the lock axis's view
+  all raise it) and to the `LegendVisible` property. A window or axis change no longer rebuilds a row.
+- **The chart** drops what it built for series no longer shown on `SeriesChanged` only, paints its data layer again on
+  `RangesChanged`, and of the plot's properties answers only `Title`: the axis label changes with the series, and the
+  zoom history, the legend's switch and the readout's pin are not drawn.
+- **Tests.** Three in `AroundTheChartTests`, two of which failed on the old code before it was changed: the legend's
+  rows are the same instances after a pan, a window, a zoom back, an axis override and a reset, and are built again for
+  a rename, the metric in view, a hidden series and the legend's switch; the data layer's render count
+  (`DataLayerRenders`) does not move for the legend's switch and moves once for a window and once for a title; and the
+  zoom rule keeps its anchor, is the same for the keys and the wheel, and refuses the same narrow window. `PlotTests`
+  reads the wheel's step from the view model.
+- **Checked.** Mutation check, `eng\mutate.ps1`, app, `eng/mutants/plot-zoom-and-legend.json` (new): **13 of 13 CAUGHT**
+  (no refusal, either end of the window scaled wrongly, the keys about the left edge, a wheel that only zooms in; the
+  legend listening to every property, to the window again, to the wrong property, or to nothing; the chart repainting
+  for every property, not for the title, not for a range, or not hearing the window). App **689** passed / 34 not run,
+  managed and native not affected, zero warnings. Baseline moved: app 686 to 689.
+
 #### deploy/avalonia/ is flattened into deploy/, and its two *_avalonia_* scripts lose the word (follow-up audit F1)
 
 The release packaging had been in `deploy/avalonia/` since v3.0.0, when the Qt packaging it sat beside was still there

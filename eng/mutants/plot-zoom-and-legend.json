@@ -1,0 +1,117 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.AroundTheChartTests",
+    "-class",
+    "TmDq.App.Tests.PlotTests",
+    "-class",
+    "TmDq.App.Tests.PlotDraftTests"
+  ],
+  "mutants": [
+    {
+      "id": "Z1",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotTimeWindow.cs",
+      "old": "return upper - lower < PlotViewModel.MinZoomSpanSeconds ? null : (lower, upper);",
+      "new": "return (lower, upper);",
+      "expect": "caught",
+      "note": "a zoom is never refused, however narrow"
+    },
+    {
+      "id": "Z2",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotTimeWindow.cs",
+      "old": "double lower = anchor - (anchor - ViewMin) * factor;",
+      "new": "double lower = anchor - (anchor - ViewMin) / factor;",
+      "expect": "caught",
+      "note": "the lower end scaled the wrong way"
+    },
+    {
+      "id": "Z3",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotTimeWindow.cs",
+      "old": "double upper = anchor + (ViewMax - anchor) * factor;",
+      "new": "double upper = anchor + (ViewMax - ViewMin) * factor;",
+      "expect": "caught",
+      "note": "the upper end ignores where the anchor is"
+    },
+    {
+      "id": "Z4",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotTimeWindow.cs",
+      "old": "if (ZoomedAbout(ViewMin + span / 2.0, factor) is not (double lower, double upper)) return;",
+      "new": "if (ZoomedAbout(ViewMin, factor) is not (double lower, double upper)) return;",
+      "expect": "caught",
+      "note": "the keys zoom about the left edge, not the centre"
+    },
+    {
+      "id": "Z5",
+      "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
+      "old": "double factor = e.Delta.Y > 0 ? PlotViewModel.WheelZoomFactor : 1.0 / PlotViewModel.WheelZoomFactor;",
+      "new": "double factor = PlotViewModel.WheelZoomFactor;",
+      "expect": "caught",
+      "note": "the wheel only zooms in"
+    },
+    {
+      "id": "L1",
+      "file": "src/TmDq.App/Views/Plot/PlotView.axaml.cs",
+      "old": "if (e.PropertyName == nameof(PlotViewModel.LegendVisible)) ShowLegend();",
+      "new": "ShowLegend();",
+      "expect": "caught",
+      "note": "the legend rebuilds for every property again (CanZoomBack changes with each step of a pan)"
+    },
+    {
+      "id": "L2",
+      "file": "src/TmDq.App/Views/Plot/PlotView.axaml.cs",
+      "old": "_watched.SeriesChanged += OnSeriesChanged;\n            _watched.PropertyChanged += OnPlotPropertyChanged;",
+      "new": "_watched.SeriesChanged += OnSeriesChanged;\n            _watched.RangesChanged += OnSeriesChanged;\n            _watched.PropertyChanged += OnPlotPropertyChanged;",
+      "expect": "caught",
+      "note": "the legend listens to the window again"
+    },
+    {
+      "id": "L3",
+      "file": "src/TmDq.App/Views/Plot/PlotView.axaml.cs",
+      "old": "if (e.PropertyName == nameof(PlotViewModel.LegendVisible)) ShowLegend();",
+      "new": "if (e.PropertyName == nameof(PlotViewModel.Title)) ShowLegend();",
+      "expect": "caught",
+      "note": "the legend does not follow its switch"
+    },
+    {
+      "id": "L4",
+      "file": "src/TmDq.App/Views/Plot/PlotView.axaml.cs",
+      "old": "_watched.SeriesChanged += OnSeriesChanged;\n            _watched.PropertyChanged += OnPlotPropertyChanged;",
+      "new": "_watched.PropertyChanged += OnPlotPropertyChanged;",
+      "expect": "caught",
+      "note": "the legend does not follow the series"
+    },
+    {
+      "id": "C1",
+      "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
+      "old": "if (e.PropertyName == nameof(PlotViewModel.Title)) OnRangesChanged(sender, e);",
+      "new": "OnRangesChanged(sender, e);",
+      "expect": "caught",
+      "note": "the data layer is painted again for every property (the legend's switch, the zoom history)"
+    },
+    {
+      "id": "C2",
+      "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
+      "old": "if (e.PropertyName == nameof(PlotViewModel.Title)) OnRangesChanged(sender, e);",
+      "new": "if (e.PropertyName == nameof(PlotViewModel.LegendVisible)) OnRangesChanged(sender, e);",
+      "expect": "caught",
+      "note": "a new title is not painted"
+    },
+    {
+      "id": "C3",
+      "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
+      "old": "private void OnRangesChanged(object? sender, EventArgs e)\n    {\n        _backingValid = false;\n        InvalidateVisual();",
+      "new": "private void OnRangesChanged(object? sender, EventArgs e)\n    {\n        InvalidateVisual();",
+      "expect": "caught",
+      "note": "a range change shows the cached layer"
+    },
+    {
+      "id": "C4",
+      "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
+      "old": "_watched.RangesChanged += OnRangesChanged;",
+      "new": "_ = 0;",
+      "expect": "caught",
+      "note": "the chart does not hear the window move"
+    }
+  ]
+}
