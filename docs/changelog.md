@@ -15,8 +15,8 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 #### The kept mutant lists match their files again, and a test keeps them matching (follow-up audit)
 
 A list kept in `eng/mutants` is a regression check only while each mutant's `old` text is still in its file exactly
-  once. After a rename or a re-indent `eng\mutate.ps1` answers NO-MATCH, checks nothing, and nobody is told. The
-  follow-up audit found 28 of the 155 kept mutants, in 7 of the 16 lists, in that state.
+once. After a rename or a re-indent `eng\mutate.ps1` answers NO-MATCH, checks nothing, and nobody is told. The
+follow-up audit found 28 of the 155 kept mutants, in 7 of the 16 lists, in that state.
 
 - **Re-anchored: 28.** 21 had only lost the namespace's indentation when #310 made every namespace file-scoped
   (`app-dialog-scaffolding` 7, `app-error-paths` 1, `app-layer-homes` 1, `plot-draft-keys` 3, `plot-draft` 7,
@@ -34,6 +34,10 @@ A list kept in `eng/mutants` is a regression check only while each mutant's `old
   reads every list as strict JSON and fails, naming the list and the mutant, when a mutant's file is gone, its `old`
   text is not in the file exactly once, it changes nothing, or its id is used twice. A change that moves such text now
   re-anchors the list in the same change.
+- **`eng\mutate.ps1` builds once more at the end, from the restored sources.** It restored each file after its mutant
+  but left what the last mutant was built into (`tmdq_core.dll` in `out\Release`, a test exe) in the tree, and the app
+  suite run next in that worktree failed against a mutant's DLL. That happened while checking this change; the closing
+  build was then checked by running a core mutant and reading the DLL it leaves.
 - **Checked.** The 28 were run again through `eng\mutate.ps1` and each has the verdict its list expects: 26 **CAUGHT**,
   one **COMPILE** (`app-error-paths` E3, which the compiler holds, as its note says) and one **SURVIVED**
   (`run-log-order` R2, kept as not a defect). Every mutant of every list (170, with #313's to #315's) matches its file
@@ -44,7 +48,7 @@ A list kept in `eng/mutants` is a regression check only while each mutant's `old
 #### The core: a reader's TMATS freed, the close inside the lock, and a free from a callback refused (follow-up audit)
 
 Three defects the follow-up audit found by reading, each now held by a test. The first is a leak every session had; the
-  other two are a race and a crash no committed test or product path was known to reach.
+other two are a race and a crash no committed test or product path was known to reach.
 
 - **The decoded TMATS was never freed.** irig106 allocates the tree a decode builds and gives it back only through
   `enI106_Free_TmatsInfo`, which nothing in the core called; both readers also zeroed the struct before each decode,
