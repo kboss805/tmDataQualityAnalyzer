@@ -987,6 +987,9 @@ suite's one skip); `ChartGeometryTests`, `ReceiverParamsTests`, `SeriesTests`, `
 returned; a Dispose while another thread waits on a run, and a run disposed from its own callback, which still reports its end and is
 released afterwards), `ObserverBridgeTests` (which thread is inside a callback, nested and after a throw); and `TempFilesTests`, the
 helper every test cleans up and reads back through, which waits out a virus scanner's moment's hold.
+The five managed tests that read the process's private memory before and after a loop (`ArenaTests`, `FormatsTests`, `HandleTests`
+and `RunTests` hold them) share `ProcessMemoryCollection`, which runs alone: the number is the whole process's, so another test
+allocating beside one (xunit runs classes in parallel) is counted as its leak.
 
 **The application** (`tests/TmDq.App.Tests`, on the headless platform with Skia drawing):
 

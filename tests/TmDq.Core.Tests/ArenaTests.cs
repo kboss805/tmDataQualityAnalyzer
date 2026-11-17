@@ -6,6 +6,7 @@ using Xunit;
 
 namespace TmDq.Core.Tests;
 
+[Collection(ProcessMemoryCollection.Name)]
 public unsafe class ArenaTests
 {
     public ArenaTests()
