@@ -154,8 +154,7 @@ public static unsafe class ChartGeometry
     private static double[] ReadTicks(TickWriter write)
     {
         Library.RequireLoaded();
-        int needed = write(null, 0);
-        if (needed < 0) throw new TmdqException(Status.BadArgument, Library.LastError());
+        int needed = Library.NonNegative(write(null, 0));
         var ticks = new double[needed];
         fixed (double* p = ticks)
         {

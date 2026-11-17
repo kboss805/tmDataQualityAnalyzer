@@ -99,39 +99,22 @@ public static unsafe class CsvFile
         ArgumentNullException.ThrowIfNull(columns);
 
         using var arena = new Arena();
-        CsvColumnNative** wire = (CsvColumnNative**)arena.Alloc((nuint)(columns.Count * sizeof(void*)));
+        CsvColumnNative** wire = arena.AllocPointers<CsvColumnNative>(columns.Count);
         for (int i = 0; i < columns.Count; i++)
         {
             CsvColumn c = columns[i];
-            CsvColumnNative* one = arena.Alloc<CsvColumnNative>(1);
-            *one = new CsvColumnNative
+            wire[i] = arena.Box(new CsvColumnNative
             {
                 StructSize = (uint)sizeof(CsvColumnNative),
                 MetricType = (int)c.Metric,
                 NameUtf8 = arena.Utf8(c.Name),
-                XValues = Copy(arena, c.X),
-                YValues = Copy(arena, c.Y),
+                XValues = arena.Copy(c.X),
+                YValues = arena.Copy(c.Y),
                 SourceId = c.SourceId,
                 XCount = c.X.Count,
                 YCount = c.Y.Count,
-            };
-            wire[i] = one;
+            });
         }
         Library.Check(Native.tmdq_csv_write(arena.Utf8(path), wire, columns.Count, baseDay, baseTimeOffset));
-    }
-
-    private static double* Copy(Arena arena, IReadOnlyList<double> values)
-    {
-        if (values.Count == 0)
-        {
-            return null;
-        }
-
-        double* copy = arena.Alloc<double>(values.Count);
-        for (int i = 0; i < values.Count; i++)
-        {
-            copy[i] = values[i];
-        }
-        return copy;
     }
 }

@@ -12,6 +12,28 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### TmDq.Core: the interop's small repeats written once (audit S8's leftovers)
+
+What PR 5 left of S8: three copies of the same few lines each, in the binding's calls into the DLL. Behaviour is the
+  same.
+
+- **A list into native memory** (`Arena.Copy`): `CsvFile` copied a column's values and `TemplateMatcher` a set of ids
+  with a private `Copy` each, and `CalibrationRun` copied its steps in a loop of its own. One method, null for an empty
+  list, which the library never reads (its count is 0). `CalibrationRun` used to allocate a one-byte block for no steps
+  and passed null for them anyway.
+- **An array of pointers to structs** (`Arena.AllocPointers`, with `Arena.Box` for each struct): `CsvFile.Write` and
+  `ProcessingRun` each cast `Alloc(count * sizeof(void*))` and boxed each struct by hand.
+- **"A negative result is BadArgument"** (`Library.NonNegative`): written four times, in `Text.Snprintf` (twice),
+  `StreamKey.IsSameStream` and the ticks.
+- **Checked.** Mutation check, `eng\mutate.ps1`, managed (`eng/mutants/arena-repeats.json`, 13 mutants): 12 **CAUGHT**,
+  and the 13th **SURVIVED** on the first run: nothing asserted that the ticks' error is an exception, so a binding
+  that read -1 as "no ticks" passed. `ATickCountThatIsNotAnAxisIsABadArgumentForBothKindsOfTick` closes it, and that
+  mutant is **CAUGHT** (the other twelve: a copy of nothing that is not null, a copy that leaves out its last value, a
+  box that stores nothing, a pointer array a byte to a pointer, -1 no longer an error, a result not given back, the
+  second `Snprintf` call unchecked, a stream key's answer inverted, the step count not passed, a template read from the
+  file's ids, a CSV's y column written from its x, every stream the first). The app suite is **676** passed / 34 not
+  run, zero warnings; native not affected. Baseline moved: managed 381 to 385 (`ArenaTests` three, the ticks one).
+
 #### Body text at 13 px, as VS Code's is
 
 Asked for from the parked VS Code items: the interface's text at 13 px where Fluent's is 14. Captions stay 12.

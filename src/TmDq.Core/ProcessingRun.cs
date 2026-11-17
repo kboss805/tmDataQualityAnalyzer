@@ -110,12 +110,10 @@ public sealed unsafe class ProcessingRun : IDisposable
     private static RunRequestNative ToNative(RunRequest request, Arena arena)
     {
         int count = request.Streams.Count;
-        StreamConfigNative** streams = (StreamConfigNative**)arena.Alloc((nuint)(count * sizeof(void*)));
+        StreamConfigNative** streams = arena.AllocPointers<StreamConfigNative>(count);
         for (int i = 0; i < count; i++)
         {
-            StreamConfigNative* one = arena.Alloc<StreamConfigNative>(1);
-            *one = StreamToNative(request.Streams[i], arena);
-            streams[i] = one;
+            streams[i] = arena.Box(StreamToNative(request.Streams[i], arena));
         }
 
         return new RunRequestNative

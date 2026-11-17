@@ -137,12 +137,7 @@ public readonly record struct StreamKey(int SourceId, string Label, int Channel)
         using var arena = new Arena();
         StreamKeyNative a = ToNative(this, arena);
         StreamKeyNative b = ToNative(other, arena);
-        int same = Native.tmdq_stream_key_equal(&a, &b);
-        if (same < 0)
-        {
-            throw new TmdqException(Status.BadArgument, Library.LastError());
-        }
-        return same != 0;
+        return Library.NonNegative(Native.tmdq_stream_key_equal(&a, &b)) != 0;
     }
 
     private static unsafe StreamKeyNative ToNative(StreamKey key, Arena arena) => new()

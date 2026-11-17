@@ -119,6 +119,42 @@ public unsafe class ArenaTests
     }
 
     [Fact]
+    public void AListIsCopiedAndNothingIsNull()
+    {
+        using var arena = new Arena();
+        Assert.True(arena.Copy(new List<double>()) == null);          // the library reads nothing from a count of 0
+        Assert.True(arena.Copy(Array.Empty<int>()) == null);
+
+        double* doubles = arena.Copy(new List<double> { 1.5, -2.0, 7.25 });
+        Assert.Equal(new[] { 1.5, -2.0, 7.25 }, new[] { doubles[0], doubles[1], doubles[2] });
+        int* ints = arena.Copy(new[] { 4, 5 });
+        Assert.Equal(new[] { 4, 5 }, new[] { ints[0], ints[1] });
+    }
+
+    [Fact]
+    public void AnArrayOfPointersIsZeroedAndABoxedValueIsReadBackThroughItsPointer()
+    {
+        using var arena = new Arena();
+        long** pointers = arena.AllocPointers<long>(3);
+        Assert.True(pointers[0] == null && pointers[1] == null && pointers[2] == null);
+        Assert.True(arena.AllocPointers<long>(0) != null);
+        Assert.True(arena.AllocPointers<long>(-4) != null);
+
+        pointers[1] = arena.Box(123456789012L);
+        pointers[2] = arena.Box(-7L);
+        Assert.Equal((123456789012L, -7L), (*pointers[1], *pointers[2]));
+        Assert.True(pointers[1] != pointers[2]);                      // a block each, not one shared
+    }
+
+    [Fact]
+    public void ANegativeResultIsABadArgumentAndAnythingElseIsReturnedAsItIs()
+    {
+        Assert.Equal((0, 7), (Library.NonNegative(0), Library.NonNegative(7)));
+        TmdqException e = Assert.Throws<TmdqException>(() => Library.NonNegative(-1));
+        Assert.Equal(Status.BadArgument, e.Status);
+    }
+
+    [Fact]
     public void AnErrorFromEitherCallIsAnException()
     {
         TmdqException first = Assert.Throws<TmdqException>(() => Text.Snprintf((buffer, capacity) => -1));
