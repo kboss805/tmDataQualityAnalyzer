@@ -32,8 +32,8 @@
     {
       "id": "H3",
       "file": "src/TmDq.Core/Interop/Handles.cs",
-      "old": "        Native.tmdq_run_free(handle);   // cancels and waits, so no native thread can still hold the context",
-      "new": "        _ = handle;",
+      "old": "    protected override void Free(IntPtr native) => Native.tmdq_run_free(native);",
+      "new": "    protected override void Free(IntPtr native) => _ = native;",
       "args": [
         "-class",
         "TmDq.Core.Tests.RunTests"
@@ -44,8 +44,8 @@
     {
       "id": "H4",
       "file": "src/TmDq.Core/Interop/Handles.cs",
-      "old": "        Native.tmdq_calibration_free(handle);   // cancels and waits, so no native thread can still call back",
-      "new": "        _ = handle;",
+      "old": "    protected override void Free(IntPtr native) => Native.tmdq_calibration_free(native);",
+      "new": "    protected override void Free(IntPtr native) => _ = native;",
       "args": [
         "-class",
         "TmDq.Core.Tests.CalibrationTests"
@@ -148,6 +148,66 @@
       ],
       "expect": "caught",
       "note": "a disposed result is still read"
+    },
+    {
+      "id": "H13",
+      "file": "src/TmDq.Core/Interop/Handles.cs",
+      "old": "        if (bridge is { IsDelivering: true })",
+      "new": "        if (bridge is { IsDelivering: true } && native == IntPtr.Zero)",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.HandleTests"
+      ],
+      "expect": "caught",
+      "note": "a release from the run's own callback is not deferred: the free is refused, the context is freed, the run calls back into it"
+    },
+    {
+      "id": "H14",
+      "file": "src/TmDq.Core/Interop/Handles.cs",
+      "old": "        Free(native);       // so that no native thread can still hold the context...\n        bridge?.Dispose();  // ...which is freed only now",
+      "new": "        bridge?.Dispose();\n        Free(native);",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.HandleTests"
+      ],
+      "expect": "caught",
+      "note": "the context is freed before the native threads are gone"
+    },
+    {
+      "id": "H15",
+      "file": "src/TmDq.Core/Interop/ObserverBridge.cs",
+      "old": "    public bool IsDelivering => ReferenceEquals(t_delivering, _state);",
+      "new": "    public bool IsDelivering => _state is null;",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.ObserverBridgeTests"
+      ],
+      "expect": "caught",
+      "note": "no thread is ever known to be inside a callback"
+    },
+    {
+      "id": "H16",
+      "file": "src/TmDq.Core/Interop/ObserverBridge.cs",
+      "old": "try { c?.Observer?.OnFinished(success != 0); } catch (Exception e) { c?.Remember(e); } finally { t_delivering = outer; }",
+      "new": "try { c?.Observer?.OnFinished(success != 0); } catch (Exception e) { c?.Remember(e); }",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.ObserverBridgeTests"
+      ],
+      "expect": "caught",
+      "note": "a thread stays marked after the end report returns"
+    },
+    {
+      "id": "H17",
+      "file": "src/TmDq.Core/Interop/ObserverBridge.cs",
+      "old": "try { c?.Observer?.OnProgress(percent); } catch (Exception e) { c?.Remember(e); } finally { t_delivering = outer; }",
+      "new": "try { c?.Observer?.OnProgress(percent); } catch (Exception e) { c?.Remember(e); } finally { t_delivering = null; }",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.ObserverBridgeTests"
+      ],
+      "expect": "caught",
+      "note": "a callback inside another run's callback forgets the outer one when it returns"
     }
   ]
 }

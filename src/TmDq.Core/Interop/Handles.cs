@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Microsoft.Win32.SafeHandles;
 
 namespace TmDq.Core;
@@ -20,40 +21,65 @@ internal abstract class NativeHandle : SafeHandleZeroOrMinusOneIsInvalid
     protected NativeHandle(IntPtr handle) : this() => SetHandle(handle);
 }
 
-/// <summary>A processing run in flight. Releasing it cancels and waits, then frees the callbacks' context.</summary>
-internal sealed class RunHandle : NativeHandle
+/// <summary>
+/// What a run and an extraction have in common: they call back from native threads, so releasing one cancels and waits
+/// for those threads, and only then frees what they call back into. The native library refuses that wait on a thread it
+/// is calling back on (the thread would wait for itself), so a release asked for from one of the observer's own
+/// callbacks, which the observer may well ask for from OnFinished, is carried out from the thread pool, once the
+/// callback has returned. Freeing the context at once instead would leave the run alive, calling back into a freed
+/// <see cref="System.Runtime.InteropServices.GCHandle"/>: a crash, in a native thread no one can catch it on.
+/// </summary>
+internal abstract class CallbackRunHandle : NativeHandle
 {
-    public RunHandle()
+    protected CallbackRunHandle()
     {
     }
 
     /// <summary>What the run calls back into; freed with the run, never before the native threads are gone.</summary>
     internal ObserverBridge? Bridge { get; set; }
 
+    /// <summary>The native free: cancels, waits for every thread, and releases the run.</summary>
+    protected abstract void Free(IntPtr native);
+
     protected override bool ReleaseHandle()
     {
-        Native.tmdq_run_free(handle);   // cancels and waits, so no native thread can still hold the context
-        Bridge?.Dispose();
+        IntPtr native = handle;
+        ObserverBridge? bridge = Bridge;
+        if (bridge is { IsDelivering: true })
+        {
+            ThreadPool.UnsafeQueueUserWorkItem(_ => Release(native, bridge), null);
+            return true;
+        }
+
+        Release(native, bridge);
         return true;
+    }
+
+    private void Release(IntPtr native, ObserverBridge? bridge)
+    {
+        Free(native);       // so that no native thread can still hold the context...
+        bridge?.Dispose();  // ...which is freed only now
     }
 }
 
+/// <summary>A processing run in flight. Releasing it cancels and waits, then frees the callbacks' context.</summary>
+internal sealed class RunHandle : CallbackRunHandle
+{
+    public RunHandle()
+    {
+    }
+
+    protected override void Free(IntPtr native) => Native.tmdq_run_free(native);
+}
+
 /// <summary>A calibration extraction in flight. Releasing it cancels and waits, then frees the callbacks' context.</summary>
-internal sealed class CalibrationRunHandle : NativeHandle
+internal sealed class CalibrationRunHandle : CallbackRunHandle
 {
     public CalibrationRunHandle()
     {
     }
 
-    /// <summary>What the extraction calls back into; freed with it, never before the native threads are gone.</summary>
-    internal ObserverBridge? Bridge { get; set; }
-
-    protected override bool ReleaseHandle()
-    {
-        Native.tmdq_calibration_free(handle);   // cancels and waits, so no native thread can still call back
-        Bridge?.Dispose();
-        return true;
-    }
+    protected override void Free(IntPtr native) => Native.tmdq_calibration_free(native);
 }
 
 /// <summary>A stream's processed data.</summary>

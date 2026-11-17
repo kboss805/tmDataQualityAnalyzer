@@ -12,6 +12,32 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### A run disposed from its own callback is released once the callback has returned (follow-up audit)
+
+An observer that disposes its run from `OnFinished` (or any callback) asked the binding to release it on the very thread
+  the native library was calling back on. #315 made the library refuse that free, because the free joins the run's
+  threads and the caller is one of them; the binding did not know it was refused. `RunHandle` and `CalibrationRunHandle`
+  went on to free the callbacks' `GCHandle` anyway, so the run, never released, called back into a freed handle: an
+  `InvalidOperationException` thrown out of an `UnmanagedCallersOnly` method, which ends the process.
+
+- **`ObserverBridge.IsDelivering`** says whether the calling thread is inside one of that bridge's callbacks (a
+  thread-static marker, saved and restored around each of the five callbacks, also when the observer throws): the
+  library's own `CallbackEvents::delivering()`, one level up.
+- **`CallbackRunHandle`**, the base of both run handles, releases as before from any other thread (the native free,
+  which cancels and waits, and only then the context). From a callback it queues the same two steps to the thread pool,
+  where the free waits for the callback to return and is not refused. `Dispose` from a callback therefore returns before
+  the release has happened; its documentation says so, and says `Wait` from a callback returns at once.
+- **Tests.** `HandleTests` and `CalibrationTests` each run a real run whose observer disposes it from its first progress
+  report (and from the end, if there was none): it must still report its end, and its context must become collectible.
+  `ObserverBridgeTests` (new) call the five callbacks through the pointers the library is given and check the marker:
+  inside, not after, restored after a throw, and the outer run's restored when one callback is called inside another's.
+- **Checked.** Mutation check, `eng\mutate.ps1`, managed, `eng/mutants/safe-handles.json`: 17 mutants, **17 CAUGHT or
+  recorded**: H7 SURVIVED as recorded (a time base's few bytes), the other 16 CAUGHT. H3 and H4 were re-anchored to the
+  new `Free` methods; new H13 (a release from a callback is not deferred: the old behaviour, a crash), H14 (the context
+  freed before the native free), H15 (no thread is ever marked), H16 (not cleared after the end report) and H17 (cleared
+  to nothing instead of the outer run's) are all CAUGHT. Managed suite **395** passed / 1 skipped, zero warnings; the
+  app suite is unchanged. Baseline moved: managed 390 to 395.
+
 #### The CSV memory test measures what it says it does (a flake on the CI runner)
 
 `FormatsTests.ParsedCsvsGiveTheirNativeMemoryBack` failed on the CI runner of #320 ("private memory grew by 116 MiB over

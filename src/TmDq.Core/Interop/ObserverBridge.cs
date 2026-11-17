@@ -15,6 +15,10 @@ namespace TmDq.Core;
     Justification = "An exception must never unwind a native thread: each callback catches everything the observer throws and keeps the first (Context.Remember).")]
 internal sealed unsafe class ObserverBridge : IDisposable
 {
+    /// <summary>The context of the callback this thread is inside, if it is inside one: what <see cref="IsDelivering"/> asks.</summary>
+    [ThreadStatic]
+    private static Context? t_delivering;
+
     private readonly Context _state;
     private GCHandle _handle;
 
@@ -26,6 +30,12 @@ internal sealed unsafe class ObserverBridge : IDisposable
 
     /// <summary>The first exception an observer method threw, or null.</summary>
     public Exception? ObserverException => _state.ObserverException;
+
+    /// <summary>
+    /// True on a thread that is inside one of this bridge's callbacks: a native thread of the run is on it, and cannot be
+    /// waited for from it. As the library's own check (<c>CallbackEvents::delivering</c>), one for each run.
+    /// </summary>
+    public bool IsDelivering => ReferenceEquals(t_delivering, _state);
 
     /// <summary>
     /// Fills every field of <paramref name="callbacks"/> and returns a pointer to it, or null when there is no
@@ -76,25 +86,36 @@ internal sealed unsafe class ObserverBridge : IDisposable
 
     private static Context? From(void* user) => user is null ? null : GCHandle.FromIntPtr((IntPtr)user).Target as Context;
 
+    /// <summary>Marks this thread as inside <paramref name="context"/>'s callback; returns what to put back when it returns.</summary>
+    private static Context? Enter(Context? context)
+    {
+        Context? outer = t_delivering;
+        t_delivering = context;
+        return outer;
+    }
+
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
     private static void OnLog(void* user, byte* message)
     {
         Context? c = From(user);
-        try { c?.Observer?.OnLog(Text.Read(message)); } catch (Exception e) { c?.Remember(e); }
+        Context? outer = Enter(c);
+        try { c?.Observer?.OnLog(Text.Read(message)); } catch (Exception e) { c?.Remember(e); } finally { t_delivering = outer; }
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
     private static void OnError(void* user, byte* message)
     {
         Context? c = From(user);
-        try { c?.Observer?.OnError(Text.Read(message)); } catch (Exception e) { c?.Remember(e); }
+        Context? outer = Enter(c);
+        try { c?.Observer?.OnError(Text.Read(message)); } catch (Exception e) { c?.Remember(e); } finally { t_delivering = outer; }
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
     private static void OnProgress(void* user, int percent)
     {
         Context? c = From(user);
-        try { c?.Observer?.OnProgress(percent); } catch (Exception e) { c?.Remember(e); }
+        Context? outer = Enter(c);
+        try { c?.Observer?.OnProgress(percent); } catch (Exception e) { c?.Remember(e); } finally { t_delivering = outer; }
     }
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
@@ -103,6 +124,7 @@ internal sealed unsafe class ObserverBridge : IDisposable
     private static void OnStreamDone(void* user, void* result)
     {
         Context? c = From(user);
+        Context? outer = Enter(c);
         // Ownership of the native result has passed to this callback: it is wrapped first, so it is released
         // whatever happens next (the wrapper releases it itself if it cannot be made).
         try
@@ -114,12 +136,17 @@ internal sealed unsafe class ObserverBridge : IDisposable
         {
             c?.Remember(e);   // a result that could not be wrapped was released by its constructor
         }
+        finally
+        {
+            t_delivering = outer;
+        }
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
     private static void OnFinished(void* user, int success)
     {
         Context? c = From(user);
-        try { c?.Observer?.OnFinished(success != 0); } catch (Exception e) { c?.Remember(e); }
+        Context? outer = Enter(c);
+        try { c?.Observer?.OnFinished(success != 0); } catch (Exception e) { c?.Remember(e); } finally { t_delivering = outer; }
     }
 }

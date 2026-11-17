@@ -84,7 +84,10 @@ public sealed unsafe class ProcessingRun : IDisposable
         }
     }
 
-    /// <summary>Blocks until every thread of the run has ended, so every observer call has returned.</summary>
+    /// <summary>
+    /// Blocks until every thread of the run has ended, so every observer call has returned. From one of the observer's own
+    /// methods it returns at once: it would be waiting for itself.
+    /// </summary>
     public void Wait()
     {
         try
@@ -99,7 +102,9 @@ public sealed unsafe class ProcessingRun : IDisposable
 
     /// <summary>
     /// Cancels a run still in flight, waits for it, and releases it. Safe to call twice. A <see cref="Wait"/> on another
-    /// thread keeps the run open until it returns, so the run is cancelled first.
+    /// thread keeps the run open until it returns, so the run is cancelled first. From one of the observer's own methods
+    /// (<see cref="IRunObserver.OnFinished"/>, say) it cannot wait for the thread it is on: it cancels, and the release is
+    /// carried out, from another thread, as soon as that method has returned.
     /// </summary>
     public void Dispose()
     {

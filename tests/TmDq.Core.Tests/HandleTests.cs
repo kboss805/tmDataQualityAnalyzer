@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -102,5 +103,50 @@ public class HandleTests
         Assert.True(collector.WaitFinished(Timeout));
         Assert.False(collector.Success);
         Assert.Equal("finished:0", collector.Events[^1]);
+    }
+
+    [Fact]
+    public async Task ARunDisposedFromItsOwnCallbackStillReportsItsEndAndIsReleasedOnceTheCallbackHasReturned()
+    {
+        // The native free is refused on a thread the run is calling back on (it would wait for itself). The binding used to
+        // free the callbacks' context anyway, leaving the run alive and calling back into a freed GCHandle: a crash.
+        WeakReference observer = RunThatDisposesItself();
+        await AssertReleased(observer);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static WeakReference RunThatDisposesItself()
+    {
+        var observer = new SelfDisposingObserver();
+        var request = new RunRequest(Env.Prn, 1, new[]
+        {
+            new StreamConfig { PcmChannelId = 13, Label = "Ch 13", SyncPattern = "334AABBF", BitsInMinorFrame = 32767 },
+        })
+        {
+            AppRoot = Env.RepoRoot,
+        };
+        ProcessingRun run = ProcessingRun.Start(request, observer);
+        observer.Run = run;
+        Assert.True(observer.WaitFinished(), "the run did not finish after it was disposed from a callback");
+        Assert.NotNull(observer.Success);
+        Assert.Null(run.ObserverException);
+        return new WeakReference(observer);
+    }
+
+    /// <summary>
+    /// What a run's callbacks reach (the observer, through the context's GCHandle) is collectible only once that handle is
+    /// freed, which the release does after the native free: so an observer that can be collected was released, however late.
+    /// </summary>
+    internal static async Task AssertReleased(WeakReference observer)
+    {
+        DateTime deadline = DateTime.UtcNow + Timeout;
+        while (observer.IsAlive && DateTime.UtcNow < deadline)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
+
+        Assert.False(observer.IsAlive, "the run's context was never released");
     }
 }
