@@ -12,6 +12,35 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The kept mutant lists match their files again, and a test keeps them matching (follow-up audit)
+
+A list kept in `eng/mutants` is a regression check only while each mutant's `old` text is still in its file exactly
+  once. After a rename or a re-indent `eng\mutate.ps1` answers NO-MATCH, checks nothing, and nobody is told. The
+  follow-up audit found 28 of the 155 kept mutants, in 7 of the 16 lists, in that state.
+
+- **Re-anchored: 28.** 21 had only lost the namespace's indentation when #310 made every namespace file-scoped
+  (`app-dialog-scaffolding` 7, `app-error-paths` 1, `app-layer-homes` 1, `plot-draft-keys` 3, `plot-draft` 7,
+  `run-log-order` 2). 6 named code that later changes reworded: the two `"PCMIN"` literals that #301 made
+  `PCMConstants::kChannelTypePcm` (`packet-reader-optional-fields`), the missing core's `Log.Error(Status)` that #281
+  made `Log.Error(error)` (`app-error-paths` E2, E3), and the stream's first log line, which #290 moved when it removed
+  the processing window (`run-log-order` R2, M5). One had no target left: `app-error-paths` C1 mutated the culture of
+  the status line's "mean lock" number, which the status bar's return (#281) removed; it now mutates the culture of the
+  file size in the log, the number that still has a decimal.
+- **A test that was missing.** Nothing wrote a file size under a culture with a decimal comma, so C1 in its new place
+  would have survived: `AFileSizeIsWrittenTheSameInEveryCulture` (`ProcessingTests`).
+- **`safe-handles.json`** had a raw line break inside a JSON string (H12), which PowerShell's reader accepts and a
+  strict one refuses.
+- **The guard.** `RepoFilesTests.EveryKeptMutantStillNamesTextThatIsInItsFileExactlyOnce` (managed suite, so CI runs it)
+  reads every list as strict JSON and fails, naming the list and the mutant, when a mutant's file is gone, its `old`
+  text is not in the file exactly once, it changes nothing, or its id is used twice. A change that moves such text now
+  re-anchors the list in the same change.
+- **Checked.** The 28 were run again through `eng\mutate.ps1` and each has the verdict its list expects: 26 **CAUGHT**,
+  one **COMPILE** (`app-error-paths` E3, which the compiler holds, as its note says) and one **SURVIVED**
+  (`run-log-order` R2, kept as not a defect). Every mutant of every list (170, with #313's to #315's) matches its file
+  exactly once. Managed **389** passed / 1 skipped, app **677** passed / 34 not run, zero warnings; native not affected
+  (no product source changed). Baselines moved: managed 385 to 389 (the guard and its counting rule's three rows), app
+  676 to 677.
+
 #### The core: a reader's TMATS freed, the close inside the lock, and a free from a callback refused (follow-up audit)
 
 Three defects the follow-up audit found by reading, each now held by a test. The first is a leak every session had; the
