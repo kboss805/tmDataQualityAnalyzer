@@ -29,7 +29,7 @@ bool is(const char* actual, std::string_view expected)
 /// A shipped settings file, by the constants that name it.
 std::filesystem::path shippedSetting(const char* folder, const char* file)
 {
-    return repoFile(std::filesystem::path(UIConstants::kSettingsDirName) / folder / file);
+    return repoFile(std::filesystem::path(SettingsConstants::kSettingsDirName) / folder / file);
 }
 
 } // namespace
@@ -67,26 +67,26 @@ TEST_CASE("Constants: pcmChannelTypeIdentifiers")
 
 TEST_CASE("Constants: uiDefaultSlopeIndex")
 {
-    CHECK(UIConstants::kDefaultSlopeIndex == 3);
+    CHECK(ReceiverConstants::kDefaultSlopeIndex == 3);
 }
 
 TEST_CASE("Constants: uiSamplePeriods")
 {
-    CHECK(UIConstants::kSamplePeriod1s == 1.0);
-    CHECK(UIConstants::kSamplePeriod100ms == 0.1);
-    CHECK(UIConstants::kSamplePeriod10ms == 0.01);
+    CHECK(TimeConstants::kSamplePeriod1s == 1.0);
+    CHECK(TimeConstants::kSamplePeriod100ms == 0.1);
+    CHECK(TimeConstants::kSamplePeriod10ms == 0.01);
 }
 
 TEST_CASE("Constants: uiChannelPrefixes")
 {
-    CHECK(is(UIConstants::kChannelPrefixes[0], "L"));
-    CHECK(is(UIConstants::kChannelPrefixes[1], "R"));
-    CHECK(is(UIConstants::kChannelPrefixes[2], "C"));
+    CHECK(is(ReceiverConstants::kChannelPrefixes[0], "L"));
+    CHECK(is(ReceiverConstants::kChannelPrefixes[1], "R"));
+    CHECK(is(ReceiverConstants::kChannelPrefixes[2], "C"));
 }
 
 TEST_CASE("Constants: uiNumKnownPrefixes")
 {
-    CHECK(UIConstants::kNumKnownPrefixes == 3);   // derived from the array's length
+    CHECK(ReceiverConstants::kNumKnownPrefixes == 3);   // derived from the array's length
 }
 
 TEST_CASE("Constants: appVersionValues")
@@ -124,22 +124,22 @@ TEST_CASE("Constants: pcmProgressReportInterval")
 
 TEST_CASE("Constants: uiTimeConversionConstants")
 {
-    CHECK(UIConstants::kSecondsPerDay == 86400);
-    CHECK(UIConstants::kSecondsPerHour == 3600);
-    CHECK(UIConstants::kSecondsPerMinute == 60);
+    CHECK(TimeConstants::kSecondsPerDay == 86400);
+    CHECK(TimeConstants::kSecondsPerHour == 3600);
+    CHECK(TimeConstants::kSecondsPerMinute == 60);
 }
 
 TEST_CASE("Constants: uiPolarityConstants")
 {
-    CHECK(UIConstants::kDefaultPolarityIndex == 0);
+    CHECK(ReceiverConstants::kDefaultPolarityIndex == 0);
 }
 
 TEST_CASE("Constants: uiDeploymentConstants")
 {
-    CHECK(is(UIConstants::kSettingsDirName, "settings"));
-    CHECK(is(UIConstants::kDefaultTomlFilename, "default.toml"));
-    CHECK(is(UIConstants::kReceiverParamsDirName, "receiver_params"));
-    CHECK(is(UIConstants::kRcvrCalsDirName, "rcvr_cals"));
+    CHECK(is(SettingsConstants::kSettingsDirName, "settings"));
+    CHECK(is(SettingsConstants::kDefaultTomlFilename, "default.toml"));
+    CHECK(is(SettingsConstants::kReceiverParamsDirName, "receiver_params"));
+    CHECK(is(SettingsConstants::kRcvrCalsDirName, "rcvr_cals"));
 }
 
 TEST_CASE("Constants: pcmFrameSyncMaskConstants")
@@ -161,27 +161,27 @@ TEST_CASE("Constants: pcmMaxPacketBufferSize")
 TEST_CASE("Constants: uiDefaultSamplePeriodIndex")
 {
     // Default is 1 s (index 0 in the 1 s / 100 ms / 10 ms combo).
-    CHECK(UIConstants::kDefaultSamplePeriodIndex == 0);
+    CHECK(TimeConstants::kDefaultSamplePeriodIndex == 0);
 }
 
 TEST_CASE("Constants: uiMaxSlopeIndex")
 {
     // Four voltage-range options (0-indexed); max valid index is 3.
-    CHECK(UIConstants::kMaxSlopeIndex == 3);
+    CHECK(ReceiverConstants::kMaxSlopeIndex == 3);
 }
 
 TEST_CASE("Constants: uiSlopeVoltageBounds")
 {
     // Voltage bounds for each slope index (US2.1, voltage range options).
-    CHECK(UIConstants::kSlopeVoltageLower[0] == -10.0);
-    CHECK(UIConstants::kSlopeVoltageLower[1] == -5.0);
-    CHECK(UIConstants::kSlopeVoltageLower[2] == 0.0);
-    CHECK(UIConstants::kSlopeVoltageLower[3] == 0.0);
+    CHECK(ReceiverConstants::kSlopeVoltageLower[0] == -10.0);
+    CHECK(ReceiverConstants::kSlopeVoltageLower[1] == -5.0);
+    CHECK(ReceiverConstants::kSlopeVoltageLower[2] == 0.0);
+    CHECK(ReceiverConstants::kSlopeVoltageLower[3] == 0.0);
 
-    CHECK(UIConstants::kSlopeVoltageUpper[0] == 10.0);
-    CHECK(UIConstants::kSlopeVoltageUpper[1] == 5.0);
-    CHECK(UIConstants::kSlopeVoltageUpper[2] == 10.0);
-    CHECK(UIConstants::kSlopeVoltageUpper[3] == 5.0);
+    CHECK(ReceiverConstants::kSlopeVoltageUpper[0] == 10.0);
+    CHECK(ReceiverConstants::kSlopeVoltageUpper[1] == 5.0);
+    CHECK(ReceiverConstants::kSlopeVoltageUpper[2] == 10.0);
+    CHECK(ReceiverConstants::kSlopeVoltageUpper[3] == 5.0);
 }
 
 // --- cases added in the port: each closes a gap the port's mutation check found --------------------------------------
@@ -219,10 +219,10 @@ TEST_CASE("Constants: each settings folder that has a default ships it under the
 {
     // The receiver parameters and the step calibration each fall back to <folder>/default.toml; the frame sync
     // patterns have no default.toml (their default is the file above), so they are not listed.
-    for (const char* folder : {UIConstants::kReceiverParamsDirName, UIConstants::kRcvrCalsDirName})
+    for (const char* folder : {SettingsConstants::kReceiverParamsDirName, SettingsConstants::kRcvrCalsDirName})
     {
         INFO(folder);
-        CHECK(std::filesystem::is_regular_file(shippedSetting(folder, UIConstants::kDefaultTomlFilename)));
+        CHECK(std::filesystem::is_regular_file(shippedSetting(folder, SettingsConstants::kDefaultTomlFilename)));
     }
 }
 

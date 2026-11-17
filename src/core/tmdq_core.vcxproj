@@ -76,7 +76,7 @@
       <SDLCheck>false</SDLCheck>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <ProgramDataBaseFileName>$(IntDir)tmdq_core.pdb</ProgramDataBaseFileName>
-      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)abi;$(MSBuildThisFileDirectory)include;$(MSBuildThisFileDirectory)include\dto;$(MSBuildThisFileDirectory)include\model;$(MSBuildThisFileDirectory)..\..\third_party\irig106\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)abi;$(MSBuildThisFileDirectory)include;$(MSBuildThisFileDirectory)..\..\third_party\irig106\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>TMDQ_ABI_BUILD;UNICODE;_UNICODE;WIN32;WIN64;_ENABLE_EXTENDED_ALIGNED_STORAGE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <!-- Strict conformance, level 4 with every warning an error (audit A1, T7: a build from an IDE is gated as the
            scripted one is), and two kept off (C4577, C4467) as v2.x's build had them. The vendored irig106 headers are
@@ -119,37 +119,37 @@
     <ClInclude Include="include\containerutil.h" />
     <ClInclude Include="include\textformat.h" />
     <ClInclude Include="include\textparse.h" />
-    <ClInclude Include="include\dto\calibrationprofile.h" />
-    <ClInclude Include="include\dto\metrictype.h" />
-    <ClInclude Include="include\dto\processedstreamdata.h" />
-    <ClInclude Include="include\dto\processingparams.h" />
-    <ClInclude Include="include\dto\streammode.h" />
-    <ClInclude Include="include\model\calibrationextractor.h" />
-    <ClInclude Include="include\model\calibrationrequest.h" />
-    <ClInclude Include="include\model\ch10packetreader.h" />
-    <ClInclude Include="include\model\channeldata.h" />
-    <ClInclude Include="include\model\chapter10reader.h" />
-    <ClInclude Include="include\model\chartgeometry.h" />
-    <ClInclude Include="include\model\clocktime.h" />
-    <ClInclude Include="include\model\csvseriesparser.h" />
-    <ClInclude Include="include\model\csvserieswriter.h" />
-    <ClInclude Include="include\model\frameprocessor.h" />
-    <ClInclude Include="include\model\framesetup.h" />
-    <ClInclude Include="include\model\framesync.h" />
-    <ClInclude Include="include\model\framesyncfile.h" />
-    <ClInclude Include="include\model\intervalgate.h" />
-    <ClInclude Include="include\model\irig106lock.h" />
-    <ClInclude Include="include\model\packetqueue.h" />
-    <ClInclude Include="include\model\pipelinerunner.h" />
-    <ClInclude Include="include\model\processingevents.h" />
-    <ClInclude Include="include\model\seriesbuilder.h" />
-    <ClInclude Include="include\model\seriescolumnschema.h" />
-    <ClInclude Include="include\model\seriesrange.h" />
-    <ClInclude Include="include\model\stepdetector.h" />
-    <ClInclude Include="include\model\streamjobbuilder.h" />
-    <ClInclude Include="include\model\templatematcher.h" />
-    <ClInclude Include="include\model\textfile.h" />
-    <ClInclude Include="include\model\tomldocument.h" />
+    <ClInclude Include="include\calibrationprofile.h" />
+    <ClInclude Include="include\metrictype.h" />
+    <ClInclude Include="include\processedstreamdata.h" />
+    <ClInclude Include="include\processingparams.h" />
+    <ClInclude Include="include\streammode.h" />
+    <ClInclude Include="include\calibrationextractor.h" />
+    <ClInclude Include="include\calibrationrequest.h" />
+    <ClInclude Include="include\ch10packetreader.h" />
+    <ClInclude Include="include\channeldata.h" />
+    <ClInclude Include="include\chapter10reader.h" />
+    <ClInclude Include="include\chartgeometry.h" />
+    <ClInclude Include="include\clocktime.h" />
+    <ClInclude Include="include\csvseriesparser.h" />
+    <ClInclude Include="include\csvserieswriter.h" />
+    <ClInclude Include="include\frameprocessor.h" />
+    <ClInclude Include="include\framesetup.h" />
+    <ClInclude Include="include\framesync.h" />
+    <ClInclude Include="include\framesyncfile.h" />
+    <ClInclude Include="include\intervalgate.h" />
+    <ClInclude Include="include\irig106lock.h" />
+    <ClInclude Include="include\packetqueue.h" />
+    <ClInclude Include="include\pipelinerunner.h" />
+    <ClInclude Include="include\processingevents.h" />
+    <ClInclude Include="include\seriesbuilder.h" />
+    <ClInclude Include="include\seriescolumnschema.h" />
+    <ClInclude Include="include\seriesrange.h" />
+    <ClInclude Include="include\stepdetector.h" />
+    <ClInclude Include="include\streamjobbuilder.h" />
+    <ClInclude Include="include\templatematcher.h" />
+    <ClInclude Include="include\textfile.h" />
+    <ClInclude Include="include\tomldocument.h" />
   </ItemGroup>
 
   <ItemGroup>

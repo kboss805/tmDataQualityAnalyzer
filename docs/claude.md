@@ -641,9 +641,10 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
 
 ### File Organization
 
-- **The core** (`src/core/`, its project `tmdq_core.vcxproj`): headers in `include/` (`dto/`, `model/`, `constants.h`, and three helper headers at its root: `containerutil.h` for
-  signed indexing, `textformat.h` for fixed-point text that rounds a tie away from zero, `textparse.h` for the forgiving
-  number rules the settings files are read with),
+- **The core** (`src/core/`, its project `tmdq_core.vcxproj`): headers in `include/`, all in the one folder (`constants.h`; the helpers `containerutil.h` for signed indexing,
+  `textformat.h` for fixed-point text that rounds a tie away from zero and `textparse.h` for the forgiving number rules the
+  settings files are read with; and a header to each class, struct or enum of the core, none of them in a subfolder, so a
+  header is included by its bare name),
   sources in `src/`, the ABI in `abi/`; the doctest suite in `tests/core/`. A new core source goes in `tmdq_core.vcxproj`,
   and a new ABI source in both native projects; `NativeProjectTests` fails until they list it.
 - **.NET**: `src/TmDq.Core` (the binding) and `src/TmDq.App`, each with a `.Tests` project of the same name

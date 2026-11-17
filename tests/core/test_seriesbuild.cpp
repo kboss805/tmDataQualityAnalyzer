@@ -846,7 +846,7 @@ public:
         if (ok)
         {
             m_base_day = tm_buf.tm_yday + 1;
-            m_base_time_offset = (tm_buf.tm_hour * UIConstants::kSecondsPerHour) + (tm_buf.tm_min * UIConstants::kSecondsPerMinute) +
+            m_base_time_offset = (tm_buf.tm_hour * TimeConstants::kSecondsPerHour) + (tm_buf.tm_min * TimeConstants::kSecondsPerMinute) +
                                  tm_buf.tm_sec + (m_base_abs_seconds - static_cast<double>(epoch));
         }
     }

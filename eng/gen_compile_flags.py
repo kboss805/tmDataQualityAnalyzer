@@ -28,8 +28,6 @@ REPO = Path(__file__).resolve().parent.parent
 # tests/core/tmdq_core_tests.vcxproj), repo-relative.
 PROJECT_INCLUDES = [
     "src/core/include",
-    "src/core/include/dto",
-    "src/core/include/model",
     "third_party/irig106/include",
     "third_party/doctest",
     "src/core/abi",

@@ -36,11 +36,11 @@ struct StreamJobConfig
     bool        randomized = false;
     bool        inverted = false;
     double      dataRateMbps = 0.0;    ///< 0 = use the TMATS-declared rate.
-    int         samplePeriodIndex = UIConstants::kDefaultSamplePeriodIndex;
+    int         samplePeriodIndex = TimeConstants::kDefaultSamplePeriodIndex;
 
     // Receiver SNR only.
-    int         polarityIndex = UIConstants::kDefaultPolarityIndex;
-    int         slopeIndex = UIConstants::kDefaultSlopeIndex;
+    int         polarityIndex = ReceiverConstants::kDefaultPolarityIndex;
+    int         slopeIndex = ReceiverConstants::kDefaultSlopeIndex;
     double      scaleDdBPerV = PCMConstants::kDefaultScaleDdBPerV;
     int         numReceivers = PCMConstants::kDefaultNumReceivers;
     int         receiverChannels = PCMConstants::kDefaultReceiverChannels;

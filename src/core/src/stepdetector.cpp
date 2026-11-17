@@ -713,9 +713,9 @@ std::string StepDetector::initialStepConfigPath(const std::string& appRoot,
     {
         return {};
     }
-    const std::string fallback = appRoot + "/" + UIConstants::kSettingsDirName + "/"
-                                 + UIConstants::kRcvrCalsDirName + "/"
-                                 + UIConstants::kDefaultTomlFilename;
+    const std::string fallback = appRoot + "/" + SettingsConstants::kSettingsDirName + "/"
+                                 + SettingsConstants::kRcvrCalsDirName + "/"
+                                 + SettingsConstants::kDefaultTomlFilename;
     return isFile(fallback) ? fallback : std::string();
 }
 

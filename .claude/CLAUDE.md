@@ -46,7 +46,7 @@ themselves). Use the **PowerShell** tool.
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
   irig106 opens files with a narrow `open()` that reads the active code page. The .NET projects find `mt.exe` in the
   Windows SDK themselves (`eng\WindowsSdkTools.targets`), so a plain `dotnet build` (VS Code's) needs no developer
-  prompt. Green baseline **380 passed / 0
+  prompt. Green baseline **381 passed / 0
   failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it.
 - **The app:** `src/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and `tests/TmDq.App.Tests` (xunit v3 on
   `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default (`dotnet.defaultSolution`).
@@ -141,11 +141,11 @@ MSVC 14.51 and left two compilers' objects in one tree. Override with `TMDQ_VS_R
   merged into the app (`src/TmDq.App/app.manifest`) and into all three test hosts (the shared `assets/utf8codepage.manifest`) makes UTF-8.
 - **SNR:** average raw counts first, calibrate once per window. Out-of-range interpolation **clamps**,
   never extrapolates. The calibration extractor must mirror the main run's word map + raw-affecting
-  flags exactly: both build them through `applyAcquisition` (`src/core/include/model/framesync.h`), so a new
+  flags exactly: both build them through `applyAcquisition` (`src/core/include/framesync.h`), so a new
   raw-affecting field goes there and nowhere else.
 - **irig106 setup is serialised:** the vendored library keeps unlocked process-wide state (the handle
   table, the TMATS decoder's statics), so two simultaneous setups can crash. `Chapter10Reader::loadChannels`
-  and `Ch10PacketReader::prepare` hold `lockIrig106Setup()` (`src/core/include/model/irig106lock.h`) for their whole
+  and `Ch10PacketReader::prepare` hold `lockIrig106Setup()` (`src/core/include/irig106lock.h`) for their whole
   setup; anything new that opens a recording must too. Reading from an open handle needs no lock.
 - **Frame sync:** lock % is a **bit-span** quantity, not `time × bitrate`. Reject off-phase syncs
   while locked. Don't double-count missed frames (gap extrapolation only when a window has zero bits).

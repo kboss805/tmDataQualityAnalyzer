@@ -44,8 +44,8 @@ struct ParameterInfo
  */
 struct ReceiverParams
 {
-    int    polarityIndex    = UIConstants::kDefaultPolarityIndex;    ///< 0 = positive, 1 = negative.
-    int    slopeIndex       = UIConstants::kDefaultSlopeIndex;       ///< Index into the voltage ranges.
+    int    polarityIndex    = ReceiverConstants::kDefaultPolarityIndex;    ///< 0 = positive, 1 = negative.
+    int    slopeIndex       = ReceiverConstants::kDefaultSlopeIndex;       ///< Index into the voltage ranges.
     double scaleDdBPerV     = PCMConstants::kDefaultScaleDdBPerV;    ///< Calibration scale, dB per volt.
     int    numReceivers     = PCMConstants::kDefaultNumReceivers;    ///< Receivers contributing channels.
     int    receiverChannels = PCMConstants::kDefaultReceiverChannels;///< Channels per receiver.
@@ -167,7 +167,7 @@ public:
 
     /// Applies the linear voltage→dB calibration (slope/scale) to every parameter
     /// and enables it for output. @p polarity_index 0=positive, 1=negative;
-    /// @p slope_index selects the voltage range (UIConstants::kSlopeVoltageLower/Upper).
+    /// @p slope_index selects the voltage range (ReceiverConstants::kSlopeVoltageLower/Upper).
     /// Inputs must be pre-validated by the caller. Lives in the core so the
     /// conversion is single-sourced and unit-testable, not reimplemented by a host.
     void applyLinearCalibration(int polarity_index, int slope_index, double scale_dB_per_V);

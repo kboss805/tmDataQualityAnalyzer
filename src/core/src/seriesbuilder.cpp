@@ -157,8 +157,8 @@ void SeriesTimeBase::recomputeClock()
     if (ok)
     {
         m_day = tm_buf.tm_yday + 1;
-        m_offset = (tm_buf.tm_hour * UIConstants::kSecondsPerHour)
-                 + (tm_buf.tm_min * UIConstants::kSecondsPerMinute)
+        m_offset = (tm_buf.tm_hour * TimeConstants::kSecondsPerHour)
+                 + (tm_buf.tm_min * TimeConstants::kSecondsPerMinute)
                  + tm_buf.tm_sec
                  + (m_abs_seconds - static_cast<double>(epoch));
     }

@@ -68,6 +68,17 @@ public class NativeProjectTests
     }
 
     [Fact]
+    public void TheCoreHeadersAreOneFolderAndAreIncludedByTheirBareNames()
+    {
+        // The flattened include/ (audit S1): a subfolder would need an include directory of its own in both native
+        // projects and in the generated compile_flags.txt, and a header's place in the tree would say something the
+        // header's name already says.
+        string include = Path.Combine(CoreFolder, "include");
+        Assert.Empty(Directory.GetDirectories(include));
+        Assert.NotEmpty(Directory.GetFiles(include, "*.h"));
+    }
+
+    [Fact]
     public void TheDllListsEveryHeader()
     {
         // Listed for Solution Explorer, so nothing but this test notices a header left out.
@@ -77,7 +88,7 @@ public class NativeProjectTests
                              .Select(e => Path.GetFullPath(Path.Combine(CoreFolder, e.Attribute("Include")!.Value)))
                              .ToArray();
         Assert.All(listed, p => Assert.True(File.Exists(p), p + " is listed but does not exist"));
-        foreach (string folder in new[] { "include", Path.Combine("include", "dto"), Path.Combine("include", "model"), "abi" })
+        foreach (string folder in new[] { "include", "abi" })
         {
             string full = Path.Combine(CoreFolder, folder);
             Assert.Equal(OnDisk(full, "*.h"), Under(full, listed));
