@@ -5,8 +5,8 @@
     {
       "id": "D1",
       "file": "src/TmDq.App/ViewModels/Dialogs/DialogViewModel.cs",
-      "old": "            Accepted = true;\n            Close();",
-      "new": "            Close();",
+      "old": "        Accepted = true;\n        Close();",
+      "new": "        Close();",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ExportImportTests"],
       "expect": "caught",
       "note": "an accepted dialog closes without saying it was accepted: Export would never run"
@@ -14,8 +14,8 @@
     {
       "id": "D2",
       "file": "src/TmDq.App/ViewModels/Dialogs/DialogViewModel.cs",
-      "old": "        protected DialogViewModel() => CancelCommand = new RelayCommand(Close);",
-      "new": "        protected DialogViewModel() => CancelCommand = new RelayCommand(Accept);",
+      "old": "    protected DialogViewModel() => CancelCommand = new RelayCommand(Close);",
+      "new": "    protected DialogViewModel() => CancelCommand = new RelayCommand(Accept);",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.CalibrationDialogTests"],
       "expect": "caught",
       "note": "Cancel accepts"
@@ -23,8 +23,8 @@
     {
       "id": "D3",
       "file": "src/TmDq.App/ViewModels/Dialogs/DialogViewModel.cs",
-      "old": "        private void Close() => CloseRequested?.Invoke(this, EventArgs.Empty);",
-      "new": "        private void Close() => _ = CloseRequested;",
+      "old": "    private void Close() => CloseRequested?.Invoke(this, EventArgs.Empty);",
+      "new": "    private void Close() => _ = CloseRequested;",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.CalibrationDialogTests"],
       "expect": "caught",
       "note": "the dialog is never asked to close"
@@ -32,8 +32,8 @@
     {
       "id": "D4",
       "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
-      "old": "            if (!CanAccept) return;\n            Accept();",
-      "new": "            Accept();",
+      "old": "        if (!CanAccept) return;\n        Accept();",
+      "new": "        Accept();",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.StreamSetupViewModelTests"],
       "expect": "caught",
       "note": "OK accepts a setup with problems"
@@ -41,7 +41,7 @@
     {
       "id": "M1",
       "file": "src/TmDq.App/Platform/Modal.cs",
-      "old": "            vm.CloseRequested += (_, _) => window.Close();\n",
+      "old": "        vm.CloseRequested += (_, _) => window.Close();\n",
       "new": "",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ExportImportTests"],
       "expect": "caught",
@@ -50,7 +50,7 @@
     {
       "id": "M2",
       "file": "src/TmDq.App/Platform/Modal.cs",
-      "old": "            window.DataContext = vm;\n",
+      "old": "        window.DataContext = vm;\n",
       "new": "",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ExportImportTests"],
       "expect": "caught",
@@ -86,7 +86,7 @@
     {
       "id": "S1",
       "file": "src/TmDq.App/Platform/WindowPlotPrompts.cs",
-      "old": "            customize.AskThrough(new WindowPlotPrompts(window));\n",
+      "old": "        customize.AskThrough(new WindowPlotPrompts(window));\n",
       "new": "",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AroundTheChartTests"],
       "expect": "caught",

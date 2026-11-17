@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using Xunit;
 
 namespace TmDq.Core.Tests;
@@ -103,5 +104,62 @@ public class RepoFilesTests
         string ci = File.ReadAllText(RepoPaths.File(Path.Combine(".github", "workflows", "ci.yml")));
         Assert.Matches(@"(?m)^\s+timeout-minutes:\s*\d+\s*$", ci);
         Assert.Matches(@"(?ms)^permissions:\s*\r?\n\s+contents:\s*read\s*$", ci);
+    }
+
+    [Fact]
+    public void EveryKeptMutantStillNamesTextThatIsInItsFileExactlyOnce()
+    {
+        // A kept list (eng\mutants) is a regression check only while each mutant's "old" text is still in its file: after
+        // a rename or a re-indent eng\mutate.ps1 answers NO-MATCH and checks nothing, and nobody is told. 28 of 155 had
+        // gone that way (the follow-up audit of 2026-11-16), most of them in one re-indent. A change that moves the text
+        // a mutant names now fails here, and the list is re-anchored in the same change.
+        string[] lists = Directory.GetFiles(Path.Combine(RepoPaths.Root, "eng", "mutants"), "*.json");
+        Assert.True(lists.Length >= 16, "the mutant lists were not found");
+        var problems = new List<string>();
+        int mutants = 0;
+        foreach (string list in lists)
+        {
+            string name = Path.GetFileName(list);
+            // Strict JSON: a raw line break inside a string (one list had one) is refused here as a stricter reader would.
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(list));
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (JsonElement mutant in document.RootElement.GetProperty("mutants").EnumerateArray())
+            {
+                mutants++;
+                string id = mutant.GetProperty("id").GetString()!;
+                string file = mutant.GetProperty("file").GetString()!;
+                string old = mutant.GetProperty("old").GetString()!.ReplaceLineEndings("\n");
+                string replacement = mutant.GetProperty("new").GetString()!.ReplaceLineEndings("\n");
+                if (!ids.Add(id)) problems.Add($"{name} {id}: the id is used twice");
+                if (old.Length == 0 || old == replacement) problems.Add($"{name} {id}: the mutant changes nothing");
+                string path = Path.Combine(RepoPaths.Root, file.Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(path))
+                {
+                    problems.Add($"{name} {id}: {file} does not exist");
+                    continue;
+                }
+                int found = Occurrences(File.ReadAllText(path).ReplaceLineEndings("\n"), old);
+                if (found != 1) problems.Add($"{name} {id}: its old text is in {file} {found} times");
+            }
+        }
+        Assert.True(mutants >= 170, $"only {mutants} mutants were read");
+        Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
+    }
+
+    [Theory]
+    [InlineData("abcabc", "bc", 2)]
+    [InlineData("aaaa", "aa", 3)]          // overlapping too: "exactly once" must not miss a second place
+    [InlineData("abc", "x", 0)]
+    public void OccurrencesAreCountedWhereverTheyStart(string text, string part, int expected) =>
+        Assert.Equal(expected, Occurrences(text, part));
+
+    private static int Occurrences(string text, string part)
+    {
+        int count = 0;
+        for (int at = text.IndexOf(part, StringComparison.Ordinal); at >= 0; at = text.IndexOf(part, at + 1, StringComparison.Ordinal))
+        {
+            count++;
+        }
+        return count;
     }
 }
