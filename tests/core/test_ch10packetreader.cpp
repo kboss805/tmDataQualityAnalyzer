@@ -840,7 +840,10 @@ TEST_CASE("Ch10PacketReader: a reader gives its decoded TMATS back")
 {
     const StepCalFixture fx = loadStepCalFixture();
     constexpr int         kRounds = 400;
-    constexpr std::size_t kLimit  = 2u * 1024u * 1024u;   // 400 trees kept would be several times this
+    // What the heap grows by with nothing leaked varies from run to run, from under 1 MiB to nearly 2 (measured over dozens of
+    // runs, in both build configurations; CI once read 2056 KiB against a limit of 2048 and failed a build that leaked
+    // nothing). 400 trees kept grow it by about 65 MB, 160 KiB each, so 8 MiB is four times the noise and an eighth of a leak.
+    constexpr std::size_t kLimit  = 8u * 1024u * 1024u;
 
     SUBCASE("Chapter10Reader, destroyed")
     {

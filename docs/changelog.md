@@ -41,6 +41,11 @@ What was left after the queue: each checked to still be real before it was chang
   and git never tracked.
 - **Checked.** `reader-setup.json` S8, S12 and S17 CAUGHT. Native 524 test cases, 0 warnings, on the hardened build; managed
   399 total (398 passed, 1 skipped) and app 725 total (691 passed, 34 not run); the soak on the hardened Release DLL (eng\run_soak.ps1, all 34 runs): every CSV export byte for byte what v2.14.2 exported. The other kept mutant lists were re-run for expectation drift (14 lists, 105 mutants): none had drifted (the three that had, G1, G2 and N3, were fixed in #330). Baselines: unchanged.
+- **The decoded-TMATS memory guard's limit is 8 MiB, not 2** (`a reader gives its decoded TMATS back`). It failed this
+  change's CI at 2056 KiB against 2048 with nothing leaked: the heap's growth over 400 loads varies from under 1 MiB to
+  nearly 2 between runs of the same executable (measured over dozens of runs, hardened and not). A leak is far above that:
+  with the destructor's free removed, 400 trees grow it by about 65 MB (160 KiB each). 8 MiB is four times the noise and an
+  eighth of a leak; the five leak mutants of `reader-lifetime.json` (T1-T5) are still CAUGHT.
 - **Not changed, and why.** `~Ch10PacketReader` throwing if the setup mutex cannot be locked: the mutex cannot fail to lock
   here, and the destructor says so where it is annotated. `ManualFiguresTests.TheBatchConfirmationAndPlotFile` failed once
   in its cleanup on CI (a recording still in use after the 3 s window) and passed on the re-run, in about fifteen runs: one
