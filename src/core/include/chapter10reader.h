@@ -99,9 +99,7 @@ private:
     void closeFile();
     /// Builds combo box display strings for the channels whose ids are in @p channel_ids.
     std::vector<std::string> buildChannelComboBoxList(const std::vector<int>& channel_ids) const;
-    bool processTmatsPacket(Irig106::SuI106Ch10Header& header);
     void applyTmatsNames();
-    void inferChannelTypeFromHeader(int channel_id);
     void categorizeChannels();
 
     Irig106::EnI106Status m_status;                             ///< Last irig106 API return status.

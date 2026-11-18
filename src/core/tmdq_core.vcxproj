@@ -119,6 +119,7 @@
     <ClInclude Include="include\containerutil.h" />
     <ClInclude Include="include\textformat.h" />
     <ClInclude Include="include\textparse.h" />
+    <ClInclude Include="include\tmatswalk.h" />
     <ClInclude Include="include\calibrationprofile.h" />
     <ClInclude Include="include\metrictype.h" />
     <ClInclude Include="include\processedstreamdata.h" />
@@ -128,6 +129,7 @@
     <ClInclude Include="include\calibrationrequest.h" />
     <ClInclude Include="include\ch10packetreader.h" />
     <ClInclude Include="include\channeldata.h" />
+    <ClInclude Include="include\ch10setup.h" />
     <ClInclude Include="include\chapter10reader.h" />
     <ClInclude Include="include\chartgeometry.h" />
     <ClInclude Include="include\clocktime.h" />
@@ -175,6 +177,7 @@
     <ClCompile Include="src\calibrationrequest.cpp" />
     <ClCompile Include="src\chartgeometry.cpp" />
     <ClCompile Include="src\ch10packetreader.cpp" />
+    <ClCompile Include="src\ch10setup.cpp" />
     <ClCompile Include="src\channeldata.cpp" />
     <ClCompile Include="src\chapter10reader.cpp" />
     <ClCompile Include="src\clocktime.cpp" />

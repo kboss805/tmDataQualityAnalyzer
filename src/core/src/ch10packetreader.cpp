@@ -12,16 +12,19 @@
 #include <filesystem>
 #include <format>
 #include <memory>
+#include <optional>
 #include <system_error>
 #include <vector>
 
 #include "i106_decode_pcmf1.h"
 #include "i106_decode_time.h"
 
+#include "ch10setup.h"
 #include "constants.h"
 #include "intervalgate.h"
 #include "irig106lock.h"
 #include "packetqueue.h"
+#include "tmatswalk.h"
 
 using namespace Irig106;
 
@@ -118,76 +121,67 @@ EnI106Status Ch10PacketReader::assembleAttributesFromTMATS(SuTmatsInfo* tmats_in
         channel_info.resize(PCMConstants::kMaxChannelCount, nullptr);
     }
 
-    SuRRecord* psuRRecord = tmats_info->psuFirstRRecord;
-    while (psuRRecord != nullptr)
-    {
-        SuRDataSource* psuRDataSrc = psuRRecord->psuFirstDataSource;
-        while (psuRDataSrc != nullptr)
+    EnI106Status status = I106_OK;
+    tmatswalk::forEachDataSource(*tmats_info, [&](SuRDataSource& data_source) {
+        // A data source with no usable track number (none, or a negative one, which would index out of bounds) is
+        // skipped rather than indexed with.
+        const std::optional<int> track = tmatswalk::trackNumber(data_source);
+        if (!track.has_value())
         {
-            if (psuRDataSrc->szTrackNumber == nullptr)
-            {
-                psuRDataSrc = psuRDataSrc->psuNext;
-                continue;
-            }
-
-            int iTrackNumber = atoi(psuRDataSrc->szTrackNumber);   // NOLINT(bugprone-unchecked-string-to-number-conversion): checked below
-            // atoi() yields 0 on non-numeric text and can be negative for a
-            // malformed track string; a negative index would read out of bounds
-            // below, so skip such a data source rather than indexing with it.
-            if (iTrackNumber < 0)
-            {
-                psuRDataSrc = psuRDataSrc->psuNext;
-                continue;
-            }
-            if (iTrackNumber >= PCMConstants::kMaxChannelCount)
-            {
-                return I106_BUFFER_TOO_SMALL;
-            }
-
-            if (channel_info[iTrackNumber] == nullptr)
-            {
-                channel_info[iTrackNumber] = new SuChanInfo();
-                memset(channel_info[iTrackNumber], 0, sizeof(SuChanInfo));
-
-                channel_info[iTrackNumber]->psuRDataSrc = psuRDataSrc;
-
-                // The decoder leaves a field the TMATS does not carry NULL, and Chapter10Reader lists such a channel
-                // (a missing CHE-n counts as enabled), so the data type is checked before it is compared. A source with
-                // none is not taken for PCM: it gets no attributes, and a stream asked of it is refused in prepare().
-                if (psuRDataSrc->szChannelDataType != nullptr && strcasecmp(psuRDataSrc->szChannelDataType, PCMConstants::kChannelTypePcm) == 0)
-                {
-                    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory, cppcoreguidelines-no-malloc)
-                    channel_info[iTrackNumber]->psuAttributes = calloc(1, sizeof(SuPcmF1_Attributes));
-                    if (channel_info[iTrackNumber]->psuAttributes == nullptr)
-                    {
-                        freeChanInfoTable(channel_info);
-                        return I106_BUFFER_TOO_SMALL;
-                    }
-                    (void)Set_Attributes_PcmF1(psuRDataSrc,
-                        static_cast<SuPcmF1_Attributes*>(channel_info[iTrackNumber]->psuAttributes));
-                }
-            }
-
-            psuRDataSrc = psuRDataSrc->psuNext;
+            return tmatswalk::Walk::Continue;
         }
-        psuRRecord = psuRRecord->psuNext;
-    }
+        const int iTrackNumber = *track;
+        if (iTrackNumber >= PCMConstants::kMaxChannelCount)
+        {
+            status = I106_BUFFER_TOO_SMALL;
+            return tmatswalk::Walk::Stop;
+        }
 
-    return I106_OK;
+        if (channel_info[iTrackNumber] == nullptr)
+        {
+            channel_info[iTrackNumber] = new SuChanInfo();
+            memset(channel_info[iTrackNumber], 0, sizeof(SuChanInfo));
+
+            channel_info[iTrackNumber]->psuRDataSrc = &data_source;
+
+            // The decoder leaves a field the TMATS does not carry NULL, and Chapter10Reader lists such a channel
+            // (a missing CHE-n counts as enabled), so the data type is checked before it is compared. A source with
+            // none is not taken for PCM: it gets no attributes, and a stream asked of it is refused in prepare().
+            if (data_source.szChannelDataType != nullptr && strcasecmp(data_source.szChannelDataType, PCMConstants::kChannelTypePcm) == 0)
+            {
+                // NOLINTNEXTLINE(cppcoreguidelines-owning-memory, cppcoreguidelines-no-malloc)
+                channel_info[iTrackNumber]->psuAttributes = calloc(1, sizeof(SuPcmF1_Attributes));
+                if (channel_info[iTrackNumber]->psuAttributes == nullptr)
+                {
+                    freeChanInfoTable(channel_info);
+                    status = I106_BUFFER_TOO_SMALL;
+                    return tmatswalk::Walk::Stop;
+                }
+                (void)Set_Attributes_PcmF1(&data_source,
+                    static_cast<SuPcmF1_Attributes*>(channel_info[iTrackNumber]->psuAttributes));
+            }
+        }
+        return tmatswalk::Walk::Continue;
+    });
+
+    return status;
 }
 
-bool Ch10PacketReader::ensureBufferCapacity(std::size_t required)
+/// Reads the packet whose header was just read into m_buffer, saying why if it cannot (the run's own error text).
+bool Ch10PacketReader::readPacket()
 {
-    if (required > static_cast<std::size_t>(PCMConstants::kMaxPacketBufferSize))
+    switch (ch10setup::readPacketData(m_file_handle, m_header, m_buffer, m_status))
+    {
+    case ch10setup::PacketRead::Ok:
+        return true;
+    case ch10setup::PacketRead::Memory:
+        m_report.error("Memory allocation failed.");
         return false;
-    if (m_buffer.size() >= required)
-        return true;
-    try {
-        m_buffer.resize(required);
-        return true;
-    } catch (const std::bad_alloc&) {
+    case ch10setup::PacketRead::ReadError:
+        m_report.error("File read error; aborting parsing.");
         return false;
     }
+    return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -201,6 +195,9 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
                                std::string& error)
 {
     closeFile();   // a reader prepared again gives its earlier handle back first (before the lock: the close takes it)
+    // The decoder frees whatever tree an earlier prepare() left (the member starts zeroed; zeroing it would orphan that
+    // tree), so the table that points into that tree goes first.
+    freeChanInfoTable(m_channel_info);
     m_time_channel_id = time_channel_id;
     // 64-bit, so a recording over 2 GB is sized correctly; 0 (no progress) if it cannot be sized.
     std::error_code size_error;
@@ -212,56 +209,16 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
     // function, whichever way it returns; reading packets afterwards needs no lock.
     const auto setup_lock = lockIrig106Setup();
 
-    // The path in the process code page, matching Chapter10Reader: irig106 opens with the
-    // CRT's narrow open(), which reads that code page - UTF-8 under the UTF-8 code-page manifest
-    // (src/TmDq.App/app.manifest, assets/utf8codepage.manifest) merged into the app and every test host.
-    // (UTF-8 bytes whatever the code page would fail for a path the metadata reader opened.)
-    const std::string narrow_path = filename.string();
-    m_status = enI106Ch10Open(&m_file_handle, narrow_path.c_str(), I106_READ);
-    if (m_status != I106_OK && m_status != I106_OPEN_WARNING)
+    // Open, time sync, and the first packet - TMATS - read and decoded: the steps Chapter10Reader takes too.
+    ch10setup::Failure failure = ch10setup::openRecording(setup_lock, filename, m_file_handle, m_status);
+    m_file_open = (failure != ch10setup::Failure::Open);   // anything but a failed open leaves a handle to close
+    if (failure == ch10setup::Failure::None)
     {
-        error = "Error opening data file.";
-        return false;
+        failure = ch10setup::readTmats(setup_lock, m_file_handle, m_header, m_buffer, m_tmats_info, m_status);
     }
-    m_file_open = true;
-
-    m_status = enI106_SyncTime(m_file_handle, bFALSE, 0);
-    if (m_status != I106_OK)
+    if (failure != ch10setup::Failure::None)
     {
-        error = "Error establishing time sync.";
-        return false;
-    }
-
-    // First packet must be TMATS.
-    m_status = enI106Ch10ReadNextHeader(m_file_handle, &m_header);
-    if (m_status != I106_OK)
-    {
-        error = "Failed to read first header.";
-        return false;
-    }
-    if (m_header.ubyDataType != I106CH10_DTYPE_TMATS)
-    {
-        error = "Failed to find TMATS message.";
-        return false;
-    }
-    if (!ensureBufferCapacity(static_cast<std::size_t>(m_header.ulPacketLen)))
-    {
-        error = "Memory allocation failed.";
-        return false;
-    }
-    m_status = enI106Ch10ReadData(m_file_handle, static_cast<unsigned long>(m_buffer.size()), m_buffer.data());
-    if (m_status != I106_OK)
-    {
-        error = "Failed to read TMATS data.";
-        return false;
-    }
-    // The decoder frees whatever tree an earlier prepare() left (the member starts zeroed; zeroing it here would
-    // orphan that tree), so the table that points into it goes first.
-    freeChanInfoTable(m_channel_info);
-    m_status = enI106_Decode_Tmats(&m_header, m_buffer.data(), &m_tmats_info);
-    if (m_status != I106_OK)
-    {
-        error = "Failed to decode TMATS.";
+        error = ch10setup::describe(failure);
         return false;
     }
     m_status = assembleAttributesFromTMATS(&m_tmats_info, m_channel_info);
@@ -418,15 +375,8 @@ void Ch10PacketReader::run()
         // IRIG time packets: keep the file handle's time sync current.
         if (m_header.ubyDataType == I106CH10_DTYPE_IRIG_TIME && m_header.uChID == m_time_channel_id)
         {
-            if (!ensureBufferCapacity(static_cast<std::size_t>(m_header.ulPacketLen)))
+            if (!readPacket())
             {
-                m_report.error("Memory allocation failed.");
-                break;
-            }
-            m_status = enI106Ch10ReadData(m_file_handle, static_cast<unsigned long>(m_buffer.size()), m_buffer.data());
-            if (m_status != I106_OK)
-            {
-                m_report.error("File read error; aborting parsing.");
                 break;
             }
             enI106_Decode_TimeF1(&m_header, m_buffer.data(), &m_irig_time);
@@ -456,15 +406,8 @@ void Ch10PacketReader::run()
                 continue; // No stream is interested in this channel.
             }
 
-            if (!ensureBufferCapacity(static_cast<std::size_t>(m_header.ulPacketLen)))
+            if (!readPacket())
             {
-                m_report.error("Memory allocation failed.");
-                break;
-            }
-            m_status = enI106Ch10ReadData(m_file_handle, static_cast<unsigned long>(m_buffer.size()), m_buffer.data());
-            if (m_status != I106_OK)
-            {
-                m_report.error("File read error; aborting parsing.");
                 break;
             }
 

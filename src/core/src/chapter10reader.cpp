@@ -5,12 +5,13 @@
 
 #include "chapter10reader.h"
 
-#include <cstdlib>
-#include <new>
+#include <optional>
 
+#include "ch10setup.h"
 #include "constants.h"
 #include "irig106lock.h"
 #include "textparse.h"
+#include "tmatswalk.h"
 
 using namespace Irig106;
 
@@ -55,54 +56,23 @@ void Chapter10Reader::clearSettings()
     m_current_pcm_channel = -1;
 }
 
-void Chapter10Reader::inferChannelTypeFromHeader(int channel_id)
-{
-    ChannelData& channel = m_channel_data.at(channel_id);
-    if (!channel.channelType().empty())
-    {
-        return;
-    }
-    if (m_header.ubyDataType == I106CH10_DTYPE_IRIG_TIME)
-    {
-        channel.setChannelType(PCMConstants::kChannelTypeTime);
-        if (channel.channelName().empty())
-        {
-            channel.setChannelName("Time");
-        }
-    }
-    else if (m_header.ubyDataType == I106CH10_DTYPE_PCM_FMT_1)
-    {
-        channel.setChannelType(PCMConstants::kChannelTypePcm);
-        if (channel.channelName().empty())
-        {
-            channel.setChannelName("PCM");
-        }
-    }
-}
-
 bool Chapter10Reader::loadChannels(const std::filesystem::path& filename)
 {
     m_last_error.clear();
-    const std::string path_text = filename.string();
 
     // The whole load is setup: open, time sync and the TMATS decode all touch irig106's
     // process-wide state, so it is serialised with every other reader's setup.
     const auto setup_lock = lockIrig106Setup();
 
-    // Open the file
-    m_status = enI106Ch10Open(&m_file_handle, path_text.c_str(), I106_READ);
-    if (m_status != I106_OK)
+    ch10setup::Failure failure = ch10setup::openRecording(setup_lock, filename, m_file_handle, m_status);
+    if (failure == ch10setup::Failure::Open)
     {
-        m_last_error = "Error opening file: " + path_text;
+        m_last_error = "Error opening file: " + filename.string();
         return false;
     }
-
-    // Establish time reference so enI106_Rel2IrigTime() can convert
-    // relative header timestamps to absolute IRIG time.
-    m_status = enI106_SyncTime(m_file_handle, bFALSE, 0);
-    if (m_status != I106_OK)
+    if (failure != ch10setup::Failure::None)
     {
-        m_last_error = "Error establishing time sync.";
+        m_last_error = ch10setup::describe(failure);
         closeFile();
         return false;
     }
@@ -112,74 +82,21 @@ bool Chapter10Reader::loadChannels(const std::filesystem::path& filename)
     // doubled up when a reader was loaded a second time.)
     clearSettings();
 
-    // A valid Chapter 10 file's FIRST packet is TMATS, which enumerates every
-    // channel — so channel discovery only needs that one packet (no full-file scan,
-    // no worker thread). Scan until the first TMATS packet and stop. A file whose
-    // first packet is not TMATS is not a processable Chapter 10 stream
-    // (Ch10PacketReader::prepare() enforces the same), so reject it immediately
-    // rather than scanning to EOF.
-    bool first_packet = true;
-    while (true)
+    // A valid Chapter 10 file's FIRST packet is TMATS, which enumerates every channel, so channel discovery
+    // needs only that one packet: no scan of the file, no worker thread. A file that does not begin with a
+    // TMATS packet that reads and decodes is not a processable stream; Ch10PacketReader::prepare() asks the
+    // same of it, through the same steps.
+    failure = ch10setup::readTmats(setup_lock, m_file_handle, m_header, m_buffer, m_tmats_info, m_status);
+    if (failure != ch10setup::Failure::None)
     {
-        // Read the next header
-        m_status = enI106Ch10ReadNextHeader(m_file_handle, &m_header);
-        if (m_status == I106_EOF)
-        {
-            break;
-        }
+        m_last_error = ch10setup::describe(failure);
+        closeFile();
+        return false;
+    }
 
-        if (m_status != I106_OK)
-        {
-            break;
-        }
-
-        if (first_packet && m_header.ubyDataType != I106CH10_DTYPE_TMATS)
-        {
-            m_last_error = "Failed to find TMATS message (expected as the first packet).";
-            closeFile();
-            return false;
-        }
-        first_packet = false;
-
-        // Make sure our buffer is big enough
-        if (m_buffer.size() < static_cast<std::size_t>(uGetDataLen(&m_header)))
-        {
-            try {
-                m_buffer.resize(uGetDataLen(&m_header));
-            } catch (const std::bad_alloc&) {
-                m_last_error = "Memory allocation failed.";
-                closeFile();
-                return false;
-            }
-        }
-
-        // Read the data buffer
-        m_status = enI106Ch10ReadData(m_file_handle, static_cast<unsigned long>(m_buffer.size()), m_buffer.data());
-
-        // Check for data read errors
-        if (m_status != I106_OK)
-        {
-            break;
-        }
-
-        int channel_id = m_header.uChID;
-
-        // If the channel is not in the map, add it
-        m_channel_data.try_emplace(channel_id, channel_id);
-        m_channel_data.at(channel_id).incrementChannelCount();
-
-        // Set channel type and fallback name from packet header when not already set by TMATS
-        inferChannelTypeFromHeader(channel_id);
-
-        // TMATS enumerates all channels we care about; stop scanning once it parses.
-        if (m_header.ubyDataType == I106CH10_DTYPE_TMATS)
-        {
-            if (processTmatsPacket(m_header))
-            {
-                break;
-            }
-        }
-    } // end while
+    // The TMATS packet's own channel is known to the reader; the channels TMATS describes are added from its text.
+    m_channel_data.try_emplace(m_header.uChID, m_header.uChID);
+    m_channel_data.at(m_header.uChID).incrementChannelCount();
 
     categorizeChannels();
     closeFile();
@@ -236,76 +153,58 @@ std::vector<std::pair<int, std::string>> Chapter10Reader::getTimeChannelList() c
     return list;
 }
 
-bool Chapter10Reader::processTmatsPacket(Irig106::SuI106Ch10Header& header)
-{
-    // Decode TMATS metadata into m_tmats_info for later use by applyTmatsNames().
-    // Name/type application is deferred to categorizeChannels() so that all channels
-    // are already in m_channel_data before the TMATS lookup runs.
-    // Not zeroed first: the decoder frees whatever tree an earlier decode left here (the member starts zeroed), and
-    // zeroing it would orphan that tree.
-    m_status = enI106_Decode_Tmats(&header, m_buffer.data(), &m_tmats_info);
-    return m_status == I106_OK;
-}
-
 void Chapter10Reader::applyTmatsNames()
 {
     // Apply TMATS-derived names and types now that all channels are in m_channel_data.
-    // processTmatsPacket() runs on the first packet when most channels aren't yet
-    // discovered, so we re-apply the TMATS metadata here where the map is complete.
-    SuRRecord* record = m_tmats_info.psuFirstRRecord;
-    while (record != nullptr)
-    {
-        SuRDataSource* data_source = record->psuFirstDataSource;
-        while (data_source != nullptr)
+    // The TMATS packet is read before any channel is listed, so the names are applied here
+    // where the map is complete.
+    tmatswalk::forEachDataSource(m_tmats_info, [this](Irig106::SuRDataSource& data_source) {
+        // TMATS\R-x\CHE-n ("Channel Enabled") marks data sources the recorder
+        // is configured to capture but that may not actually be enabled for
+        // this recording. Skip explicitly-disabled sources so they don't show
+        // up as selectable channels; treat a missing CHE-n (common on older
+        // TMATS revisions) as enabled, since omission isn't a disable signal.
+        const std::string che = textparse::asciiUpper(textparse::trimmed(fieldText(data_source.szEnabled)));
+        const bool channel_enabled = che.empty() || che == "T" || che == "TRUE" || che == "Y" || che == "1";
+
+        const std::optional<int> track_number = tmatswalk::trackNumber(data_source);
+        if (track_number.has_value() && channel_enabled)
         {
-            // TMATS\R-x\CHE-n ("Channel Enabled") marks data sources the recorder
-            // is configured to capture but that may not actually be enabled for
-            // this recording. Skip explicitly-disabled sources so they don't show
-            // up as selectable channels; treat a missing CHE-n (common on older
-            // TMATS revisions) as enabled, since omission isn't a disable signal.
-            const std::string che = textparse::asciiUpper(textparse::trimmed(fieldText(data_source->szEnabled)));
-            const bool channel_enabled = che.empty() || che == "T" || che == "TRUE" || che == "Y" || che == "1";
+            m_channel_data.try_emplace(*track_number, *track_number);
+            ChannelData& channel = m_channel_data.at(*track_number);
 
-            if (data_source->szTrackNumber != nullptr && channel_enabled)
+            // Name priority: szDataSourceID (descriptive TMATS R-record identifier)
+            //              -> szChanDataLinkName (Ch10 rev 07+ link name, often generic)
+            //              -> szPcmDataLinkName (rev -04/-05 link name)
+            const std::string dsid = fieldText(data_source.szDataSourceID);
+            const std::string cdln = fieldText(data_source.szChanDataLinkName);
+            const std::string pdln = fieldText(data_source.szPcmDataLinkName);
+            if (!dsid.empty())
             {
-                int track_number = atoi(data_source->szTrackNumber);   // NOLINT(bugprone-unchecked-string-to-number-conversion): TMATS gives digits; text is 0
-                m_channel_data.try_emplace(track_number, track_number);
-                ChannelData& channel = m_channel_data.at(track_number);
-
-                // Name priority: szDataSourceID (descriptive TMATS R-record identifier)
-                //              → szChanDataLinkName (Ch10 rev 07+ link name, often generic)
-                //              → szPcmDataLinkName (rev -04/-05 link name)
-                const std::string dsid = fieldText(data_source->szDataSourceID);
-                const std::string cdln = fieldText(data_source->szChanDataLinkName);
-                const std::string pdln = fieldText(data_source->szPcmDataLinkName);
-                if (!dsid.empty())
-                {
-                    channel.setChannelName(dsid);
-                }
-                else if (!cdln.empty())
-                {
-                    channel.setChannelName(cdln);
-                }
-                else if (!pdln.empty())
-                {
-                    channel.setChannelName(pdln);
-                }
-                if (data_source->szChannelDataType != nullptr)
-                {
-                    const std::string cdt = textparse::trimmed(data_source->szChannelDataType);
-                    if (cdt == "11" || cdt == PCMConstants::kChannelTypeTime) {
-                        channel.setChannelType(PCMConstants::kChannelTypeTime);
-                    } else if (cdt == "01" || cdt == "09" || cdt == PCMConstants::kChannelTypePcm) {
-                        channel.setChannelType(PCMConstants::kChannelTypePcm);
-                    } else {
-                        channel.setChannelType(cdt);
-                    }
+                channel.setChannelName(dsid);
+            }
+            else if (!cdln.empty())
+            {
+                channel.setChannelName(cdln);
+            }
+            else if (!pdln.empty())
+            {
+                channel.setChannelName(pdln);
+            }
+            if (data_source.szChannelDataType != nullptr)
+            {
+                const std::string cdt = textparse::trimmed(data_source.szChannelDataType);
+                if (cdt == "11" || cdt == PCMConstants::kChannelTypeTime) {
+                    channel.setChannelType(PCMConstants::kChannelTypeTime);
+                } else if (cdt == "01" || cdt == "09" || cdt == PCMConstants::kChannelTypePcm) {
+                    channel.setChannelType(PCMConstants::kChannelTypePcm);
+                } else {
+                    channel.setChannelType(cdt);
                 }
             }
-            data_source = data_source->psuNext;
         }
-        record = record->psuNext;
-    }
+        return tmatswalk::Walk::Continue;
+    });
 }
 
 void Chapter10Reader::categorizeChannels()
@@ -367,31 +266,21 @@ double Chapter10Reader::getTmatsDataRateBps(int channel_id) const
 {
     // Walk the R record -> data source -> P record chain looking for
     // the P-x\D2 (Bits Per Second) field that corresponds to this channel.
-    SuRRecord* record = m_tmats_info.psuFirstRRecord;
-    while (record != nullptr)
-    {
-        SuRDataSource* data_source = record->psuFirstDataSource;
-        while (data_source != nullptr)
+    double rate = 0.0;
+    tmatswalk::forEachDataSource(m_tmats_info, [&](const Irig106::SuRDataSource& data_source) {
+        if (tmatswalk::trackNumber(data_source) == channel_id && data_source.psuPRecord != nullptr)
         {
-            if (data_source->szTrackNumber != nullptr)
+            const char* sz = data_source.psuPRecord->szBitsPerSec;
+            double bps = 0.0;
+            if (sz != nullptr && sz[0] != '\0' && textparse::parseDouble(sz, bps) && bps > 0.0)
             {
-                int track = atoi(data_source->szTrackNumber);   // NOLINT(bugprone-unchecked-string-to-number-conversion): compared with a channel id, so text (0) matches none
-                if (track == channel_id && data_source->psuPRecord != nullptr)
-                {
-                    const char* sz = data_source->psuPRecord->szBitsPerSec;
-                    if (sz != nullptr && sz[0] != '\0')
-                    {
-                        double bps = 0.0;
-                        if (textparse::parseDouble(sz, bps) && bps > 0.0)
-                            return bps;
-                    }
-                }
+                rate = bps;
+                return tmatswalk::Walk::Stop;
             }
-            data_source = data_source->psuNext;
         }
-        record = record->psuNext;
-    }
-    return 0.0;
+        return tmatswalk::Walk::Continue;
+    });
+    return rate;
 }
 
 int Chapter10Reader::getCurrentTimeChannelID() const
