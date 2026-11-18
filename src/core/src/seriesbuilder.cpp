@@ -11,6 +11,7 @@
 
 #include "constants.h"
 #include "framesetup.h"
+#include "receivernames.h"
 #include "seriescolumnschema.h"
 #include "seriesrange.h"
 
@@ -81,7 +82,7 @@ StreamSeries buildStreamSeries(const ProcessedStreamData& data, double baseAbsSe
         // distinct; the Configure Streams dialog and Frame Sync Lock series intentionally drop it. The exact
         // name format - and its inverse for CSV import - is owned by SeriesColumnSchema.
         s.name = SeriesColumnSchema::snrSeriesName(data.pcmChannelId, data.streamLabel, ch.name);
-        s.receiverIndex = FrameSetup::receiverNumberInName(ch.name);
+        s.receiverIndex = receivernames::receiverNumberInName(ch.name);
         int& count = receiver_channel_count[s.receiverIndex];
         s.channelIndex = count;
         ++count;

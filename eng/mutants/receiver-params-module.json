@@ -1,0 +1,88 @@
+{
+  "suite": "native",
+  "args": [
+    "-tc=ReceiverNames: *,ReceiverParamsFile: *,StreamJob: *"
+  ],
+  "mutants": [
+    {
+      "id": "N1",
+      "file": "src/core/src/receivernames.cpp",
+      "old": "    const std::size_t at = name.rfind(kReceiverToken);\n    if (at == std::string::npos)\n    {\n        return 0;\n    }",
+      "new": "    const std::size_t at = name.find(kReceiverToken);\n    if (at == std::string::npos)\n    {\n        return 0;\n    }",
+      "expect": "caught",
+      "note": "the number after the FIRST \"_RCVR\" is read, not the last"
+    },
+    {
+      "id": "N2",
+      "file": "src/core/src/receivernames.cpp",
+      "old": "    return receiver > 0 ? receiver : 0;\n",
+      "new": "    return receiver;\n",
+      "expect": "caught",
+      "note": "a receiver that is not positive is a receiver, in the calibration summary"
+    },
+    {
+      "id": "N3",
+      "file": "src/core/src/receivernames.cpp",
+      "old": "    return \"CH\" + std::to_string(channel_index + 1);",
+      "new": "    return \"CH\" + std::to_string(channel_index);",
+      "expect": "caught",
+      "note": "the fallback prefix is off by one"
+    },
+    {
+      "id": "N4",
+      "file": "src/core/src/receivernames.cpp",
+      "old": "    return channelPrefix(channel_index) + kReceiverToken + std::to_string(receiver_index + 1);",
+      "new": "    return channelPrefix(channel_index) + kReceiverToken + std::to_string(receiver_index);",
+      "expect": "caught",
+      "note": "a receiver is named from 0, where its number is 1-based"
+    },
+    {
+      "id": "P1",
+      "file": "src/core/src/receiverparamsfile.cpp",
+      "old": "    if (setup.length() == 0)\n    {\n        return false;\n    }\n",
+      "new": "",
+      "expect": "caught",
+      "note": "a receiver-parameters file is written with no word map"
+    },
+    {
+      "id": "P2",
+      "file": "src/core/src/receiverparamsfile.cpp",
+      "old": "    if (scale > 0.0)\n",
+      "new": "    if (scale > -1.0)\n",
+      "expect": "caught",
+      "note": "a scale that is not positive replaces the one the dialog shows"
+    },
+    {
+      "id": "P3",
+      "file": "src/core/src/receiverparamsfile.cpp",
+      "old": "    if (receivers > 0)\n",
+      "new": "    if (receivers > -1)\n",
+      "expect": "caught",
+      "note": "a receiver count of zero replaces the one the dialog shows"
+    },
+    {
+      "id": "P4",
+      "file": "src/core/src/receiverparamsfile.cpp",
+      "old": "            // A rejected load can leave a partial map behind and buildDefaultReceiverMap appends, so start empty.\n            setup.clearParameters();\n",
+      "new": "            // A rejected load can leave a partial map behind and buildDefaultReceiverMap appends, so start empty.\n",
+      "expect": "caught",
+      "note": "a word map that failed to load is mixed with the default one when a job resolves it"
+    },
+    {
+      "id": "P5",
+      "file": "src/core/src/receiverparamsfile.cpp",
+      "old": "        setup.clearParameters();\n        if (!setup.buildDefaultReceiverMap(params.numReceivers, params.receiverChannels,",
+      "new": "        if (!setup.buildDefaultReceiverMap(params.numReceivers, params.receiverChannels,",
+      "expect": "caught",
+      "note": "a word map that failed to load is mixed with the default one when a file is saved"
+    },
+    {
+      "id": "P6",
+      "file": "src/core/src/receiverparamsfile.cpp",
+      "old": "            out.error = \"Receiver Parameters file '\" + textfile::utf8FileName(explicitFile) + \"' was not found.\";\n            return false;",
+      "new": "            out.error = \"Receiver Parameters file '\" + textfile::utf8FileName(explicitFile) + \"' was not found.\";\n            return true;",
+      "expect": "caught",
+      "note": "a named word-map file that does not exist is taken for a map"
+    }
+  ]
+}

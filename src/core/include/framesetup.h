@@ -3,7 +3,7 @@
  * @brief PCM frame parameter definitions and the word map: the list of parameters, loaded from and written to TOML.
  *
  * The receiver-parameters FILE as a whole (the scalar settings beside the word map) is receiverparamsfile.h's; the
- * naming rules for receiver parameters are receivernames.h's (after this module's second step).
+ * naming rules for receiver parameters are receivernames.h's.
  */
 
 #ifndef FRAMESETUP_H
@@ -87,36 +87,6 @@ public:
 
     /// Appends a parameter with the given name and zero-based word index.
     void addParameter(const std::string& name, int word);
-
-    /// Channel-position prefix for a 0-based channel index: "L"/"R"/"C" for the
-    /// known positions, "CH<n+1>" beyond them.
-    static std::string channelPrefix(int channel_index);
-
-    /// Canonical default parameter name "<prefix>_RCVR<receiver+1>" for a 0-based
-    /// channel and receiver index. The single source of truth shared by the main
-    /// processing run and the calibration extractor so their default word maps
-    /// agree on names (a divergence silently misattaches calibration profiles).
-    static std::string receiverParameterName(int channel_index, int receiver_index);
-
-    /// Inverse of receiverParameterName(): the 1-based receiver number carried by
-    /// a parameter name's "_RCVR<N>" suffix, or 0 when the name carries none.
-    ///
-    /// Returning 0 rather than failing is deliberate: a receiver-params TOML may
-    /// name its parameters anything at all, so callers that group by receiver
-    /// (the calibration summary) must degrade to listing the names themselves
-    /// rather than inventing a receiver number.
-    static int receiverIndexFromName(const std::string& name);
-
-    /// The number after the LAST "_RCVR" in a name, as written: 0 when there is no token or the text after it is not
-    /// a whole decimal number, and a negative number kept as it is. The series builder and the CSV column schema
-    /// read names with this (a hand-edited CSV header "_RCVR-7" was a receiver -7 in v2.14.2, and the recorded
-    /// digests of SeriesColumnSchema keep it so); receiverIndexFromName() is this, with a number that is not
-    /// positive made 0, because a calibration summary has no use for a receiver 0 or -7.
-    static int receiverNumberInName(const std::string& name);
-
-    /// The channel-position part of a "<prefix>_RCVR<N>" name ("L", "R", "C", …),
-    /// or the whole name when it carries no "_RCVR<N>" suffix.
-    static std::string channelPartOfName(const std::string& name);
 
     /// Builds the default receiver word map — NumReceivers x ReceiverChannels
     /// parameters named via receiverParameterName(), assigned sequential words —

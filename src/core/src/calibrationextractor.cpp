@@ -18,6 +18,7 @@
 #include "containerutil.h"
 #include "frameprocessor.h"
 #include "framesetup.h"
+#include "receivernames.h"
 #include "receiverparamsfile.h"
 #include "packetqueue.h"
 #include "processedstreamdata.h"
@@ -485,8 +486,8 @@ std::string CalibrationExtractor::summarize(const std::vector<CalibrationChannel
     int calibratedChannels = 0;
     for (const CalibrationChannelResult& r : results)
     {
-        const int receiver = FrameSetup::receiverIndexFromName(r.name);
-        const std::string part = (receiver > 0) ? FrameSetup::channelPartOfName(r.name) : r.name;
+        const int receiver = receivernames::receiverIndexFromName(r.name);
+        const std::string part = (receiver > 0) ? receivernames::channelPartOfName(r.name) : r.name;
         Group& g = byReceiver[receiver];
 
         if (r.outcome == CalibrationOutcome::Calibrated)

@@ -10,12 +10,13 @@
 #include <utility>
 
 #include "framesetup.h"
+#include "receivernames.h"
 #include "textparse.h"
 
 namespace
 {
     // The SNR column format is "<pcmChannelId> - <streamLabel> <channelName>", and
-    // the receiver number lives in the channel name as "_RCVR<N>" (read by FrameSetup::receiverNumberInName). These separators
+    // the receiver number lives in the channel name as "_RCVR<N>" (read by receivernames::receiverNumberInName). These separators
     // are the single source of truth for both formatting and parsing below.
     constexpr std::string_view kIdLabelSep      = " - ";   // between "<id>" and "<streamLabel>"
     constexpr char             kLabelChannelSep = ' ';     // between "<streamLabel>" and "<channelName>"
@@ -154,7 +155,7 @@ SeriesColumnSchema::ParsedColumn SeriesColumnSchema::parseColumnHeader(const std
         out.streamLabel = (last_space != std::string::npos && last_space > 0) ? rest.substr(0, last_space) : rest;
     }
 
-    out.receiverIndex = FrameSetup::receiverNumberInName(header);
+    out.receiverIndex = receivernames::receiverNumberInName(header);
 
     return out;
 }

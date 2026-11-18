@@ -12,6 +12,36 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### `FrameSetup` is the word map: the receiver-parameters file and the naming rules are modules of their own (follow-up audit S2, second part)
+
+`FrameSetup` was the word-map container, the reader and writer of the receiver-parameters file, the naming rules for
+receiver parameters, and the linear calibration. The frame-sync file already had its own module; the receiver-parameters
+file did not. Two of the jobs have gone out, with no change of behaviour: the code moved as it was, and its tests with it.
+
+- **`receiverparamsfile`** (`receiverparamsfile.h`, `receiverparamsfile.cpp`; free functions, beside `framesyncfile`):
+  `ReceiverParams`, `readReceiverParams`, `writeReceiverParams(path, params, setup)` (a member before),
+  `saveReceiverParamsFile`, and with them `defaultReceiverParamsFile`, `WordMapResolution` and `resolveReceiverWordMap`,
+  which were free functions in `framesetup.h`. `FrameSetup` keeps `tryLoadingFile` and `writeWordMap`, the word map's own
+  load and write, which the file module calls.
+- **`receivernames`** (`receivernames.h`, `receivernames.cpp`; namespace `receivernames`): `channelPrefix`,
+  `receiverParameterName`, `receiverIndexFromName`, `receiverNumberInName` and `channelPartOfName`, which were static
+  members of `FrameSetup`. The `_RCVR` number parsing the audit counted three times (`framesetup.cpp`, `seriesbuilder.cpp`,
+  `seriescolumnschema.cpp`) had already become one function, `receiverNumberInName`, which the other two call; it moved
+  with the rest of the naming rules and reads names as it did, so there was no copy to unify and no rule to change (the
+  difference the audit noted between them, on a non-positive number, is the one between `receiverNumberInName`, which keeps
+  a negative number, and `receiverIndexFromName`, which makes it 0, and is pinned by the case that names both).
+- **Callers.** The ABI (`abi_formats.cpp`), the job builder, the calibration extractor and request, the series builder and the
+  CSV column schema include the new headers and call the free functions; two ABI doc comments and the `tm-code-review` skill
+  name the new homes. `docs/guide.md` describes the three modules and the new test suites.
+- **Tests.** `test_receiverparamsfile.cpp` (9 cases, from `test_framesetup.cpp`, now `ReceiverParamsFile: ...`) and
+  `test_receivernames.cpp` (5 cases, now `ReceiverNames: ...`); `test_framesetup.cpp` keeps its other 29. No case changed
+  but in its name, the free-function call and, for `writeReceiverParams`, the argument order.
+- **Checked.** `receiver-params-module.json` (new, 10 mutants over the moved code: the first `_RCVR` read for the last, a
+  non-positive receiver kept, the fallback prefix and the name each off by one, a file written with no word map, a scale and
+  a receiver count of zero accepted, a failed word map not cleared before the default one in the job's resolution and in a
+  save, a named file that does not exist taken for a map): 10 of 10 CAUGHT. Native 516 test cases, 0 warnings; managed 399 total
+  (398 passed, 1 skipped) and app 725 total (691 passed, 34 not run). Baselines: unchanged.
+
 #### The worker's running sums are the worker's (follow-up audit S2, first part)
 
 `ParameterInfo::sample_sum` was the window's running sum of raw counts, kept in the configuration object, which is why

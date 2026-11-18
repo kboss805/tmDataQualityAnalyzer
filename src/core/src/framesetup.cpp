@@ -11,7 +11,7 @@
 
 #include "constants.h"
 #include "containerutil.h"
-#include "textparse.h"
+#include "receivernames.h"
 #include "tomldocument.h"
 
 // NOLINTNEXTLINE(bugprone-throwing-static-initialization): a handful of short strings; failing to allocate them at start is fatal anyway
@@ -155,58 +155,6 @@ int FrameSetup::wordsInMinorFrame(int bits_in_minor_frame)
     return (bits_in_minor_frame + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
 }
 
-std::string FrameSetup::channelPrefix(int channel_index)
-{
-    if (channel_index < ReceiverConstants::kNumKnownPrefixes)
-    {
-        return ReceiverConstants::kChannelPrefixes[channel_index];
-    }
-    return "CH" + std::to_string(channel_index + 1);
-}
-
-std::string FrameSetup::receiverParameterName(int channel_index, int receiver_index)
-{
-    return channelPrefix(channel_index) + "_RCVR" + std::to_string(receiver_index + 1);
-}
-
-namespace {
-    /// Shared split point for the two accessors below, so the token and the
-    /// "trailing digits" rule are stated once.
-    constexpr const char* kReceiverToken = "_RCVR";
-    constexpr std::size_t kReceiverTokenLength = 5;
-}
-
-int FrameSetup::receiverNumberInName(const std::string& name)
-{
-    const std::size_t at = name.rfind(kReceiverToken);
-    if (at == std::string::npos)
-    {
-        return 0;
-    }
-    // Base 10, surrounding whitespace and a leading '+' tolerated, via the shared parser;
-    // pinned by "a receiver number in a name is a whole decimal number, or none"
-    // (test_framesetup.cpp).
-    int receiver = 0;
-    const bool ok = textparse::parseInteger(name.substr(at + kReceiverTokenLength), receiver);
-    // A name ending in "_RCVR" with no number, or with trailing non-digits, is
-    // not a receiver name — treat it as unparseable rather than guessing.
-    return ok ? receiver : 0;
-}
-
-int FrameSetup::receiverIndexFromName(const std::string& name)
-{
-    const int receiver = receiverNumberInName(name);
-    return receiver > 0 ? receiver : 0;
-}
-
-std::string FrameSetup::channelPartOfName(const std::string& name)
-{
-    const std::size_t at = name.rfind(kReceiverToken);
-    return (at != std::string::npos && at > 0 && receiverIndexFromName(name) > 0)
-        ? name.substr(0, at)
-        : name;
-}
-
 bool FrameSetup::buildDefaultReceiverMap(int num_receivers, int receiver_channels,
                                          int num_words_in_minor_frame, std::string& error)
 {
@@ -224,7 +172,7 @@ bool FrameSetup::buildDefaultReceiverMap(int num_receivers, int receiver_channel
     {
         for (int c = 0; c < receiver_channels; c++)
         {
-            addParameter(receiverParameterName(c, r), r * receiver_channels + c);
+            addParameter(receivernames::receiverParameterName(c, r), r * receiver_channels + c);
         }
     }
     return true;
