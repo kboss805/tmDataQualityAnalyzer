@@ -301,13 +301,16 @@ TEST_CASE("Chapter10Reader: a failed load reports its reason and leaves no chann
     const std::uint32_t first = firstPacketLength(all);
     REQUIRE((first > 200 && first < all.size()));
 
-    // The library refuses to open the first five, and the reader says which file. A recording whose first packet is not
-    // TMATS is refused at open as well: the reader's own "Failed to find TMATS message" branch sits behind a check the
-    // library has already made, so no file reaches it. The last two open, and then cannot establish time from what is
-    // left of the file.
+    // The library refuses to open the first three, and the reader says which file. The rest it only WARNS about (a first
+    // packet it cannot read, or one that is not a computer-generated packet) and opens, and the reader's own steps say
+    // what is wrong - the same words Ch10PacketReader::prepare() gives, because both take the same steps: a file cut
+    // inside its first header, or after its TMATS, or in the middle of it, cannot establish time, and a recording
+    // without its TMATS packet has no TMATS first.
     struct Row { const char* scenario; const char* exact_message; };
     const Row rows[] = {
-        {"missing", ""},      {"empty", ""}, {"text", ""}, {"short-header", ""}, {"no-tmats-first", ""},
+        {"missing", ""},      {"empty", ""}, {"text", ""},
+        {"short-header", "Error establishing time sync."},
+        {"no-tmats-first", "Failed to find TMATS message."},
         {"only-tmats", "Error establishing time sync."},
         {"cut-in-tmats", "Error establishing time sync."},
     };
@@ -371,6 +374,10 @@ TEST_CASE("Chapter10Reader: TMATS text decides which channels are listed and wha
         {"che-space-before", {{tk4 + che + "T;", tk4_short + che + " T;"}}, shown, irig},
         {"che-space-after", {{tk4 + che + "T;", tk4_short + che + "T ;"}}, shown, irig},
         {"che-space-before-F", {{tk4 + che + "T;", tk4_short + che + " F;"}}, none, irig},
+        // Track number (TK1-n), the channel the data source is recorded on: one that is negative, or that is not there at
+        // all, names no channel, so the data source is not listed (the PCM channel's track is 26).
+        {"track-negative", {{R"(R-1\TK1-27:26;)", R"(R-1\TK1-27:-6;)"}}, none, irig},
+        {"track-missing", {{R"(R-1\TK1-27:26;)", R"(R-1\TX1-27:26;)"}}, none, irig},
         // Channel type (CDT-n): PCMIN, 01 and 09 are PCM; TIMEIN and 11 are time; the match is case-sensitive and
         // anything else is some other kind of channel that is not listed.
         {"type-01", {{cdt + "PCMIN;", cdt + "01   ;"}}, shown, irig},

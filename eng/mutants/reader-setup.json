@@ -1,0 +1,136 @@
+{
+  "suite": "native",
+  "args": [
+    "-tc=Ch10Setup: *,TmatsWalk: *,Chapter10Reader: *,Ch10PacketReader: *"
+  ],
+  "mutants": [
+    {
+      "id": "S1",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "    if (status != I106_OK && status != I106_OPEN_WARNING)\n",
+      "new": "    if (status != I106_OK)\n",
+      "expect": "caught",
+      "note": "an \"open warning\" refused, as the metadata reader once did: a file whose first packet is not computer-generated no longer opens"
+    },
+    {
+      "id": "S2",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "    if (required > static_cast<std::size_t>(PCMConstants::kMaxPacketBufferSize))\n",
+      "new": "    if (required > static_cast<std::size_t>(PCMConstants::kMaxPacketBufferSize) * 100)\n",
+      "expect": "caught",
+      "note": "the cap a hundred times higher: a packet that claims more than 100 MB is allocated"
+    },
+    {
+      "id": "S3",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "    if (required > static_cast<std::size_t>(PCMConstants::kMaxPacketBufferSize))\n",
+      "new": "    if (required >= static_cast<std::size_t>(PCMConstants::kMaxPacketBufferSize))\n",
+      "expect": "survived",
+      "note": "the boundary itself: a packet of exactly 100 MB is not tried, because it would be allocated and read for the test"
+    },
+    {
+      "id": "S4",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "    if (buffer.size() < required)\n",
+      "new": "    if (buffer.size() > required)\n",
+      "expect": "caught",
+      "note": "the buffer never grows to the packet: the read is refused as too small"
+    },
+    {
+      "id": "S5",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "    return status == I106_OK ? PacketRead::Ok : PacketRead::ReadError;\n",
+      "new": "    return PacketRead::Ok;\n",
+      "expect": "caught",
+      "note": "a read that failed is taken for one that did not"
+    },
+    {
+      "id": "S6",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "    if (header.ubyDataType != I106CH10_DTYPE_TMATS)\n",
+      "new": "    if (header.ubyDataType == 0xFF)\n",
+      "expect": "caught",
+      "note": "a first packet that is not TMATS is decoded as if it were"
+    },
+    {
+      "id": "S7",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "    return status == I106_OK ? Failure::None : Failure::TimeSync;\n",
+      "new": "    return Failure::None;\n",
+      "expect": "caught",
+      "note": "a time sync that failed is taken for one that did not"
+    },
+    {
+      "id": "S8",
+      "file": "src/core/include/tmatswalk.h",
+      "old": "    if (track < 0)\n",
+      "new": "    if (track < -1000000)\n",
+      "expect": "caught",
+      "note": "a negative track number names a channel"
+    },
+    {
+      "id": "S9",
+      "file": "src/core/include/tmatswalk.h",
+      "old": "            if (visit(*source) == Walk::Stop)\n",
+      "new": "            if (visit(*source) == Walk::Continue)\n",
+      "expect": "caught",
+      "note": "a walk that stops when told to go on"
+    },
+    {
+      "id": "S10",
+      "file": "src/core/include/tmatswalk.h",
+      "old": "source = source->psuNext)\n",
+      "new": "source = nullptr)\n",
+      "expect": "caught",
+      "note": "a walk that visits the first data source of each R record only"
+    },
+    {
+      "id": "S11",
+      "file": "src/core/include/tmatswalk.h",
+      "old": "record = record->psuNext)\n",
+      "new": "record = nullptr)\n",
+      "expect": "caught",
+      "note": "a walk that visits the first R record only"
+    },
+    {
+      "id": "S12",
+      "file": "src/core/src/chapter10reader.cpp",
+      "old": "        if (track_number.has_value() && channel_enabled)\n",
+      "new": "        if (channel_enabled)\n",
+      "expect": "caught",
+      "note": "a data source that names no channel is listed as channel 0"
+    },
+    {
+      "id": "S13",
+      "file": "src/core/src/chapter10reader.cpp",
+      "old": "        if (tmatswalk::trackNumber(data_source) == channel_id && data_source.psuPRecord != nullptr)\n",
+      "new": "        if (tmatswalk::trackNumber(data_source) != channel_id && data_source.psuPRecord != nullptr)\n",
+      "expect": "caught",
+      "note": "the data rate of every channel but the one asked for"
+    },
+    {
+      "id": "S14",
+      "file": "src/core/src/chapter10reader.cpp",
+      "old": "    failure = ch10setup::readTmats(setup_lock, m_file_handle, m_header, m_buffer, m_tmats_info, m_status);\n    if (failure != ch10setup::Failure::None)\n    {\n        m_last_error = ch10setup::describe(failure);\n        closeFile();\n        return false;\n    }\n",
+      "new": "    failure = ch10setup::readTmats(setup_lock, m_file_handle, m_header, m_buffer, m_tmats_info, m_status);\n    if (failure != ch10setup::Failure::None)\n    {\n        closeFile();\n        return false;\n    }\n",
+      "expect": "caught",
+      "note": "a load that failed reading its TMATS says nothing of why"
+    },
+    {
+      "id": "S15",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "    freeChanInfoTable(m_channel_info);\n    m_time_channel_id = time_channel_id;",
+      "new": "    m_time_channel_id = time_channel_id;",
+      "expect": "survived",
+      "note": "the table that points into the tree is not freed before a second decode replaces the tree: it is stale, and nothing here reads it through a use-after-free detector (the debug heap leaves the freed tree readable), so no test can tell"
+    },
+    {
+      "id": "S16",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "        m_report.error(\"File read error; aborting parsing.\");\n        return false;\n    }",
+      "new": "        m_report.error(\"File read error.\");\n        return false;\n    }",
+      "expect": "caught",
+      "note": "the text of a failed packet read in a run"
+    }
+  ]
+}

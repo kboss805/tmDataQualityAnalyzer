@@ -131,6 +131,7 @@
     <ClCompile Include="test_calibrationrequest.cpp" />
     <ClCompile Include="test_chartgeometry.cpp" />
     <ClCompile Include="test_ch10packetreader.cpp" />
+    <ClCompile Include="test_ch10setup.cpp" />
     <ClCompile Include="test_chapter10reader.cpp" />
     <ClCompile Include="test_constants.cpp" />
     <ClCompile Include="test_csvseries.cpp" />
@@ -150,6 +151,7 @@
     <ClCompile Include="test_textfile.cpp" />
     <ClCompile Include="test_textformat.cpp" />
     <ClCompile Include="test_tomldocument.cpp" />
+    <ClCompile Include="test_tmatswalk.cpp" />
   </ItemGroup>
 
   <!-- The core the ported suites exercise: src\core\src\<name>.cpp, each also built by tmdq_core.vcxproj. -->
@@ -158,6 +160,7 @@
     <ClCompile Include="..\..\src\core\src\calibrationrequest.cpp" />
     <ClCompile Include="..\..\src\core\src\chartgeometry.cpp" />
     <ClCompile Include="..\..\src\core\src\ch10packetreader.cpp" />
+    <ClCompile Include="..\..\src\core\src\ch10setup.cpp" />
     <ClCompile Include="..\..\src\core\src\channeldata.cpp" />
     <ClCompile Include="..\..\src\core\src\chapter10reader.cpp" />
     <ClCompile Include="..\..\src\core\src\clocktime.cpp" />

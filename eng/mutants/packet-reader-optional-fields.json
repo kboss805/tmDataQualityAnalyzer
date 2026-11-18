@@ -5,16 +5,16 @@
     {
       "id": "R1",
       "file": "src/core/src/ch10packetreader.cpp",
-      "old": "if (psuRDataSrc->szChannelDataType != nullptr && strcasecmp(psuRDataSrc->szChannelDataType, PCMConstants::kChannelTypePcm) == 0)",
-      "new": "if (strcasecmp(psuRDataSrc->szChannelDataType, PCMConstants::kChannelTypePcm) == 0)",
+      "old": "if (data_source.szChannelDataType != nullptr && strcasecmp(data_source.szChannelDataType, PCMConstants::kChannelTypePcm) == 0)",
+      "new": "if (strcasecmp(data_source.szChannelDataType, PCMConstants::kChannelTypePcm) == 0)",
       "expect": "caught",
       "note": "the data type compared without a null check, as before: a time source or a PCM source with no CDT-n crashes"
     },
     {
       "id": "R2",
       "file": "src/core/src/ch10packetreader.cpp",
-      "old": "if (psuRDataSrc->szChannelDataType != nullptr && strcasecmp(psuRDataSrc->szChannelDataType, PCMConstants::kChannelTypePcm) == 0)",
-      "new": "if (psuRDataSrc->szChannelDataType == nullptr || strcasecmp(psuRDataSrc->szChannelDataType, PCMConstants::kChannelTypePcm) == 0)",
+      "old": "if (data_source.szChannelDataType != nullptr && strcasecmp(data_source.szChannelDataType, PCMConstants::kChannelTypePcm) == 0)",
+      "new": "if (data_source.szChannelDataType == nullptr || strcasecmp(data_source.szChannelDataType, PCMConstants::kChannelTypePcm) == 0)",
       "expect": "caught",
       "note": "a source with no data type taken for PCM: it gets attributes, so the stream asked of it would not be refused"
     },
@@ -29,7 +29,7 @@
     {
       "id": "R4",
       "file": "src/core/src/ch10packetreader.cpp",
-      "old": "channel_info[iTrackNumber]->psuRDataSrc = psuRDataSrc;\n",
+      "old": "channel_info[iTrackNumber]->psuRDataSrc = &data_source;\n",
       "new": "",
       "expect": "caught",
       "note": "the data source not kept: freeing and setting up read it back"

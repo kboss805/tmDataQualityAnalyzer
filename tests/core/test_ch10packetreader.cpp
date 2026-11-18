@@ -265,6 +265,39 @@ TEST_CASE("Ch10PacketReader: prepare reports why it failed")
     }
 }
 
+TEST_CASE("Ch10PacketReader: the packet reader and the metadata reader agree about every file irig106 warns about")
+{
+    // irig106 opens a file whose first packet it cannot read, or that is not a computer-generated packet, and says so
+    // with a warning. Each reader once answered that its own way - one refused the warning - so a file could list its
+    // channels and not run, or run and not list. They take the same steps now (ch10setup), so they answer alike.
+    const StepCalFixture fx = loadStepCalFixture();
+    const std::string original = readBytes(fx.path);
+    const std::vector<PacketAt> packets = walkPackets(original);
+    REQUIRE(packets.size() > 1);
+
+    struct Row { const char* name; std::string bytes; bool both_accept; };
+    const Row rows[] = {
+        {"the recording as it is",           original,                                 true},
+        {"without its first packet",         original.substr(static_cast<std::size_t>(packets[1].offset)), false},
+        {"cut inside the first header",      original.substr(0, 10),                   false},
+        {"cut before its first packet ends", original.substr(0, 100),                  false},
+        {"the TMATS packet alone",           original.substr(0, static_cast<std::size_t>(packets[1].offset)), false},
+        {"not a recording",                  "this is not a recording\n",              false},
+        {"empty",                            "",                                       false},
+    };
+    for (const Row& row : rows)
+    {
+        INFO(row.name);
+        TempDir dir;
+        const fs::path path = dir.file("generated.ch10");
+        writeBytes(path, row.bytes);
+        const bool by_prepare = runSetup(true, fx, path);
+        const bool by_load    = runSetup(false, fx, path);
+        CHECK(by_prepare == row.both_accept);
+        CHECK(by_load == row.both_accept);
+    }
+}
+
 TEST_CASE("Ch10PacketReader: a data source TMATS does not fully describe is not a crash")
 {
     // Chapter10Reader lists a channel whose R-record has no CHE-n ("channel enabled") as enabled, and one with no CDT-n

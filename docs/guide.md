@@ -586,6 +586,10 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
 1. **Chapter10Reader** (`chapter10reader`) - reads a recording's **metadata** up front: scans TMATS to catalogue its
    time and PCM channels (`ChannelData` values in a map by id, names and data rates), with a failed load's reason in
    `lastError()`. Wraps the irig106utils C library.
+   Both readers start a recording through **`ch10setup`** (open - a file irig106 only warns about opens -, time sync,
+   first packet required to be TMATS, read within a 100 MB cap, decoded; and the read of one packet's data) and walk
+   a decoded TMATS tree through **`tmatswalk.h`** (the R records' data sources, and the one rule for the channel a data
+   source names), so the two cannot differ about a file again.
 2. **Ch10PacketReader** (`ch10packetreader`) - the single-pass reader: `prepare()` opens the file, parses TMATS,
    resolves each stream's PCM attributes and routes channel ids to `PacketQueue`s; `run()`, on its own thread, reads
    the file once, tracks IRIG time, dispatches each PCM packet's payload to its queues, and ends each with a sentinel.
@@ -969,6 +973,9 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 - **Chapter10Reader and ChannelData** (`test_chapter10reader`) - the five committed recordings' channel ids, names and
   TMATS data rates; every way a load fails, with its message; and edited copies of `step_cal` for what the recordings do
   not reach (the enabled flag, the type codes, the name priority, a non-ASCII name, a second time channel).
+- **ch10setup and tmatswalk** (`test_ch10setup`, `test_tmatswalk`) - each setup step given a file that fails it (a file
+  that will not open, one cut inside its first header, one without its TMATS first, a packet past the cap, a packet
+  read twice), and the walk and the track-number rule on trees built by hand.
 - **Ch10PacketReader** (`test_ch10packetreader`) - the single pass over `step_cal`: every packet once with one end
   marker, progress, abort, files cut or damaged at each kind of place, data sources whose TMATS lacks a CHE-n or CDT-n,
   routing and shared payloads, the attributes `prepare()` resolves, serialised setup across threads, a close that waits

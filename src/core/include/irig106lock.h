@@ -25,10 +25,14 @@
     return mutex;
 }
 
+/// What lockIrig106Setup() returns: the lock, held. A function that must run under it takes one by reference, which
+/// makes the caller show that it holds it.
+using Irig106SetupLock = std::unique_lock<std::mutex>;
+
 /// Holds the lock until the returned object is destroyed. Take it for a whole setup phase.
-[[nodiscard]] inline std::unique_lock<std::mutex> lockIrig106Setup()
+[[nodiscard]] inline Irig106SetupLock lockIrig106Setup()
 {
-    return std::unique_lock<std::mutex>(irig106SetupMutex());
+    return Irig106SetupLock(irig106SetupMutex());
 }
 
 #endif // IRIG106LOCK_H

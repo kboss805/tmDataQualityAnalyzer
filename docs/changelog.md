@@ -12,6 +12,41 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The two readers start a recording the same way (follow-up audit B9, S3)
+
+`Chapter10Reader` (the channel list) and `Ch10PacketReader` (the run) each wrote out how a recording is started - open,
+establish time, read the first packet, require TMATS, decode it - and the two copies had come to differ. They are one
+now, in `ch10setup`, and the three hand-written walks of the TMATS tree's R records are one, in `tmatswalk.h`.
+
+- **What differed, and what both do now.** (1) `prepare()` accepted irig106's "open warning" (a first packet it cannot
+  read, or that is not a computer-generated packet) and `loadChannels()` refused it, so the metadata reader said
+  `Error opening file` for a file the run would have told the real reason for: both accept it, and the steps after say
+  what is wrong. (2) Only `prepare()` capped the read buffer, at 100 MB: `loadChannels()` allocated whatever a header
+  claimed; both are capped. (3) A TMATS that failed to read or decode failed `prepare()` and let `loadChannels()` carry
+  on to the end of the file and return true; both fail now, with the same words. (irig106's decoder returns OK for any
+  text, so no test can make a decode fail; the step is shared all the same.)
+- **What the user can see.** A file irig106 warns about still does not list, but says why in the words the run gives
+  (`Failed to find TMATS message.` for a recording without its TMATS first, `Error establishing time sync.` for one cut
+  inside its first header), not `Error opening file: <path>`, which stays for a file that does not open. The metadata
+  reader reads only the first packet, as it always did in effect (it stopped at the first TMATS that decoded), so
+  `inferChannelTypeFromHeader`, which could only see that packet's own type, is gone.
+- **One rule for a data source's channel.** `tmatswalk::trackNumber` is the channel a data source names, or none: no
+  track number, or a negative one, names none. The metadata reader used to list a negative one as a channel the packet
+  reader then refused; both skip it now. Text still reads as 0, as `atoi` reads it (a malformed number is not told from
+  channel 0), which is left as it was.
+- **Where the code went.** `src/core/include/ch10setup.h`, `src/core/src/ch10setup.cpp`,
+  `src/core/include/tmatswalk.h` (in `tmdq_core.vcxproj`; the `.cpp` in the native tests' project as well). The setup
+  steps take the setup lock by reference (`Irig106SetupLock`, an alias in `irig106lock.h`), so a caller shows it holds
+  it. `Ch10PacketReader::ensureBufferCapacity` and `Chapter10Reader::processTmatsPacket` are gone; the packet reader's
+  `readPacket()` gives the run's two error texts once.
+- **Tests.** `test_ch10setup.cpp` (7 cases: every step given a file that fails it, the cap, a packet read twice) and
+  `test_tmatswalk.cpp` (4 cases: the walk and the track rule on trees built by hand); one case holding both readers to
+  the same answer for seven files; two rows of the channel-listing case (a negative and a missing track number); two
+  rows of the failed-load case changed to the shared messages. Their comment, which said no file reaches the
+  metadata reader's TMATS check, is rewritten.
+- **Checked.** Through `eng\mutate.ps1`: `reader-setup.json` (new, 16 mutants), and `reader-lifetime.json` and
+  `packet-reader-optional-fields.json` re-anchored to the moved text. Native baseline 503 -> 515 test cases.
+
 #### `AroundTheChartTests` is five classes (follow-up audit Q5, app half)
 
 `AroundTheChartTests.cs` held 54 tests in one class of about 1,800 lines, in five parts a comment line each divided:

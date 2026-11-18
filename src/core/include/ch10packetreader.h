@@ -99,7 +99,7 @@ private:
         std::vector<SuChanInfo*>& channel_info);
 
     /// Grows m_buffer to at least @p required bytes. Returns false on failure.
-    bool ensureBufferCapacity(std::size_t required);
+    bool readPacket();
     /// Posts an end-of-stream sentinel to every distinct queue.
     void postSentinels();
     /// Closes the recording if it is open, under the irig106 setup lock (the close writes the handle table).

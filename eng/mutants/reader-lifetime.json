@@ -16,8 +16,8 @@
     {
       "id": "T2",
       "file": "src/core/src/chapter10reader.cpp",
-      "old": "    // zeroing it would orphan that tree.\n",
-      "new": "    // zeroing it would orphan that tree.\n    m_tmats_info = Irig106::SuTmatsInfo{};\n",
+      "old": "    failure = ch10setup::readTmats(setup_lock, m_file_handle, m_header, m_buffer, m_tmats_info, m_status);\n",
+      "new": "    m_tmats_info = Irig106::SuTmatsInfo{};\n    failure = ch10setup::readTmats(setup_lock, m_file_handle, m_header, m_buffer, m_tmats_info, m_status);\n",
       "args": [
         "-tc=*decoded TMATS*"
       ],
@@ -38,8 +38,8 @@
     {
       "id": "T4",
       "file": "src/core/src/ch10packetreader.cpp",
-      "old": "    freeChanInfoTable(m_channel_info);\n    m_status = enI106_Decode_Tmats(",
-      "new": "    freeChanInfoTable(m_channel_info);\n    m_tmats_info = Irig106::SuTmatsInfo{};\n    m_status = enI106_Decode_Tmats(",
+      "old": "    freeChanInfoTable(m_channel_info);\n    m_time_channel_id = time_channel_id;",
+      "new": "    freeChanInfoTable(m_channel_info);\n    m_tmats_info = Irig106::SuTmatsInfo{};\n    m_time_channel_id = time_channel_id;",
       "args": [
         "-tc=*decoded TMATS*"
       ],
