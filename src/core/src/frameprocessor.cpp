@@ -91,7 +91,7 @@ void FrameProcessor::setEvents(std::shared_ptr<ProcessingEvents> events)
 //                          PROCESSING                                        //
 ////////////////////////////////////////////////////////////////////////////////
 
-bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_setup)
+bool FrameProcessor::process(const ProcessingParams& params, const FrameSetup* frame_setup)
 {
     const bool  is_randomized  = params.isRandomized;
     const bool  is_inverted    = params.isInverted;
@@ -124,14 +124,11 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
     // Cache enabled parameters for the hot loop and build the index-aligned
     // in-memory channel series (see buildEnabledParams).
-    std::vector<ParameterInfo*> enabled_params = buildEnabledParams(frame_setup, receiver_mode);
-    for (auto* param : enabled_params)
-    {
-        param->sample_sum = 0;
-    }
+    std::vector<const ParameterInfo*> enabled_params = buildEnabledParams(frame_setup, receiver_mode);
 
     // ---- Scan working state, seeded from the reader-resolved frame attributes ----
     ScanState state;
+    state.channel_sums.assign(enabled_params.size(), 0.0);
     state.sync_pat        = attrs.syncPat;
     state.sync_mask       = attrs.syncMask;
     state.word_mask       = attrs.wordMask;
@@ -309,7 +306,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
                         static_cast<double>(state.total_bits_in_window)) * 100.0;
         }
         recordTimeSample(state.current_time_sample, state.n_samples, lock_pct,
-                         static_cast<double>(state.accumulated_missed_frames), enabled_params);
+                         static_cast<double>(state.accumulated_missed_frames), enabled_params, state.channel_sums);
         state.rows_written++;
     }
 
@@ -335,7 +332,7 @@ bool FrameProcessor::process(const ProcessingParams& params, FrameSetup* frame_s
 
 void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
                                          const ProcessingParams& params,
-                                         const std::vector<ParameterInfo*>& enabled_params)
+                                         const std::vector<const ParameterInfo*>& enabled_params)
 {
     while (s.next_time_sample < current_time_eval)
     {
@@ -356,7 +353,7 @@ void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
             // whose windows more often contain zero locked frames than short-frame
             // streams with many more frames per window.
             recordTimeSample(s.current_time_sample, s.n_samples, lock_pct,
-                             static_cast<double>(s.accumulated_missed_frames), enabled_params);
+                             static_cast<double>(s.accumulated_missed_frames), enabled_params, s.channel_sums);
         }
         else
         {
@@ -378,7 +375,7 @@ void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
             }
 
             recordTimeSample(s.current_time_sample, 0, 0.0, // lock_pct is 0.0 during gap
-                             static_cast<double>(s.accumulated_missed_frames), enabled_params);
+                             static_cast<double>(s.accumulated_missed_frames), enabled_params, s.channel_sums);
         }
 
         s.rows_written++;
@@ -392,7 +389,7 @@ void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
 }
 
 void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val,
-                             const std::vector<ParameterInfo*>& enabled_params)
+                             const std::vector<const ParameterInfo*>& enabled_params)
 {
     s.test_word = (s.test_word << 1) | bit_val;
     s.bits_loaded++;
@@ -438,8 +435,9 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val,
             // frame, or PRN data can be sampled as if it were locked.
             if (at_boundary && s.sync_count >= s.min_syncs && s.save_data > 1)
             {
-                for (auto* param : enabled_params)
+                for (std::size_t i = 0; i < enabled_params.size(); i++)
                 {
+                    const ParameterInfo* param = enabled_params[i];
                     if (param->word >= 0 &&
                         param->word < static_cast<int>(s.words_in_frame))
                     {
@@ -451,7 +449,7 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val,
                         // true dB, so mean(interpolate(raw)) would bias each plateau
                         // off the true step value. For linear cal the two orders are
                         // identical.
-                        param->sample_sum += static_cast<double>(raw_value);
+                        s.channel_sums[i] += static_cast<double>(raw_value);
                     }
                 }
 
@@ -495,9 +493,9 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val,
     }
 }
 
-std::vector<ParameterInfo*> FrameProcessor::buildEnabledParams(FrameSetup* frame_setup, bool receiver_mode)
+std::vector<const ParameterInfo*> FrameProcessor::buildEnabledParams(const FrameSetup* frame_setup, bool receiver_mode)
 {
-    std::vector<ParameterInfo*> enabled_params;
+    std::vector<const ParameterInfo*> enabled_params;
     if (receiver_mode && frame_setup != nullptr)
     {
         enabled_params.reserve(frame_setup->length());
@@ -592,7 +590,8 @@ void FrameProcessor::recordTimeSample(double current_time_sample,
                                       int n_samples,
                                       double lock_percentage,
                                       double accumulated_missed_frames,
-                                      const std::vector<ParameterInfo*>& enabled_params)
+                                      const std::vector<const ParameterInfo*>& enabled_params,
+                                      std::vector<double>& channel_sums)
 {
     // Store the absolute IRIG seconds; the plot derives DOY/HH:MM:SS from this.
     m_result.timesSec.push_back(current_time_sample);
@@ -608,7 +607,7 @@ void FrameProcessor::recordTimeSample(double current_time_sample,
     }
 
     // enabled_params is index-aligned to m_result.channels (built by buildEnabledParams()).
-    // sample_sum holds the running sum of RAW counts for this window; calibration
+    // channel_sums holds the running sum of RAW counts for this window; calibration
     // is applied here, once, to the windowed average — see the sampling loop for
     // why averaging precedes calibration (required for non-linear profiles).
     // n_samples can be 0 for a window that produced no extracted frames (a
@@ -616,16 +615,16 @@ void FrameProcessor::recordTimeSample(double current_time_sample,
     // rather than calibrating a meaningless zero average.
     for (int i = 0; i < intSize(enabled_params); i++)
     {
-        ParameterInfo* param = enabled_params[i];
+        const ParameterInfo* param = enabled_params[i];
         double value = 0.0;
         if (n_samples > 0)
         {
-            const double mean_raw = param->sample_sum / n_samples;
+            const double mean_raw = channel_sums[i] / n_samples;
             value = param->profile.valid
                 ? interpolateCalibration(mean_raw, param->profile)
                 : (mean_raw + param->scale) * param->slope;
         }
         m_result.channels[i].values.push_back(value);
-        param->sample_sum = 0;
+        channel_sums[i] = 0;
     }
 }

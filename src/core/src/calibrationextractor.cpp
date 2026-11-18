@@ -446,7 +446,6 @@ bool CalibrationExtractor::buildFrameSetup(const Request& request,
         ParameterInfo* p = m_frame_setup->getParameter(i);
         p->slope      = 1.0;
         p->scale      = 0.0;
-        p->sample_sum = 0.0;
         p->profile    = CalibrationProfile{}; // ensure linear (raw) extraction
     }
     return true;

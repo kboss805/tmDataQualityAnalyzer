@@ -265,7 +265,7 @@ ProcessingParams timedParams(StreamMode mode, bool rate_clock)
 }
 
 /// Processes @p packets, each queued as one packet, and returns the result.
-ProcessedStreamData runPackets(ProcessingParams p, FrameSetup* setup, const std::vector<Packet>& packets,
+ProcessedStreamData runPackets(ProcessingParams p, const FrameSetup* setup, const std::vector<Packet>& packets,
                                Capture* events = nullptr, bool* ok = nullptr)
 {
     PacketQueue queue;
@@ -307,7 +307,6 @@ ParameterInfo* addWord0(FrameSetup& setup)
     ParameterInfo* param = setup.getParameter(0);
     param->slope      = 1.0;
     param->scale      = 0.0;
-    param->sample_sum = 0.0;
     return param;
 }
 
@@ -326,7 +325,6 @@ void setupParams(FrameSetup& setup, double slope, double offset)
         ParameterInfo* param = setup.getParameter(i);
         param->slope      = slope;
         param->scale      = offset;
-        param->sample_sum = 0.0;
     }
 }
 
@@ -983,7 +981,6 @@ TEST_CASE("FrameProcessor: a calibration round trip on a real recording produces
         ParameterInfo* param = setup.getParameter(i);
         param->slope      = 1.0;
         param->scale      = 0.0;
-        param->sample_sum = 0.0;
         const auto it = calibration_by_word.find(param->word);
         if (it != calibration_by_word.end())
         {
@@ -1280,8 +1277,7 @@ TEST_CASE("FrameProcessor: frames are extracted only after the minimum number of
 TEST_CASE("FrameProcessor: every word of the map becomes a channel, each calibrated as (raw + offset) x slope")
 {
     // Word 0 is 5 then 6. A word the frame does not have (before it, or past its two words) stays at zero rather than
-    // reading outside the frame; a lock-only stream has no channels whatever its word map says; and a sum left in the
-    // map by an earlier run does not leak into this one.
+    // reading outside the frame; and a lock-only stream has no channels whatever its word map says.
     FrameSetup setup;
     setup.addParameter("W0", 0);
     setup.addParameter("Cal", 0);
@@ -1292,7 +1288,6 @@ TEST_CASE("FrameProcessor: every word of the map becomes a channel, each calibra
         ParameterInfo* param = setup.getParameter(i);
         param->slope      = 1.0;
         param->scale      = 0.0;
-        param->sample_sum = 1000.0; // left over from a run that was cancelled mid-window
     }
     setup.getParameter(1)->slope = 2.0;
     setup.getParameter(1)->scale = 3.0;
@@ -1317,6 +1312,40 @@ TEST_CASE("FrameProcessor: every word of the map becomes a channel, each calibra
     const ProcessedStreamData lock_only = runPackets(p, &setup, {{stream({5, 6})}});
     CHECK(lock_only.hasSamples());
     CHECK(lock_only.channels.empty());
+}
+
+TEST_CASE("FrameProcessor: a run reads its word map and changes nothing in it, so a second run over it gives the same answer")
+{
+    // The window's running sums are the run's own (they were once kept in the word map, where a run cancelled
+    // mid-window left its sum for the next). process() takes the map as const; this holds the behaviour that follows:
+    // two runs over one map agree, and the map is as it was.
+    FrameSetup setup;
+    setup.addParameter("W0", 0);
+    setup.addParameter("Cal", 0);
+    setup.getParameter(0)->slope = 1.0;
+    setup.getParameter(1)->slope = 2.0;
+    setup.getParameter(1)->scale = 3.0;
+
+    ProcessingParams p = timedParams(StreamMode::ReceiverChannelInfo, true);
+    p.samplePeriodSec = 1e9;
+    const ProcessedStreamData first  = runPackets(p, &setup, {{stream({5, 6})}});
+    const ProcessedStreamData second = runPackets(p, &setup, {{stream({5, 6})}});
+    REQUIRE(first.channels.size() == 2);
+    REQUIRE(second.channels.size() == 2);
+    for (std::size_t i = 0; i < 2; i++)
+    {
+        INFO("channel " << i);
+        REQUIRE(first.channels[i].values.size() == 1);
+        CHECK(second.channels[i].values == first.channels[i].values);
+    }
+    CHECK(first.channels[0].values[0] == 5.5);
+    CHECK(first.channels[1].values[0] == (5.5 + 3.0) * 2.0);
+
+    REQUIRE(setup.length() == 2);
+    CHECK(setup.getParameter(0)->slope == 1.0);
+    CHECK(setup.getParameter(0)->scale == 0.0);
+    CHECK(setup.getParameter(1)->slope == 2.0);
+    CHECK(setup.getParameter(1)->scale == 3.0);
 }
 
 TEST_CASE("FrameProcessor: a randomized stream decodes across packet boundaries")

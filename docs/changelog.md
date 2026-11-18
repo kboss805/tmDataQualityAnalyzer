@@ -12,6 +12,27 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The worker's running sums are the worker's (follow-up audit S2, first part)
+
+`ParameterInfo::sample_sum` was the window's running sum of raw counts, kept in the configuration object, which is why
+`FrameProcessor::process` took a mutable `FrameSetup*` that the job shared with it, and why a run cancelled mid-window
+could leave its sum in the word map for the next run to start from (`FrameProcessor` zeroed every sum at the start of a
+run to guard against it, and a test set one to 1000 to check).
+
+- **`ScanState::channel_sums`** holds them now: one per enabled parameter, index-aligned to them, zeroed when the run
+  starts and again when each window closes (`recordTimeSample` takes it). `ParameterInfo` has no `sample_sum`;
+  `applyLinearCalibration` and the calibration extractor no longer reset one.
+- **`process` takes a `const FrameSetup*`**, and the helpers a `std::vector<const ParameterInfo*>`: the word map a run
+  reads is not changed by it, in the type. The hot loop sums into `s.channel_sums[i]` where it summed into the
+  parameter.
+- **Tests.** The cases that set a `sample_sum` (a fresh window, a leftover from a cancelled run, the mutable overload
+  being the same parameter) lose that line, and the mutable-overload case uses a slope; one new case holds that two runs
+  over one word map agree and that the map is as it was (`runPackets` takes a `const FrameSetup*`).
+- **Checked.** `frame-processor-sums.json` (new, 4 mutants: the sum not cleared per window, all words summed into the
+  first channel, a run that starts with a sum, every channel reporting the first's average): 4 of 4 CAUGHT. Native
+  baseline 515 -> 516 test cases; managed (399 total, 398 passed, 1 skipped) and app (725 total, 691 passed, 34 not
+  run) unchanged. The receiver-params file module, the second part of S2, is its own change.
+
 #### The two readers start a recording the same way (follow-up audit B9, S3)
 
 `Chapter10Reader` (the channel list) and `Ch10PacketReader` (the run) each wrote out how a recording is started - open,

@@ -55,11 +55,12 @@ public:
      * Reports processingFinished() on completion.
      *
      * @param[in] params      Validated parameters, including resolvedAttrs and packetQueue.
-     * @param[in] frame_setup Frame parameter definitions (word map, calibration). May be
-     *                        empty/null for FrameSyncLockStats mode.
+     * @param[in] frame_setup Frame parameter definitions (word map, calibration), read and never
+     *                        changed: the run's running sums are its own (ScanState::channel_sums). May
+     *                        be empty/null for FrameSyncLockStats mode.
      * @return true if processing completed without errors.
      */
-    bool process(const ProcessingParams& params, FrameSetup* frame_setup);
+    bool process(const ProcessingParams& params, const FrameSetup* frame_setup);
 
     /// @return The accumulated in-memory output of the last process() call.
     const ProcessedStreamData& result() const { return m_result; }
@@ -112,6 +113,9 @@ private:
         // Output windowing.
         double current_time_sample = 0.0, next_time_sample = 0.0;
         int    n_samples = 0;
+        /// Running sum of RAW counts in the window, one per enabled parameter (index-aligned to them); calibration
+        /// is applied once, to the windowed average. The run's own: the word map it is read against is not changed.
+        std::vector<double> channel_sums;
         // Lock-percentage counters (reset each output window).
         uint64_t valid_bits_in_window = 0, total_bits_in_window = 0;
         uint64_t accumulated_missed_frames = 0; ///< Monotonic across the run.
@@ -125,18 +129,18 @@ private:
     /// genuine recording gap) and advancing the windowing clock in @p s.
     void closeElapsedWindows(ScanState& s, double current_time_eval,
                              const ProcessingParams& params,
-                             const std::vector<ParameterInfo*>& enabled_params);
+                             const std::vector<const ParameterInfo*>& enabled_params);
 
     /// Feeds one decoded PCM bit through the acquire/lock state machine: shifts the
     /// sync register, tracks frame-boundary rollover/missed frames, honors in-phase
     /// sync matches (rejecting off-phase ones while locked), collects data words, and
     /// tallies lock-percentage bits.
     void scanBit(ScanState& s, uint8_t bit_val,
-                 const std::vector<ParameterInfo*>& enabled_params);
+                 const std::vector<const ParameterInfo*>& enabled_params);
 
     /// Caches the enabled parameters for the hot loop and builds the index-aligned
     /// in-memory channel series in m_result. @return the enabled-parameter pointers.
-    std::vector<ParameterInfo*> buildEnabledParams(FrameSetup* frame_setup, bool receiver_mode);
+    std::vector<const ParameterInfo*> buildEnabledParams(const FrameSetup* frame_setup, bool receiver_mode);
 
     /// Identity prefix for every message this worker logs, e.g. "[CH 13 PCM03] ".
     /// Parallel workers share one log, so an unlabelled message cannot be traced
@@ -168,13 +172,14 @@ private:
     /// @}
 
     /**
-     * @brief Appends one averaged time sample to the in-memory result.
+     * @brief Appends one averaged time sample to the in-memory result, and zeroes the window's @p channel_sums.
      */
     void recordTimeSample(double current_time_sample,
                           int n_samples,
                           double lock_percentage,
                           double accumulated_missed_frames,
-                          const std::vector<ParameterInfo*>& enabled_params);
+                          const std::vector<const ParameterInfo*>& enabled_params,
+                          std::vector<double>& channel_sums);
 
     std::atomic<bool> m_abort_requested; ///< Thread-safe abort flag.
     EventReporter m_report;              ///< All of a run's reporting goes through this; see setEvents().
