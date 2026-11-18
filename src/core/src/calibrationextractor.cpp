@@ -18,6 +18,7 @@
 #include "containerutil.h"
 #include "frameprocessor.h"
 #include "framesetup.h"
+#include "receiverparamsfile.h"
 #include "packetqueue.h"
 #include "processedstreamdata.h"
 #include "stepdetector.h"

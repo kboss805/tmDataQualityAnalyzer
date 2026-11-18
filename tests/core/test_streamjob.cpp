@@ -388,7 +388,7 @@ const std::vector<Case>& cases()
         // Changed on purpose (plan step 1.5); this built SEVEN parameters, L_RCVR1 twice. A default.toml that
         // loads in part before it hits a word outside the frame leaves the words it did read in the table, and
         // the fallback to the default word map APPENDED to them, so the job processed with a map nobody wrote.
-        // FrameSetup::saveReceiverParamsFile already cleared first; building a job did not. It now does, and
+        // saveReceiverParamsFile already cleared first; building a job did not. It now does, and
         // a partly usable default file falls back to the same six-parameter map as an unusable one.
         { "default-file-partly-outside-the-frame", Adj([](StreamJobConfig& c, const Fixtures&) { c.receiverParamsToml.clear(); }), DefaultFile::PartlyOutsideFrame, true, "ok error='' log=[  Rcvr: the default Receiver Parameters file 'default.toml' could not be used; the sequential word map for 2 x 3 receiver channels is used instead. |   Rcvr: no non-linear calibration profiles configured <U+2014> using linear calibration.]"
             " | file=base.ch10 src=2 time=3 pcm=5 sync=fe6b2840/ffffffff/32 words=50 bits=800 period=0.1 rand=0 inv=0 swap=1 mode=0 rate=0 label=Rcvr"

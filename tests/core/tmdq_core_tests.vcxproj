@@ -143,6 +143,7 @@
     <ClCompile Include="test_intervalgate.cpp" />
     <ClCompile Include="test_packetqueue.cpp" />
     <ClCompile Include="test_pipelinerunner.cpp" />
+    <ClCompile Include="test_receiverparamsfile.cpp" />
     <ClCompile Include="test_seriesbuild.cpp" />
     <ClCompile Include="test_seriescolumnschema.cpp" />
     <ClCompile Include="test_stepdetector.cpp" />
@@ -170,6 +171,7 @@
     <ClCompile Include="..\..\src\core\src\framesetup.cpp" />
     <ClCompile Include="..\..\src\core\src\framesyncfile.cpp" />
     <ClCompile Include="..\..\src\core\src\pipelinerunner.cpp" />
+    <ClCompile Include="..\..\src\core\src\receiverparamsfile.cpp" />
     <ClCompile Include="..\..\src\core\src\seriesbuilder.cpp" />
     <ClCompile Include="..\..\src\core\src\seriescolumnschema.cpp" />
     <ClCompile Include="..\..\src\core\src\stepdetector.cpp" />
