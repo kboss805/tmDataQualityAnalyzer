@@ -1,0 +1,108 @@
+{
+  "suite": "native",
+  "args": [
+    "-tc=StepPlateaus: *"
+  ],
+  "mutants": [
+    {
+      "id": "W1",
+      "file": "src/core/include/stepplateaus.h",
+      "old": "            begin++; // sub-threshold: not a real transition, skip\n            continue;\n",
+      "new": "            break; // sub-threshold: stop looking\n",
+      "expect": "caught",
+      "note": "a change within the threshold ends the whole walk, not just the run"
+    },
+    {
+      "id": "W2",
+      "file": "src/core/include/stepplateaus.h",
+      "old": "        begin = end;\n    }\n}",
+      "new": "        begin = end + 1;\n    }\n}",
+      "expect": "caught",
+      "note": "the next run is looked for after the last value, not from it: a reversal is not the start of the next run"
+    },
+    {
+      "id": "W3",
+      "file": "src/core/include/stepplateaus.h",
+      "old": "        if (visit(Run{begin, end}) == RunWalk::Stop)",
+      "new": "        if (visit(Run{begin, end}) == RunWalk::Continue)",
+      "expect": "caught",
+      "note": "a walk stops when told to go on"
+    },
+    {
+      "id": "W4",
+      "file": "src/core/include/stepplateaus.h",
+      "old": "transitionDirection(values[end + 1] - values[end], threshold) == direction)",
+      "new": "transitionDirection(values[end + 1] - values[end], threshold) != 0)",
+      "expect": "caught",
+      "note": "a run ends only at a sub-threshold change: a reversal does not end it"
+    },
+    {
+      "id": "W5",
+      "file": "src/core/src/stepplateaus.cpp",
+      "old": "    if (delta > threshold) return 1;",
+      "new": "    if (delta >= threshold) return 1;",
+      "expect": "caught",
+      "note": "a change of exactly the threshold is a transition"
+    },
+    {
+      "id": "W6",
+      "file": "src/core/src/stepplateaus.cpp",
+      "old": "              [](const CalibrationPoint& a, const CalibrationPoint& b) {\n                  return a.rawAvg < b.rawAvg;",
+      "new": "              [](const CalibrationPoint& a, const CalibrationPoint& b) {\n                  return a.rawAvg > b.rawAvg;",
+      "expect": "caught",
+      "note": "the profile points are sorted descending"
+    },
+    {
+      "id": "W7",
+      "file": "src/core/src/stepplateaus.cpp",
+      "old": "            out.back().value = level.value;\n",
+      "new": "            out.back().value = out.back().value;\n",
+      "expect": "caught",
+      "note": "a merged level keeps the earlier value, not the later, more settled one"
+    },
+    {
+      "id": "U1",
+      "file": "src/core/src/stepdetector.cpp",
+      "old": "        if (run.end - run.begin + 1 < expected)\n        {\n            return RunWalk::Continue; // too short",
+      "new": "        if (run.end - run.begin + 1 <= expected)\n        {\n            return RunWalk::Continue; // too short",
+      "expect": "caught",
+      "note": "a run exactly as long as the sweep is too short for it",
+      "args": [
+        "-tc=StepDetector: *,StepPlateaus: *"
+      ]
+    },
+    {
+      "id": "U2",
+      "file": "src/core/src/stepdetector.cpp",
+      "old": "        run_start = run.end - (expected - 1); // keep the last `expected` of the run",
+      "new": "        run_start = run.begin; // keep the first levels of the run",
+      "expect": "caught",
+      "note": "the sweep is the FIRST levels of its run, so a turn-on transient is paired with step 0",
+      "args": [
+        "-tc=StepDetector: *,StepPlateaus: *"
+      ]
+    },
+    {
+      "id": "U3",
+      "file": "src/core/src/stepsaturated.cpp",
+      "old": "        if (run.end - run.begin > run_end - run_begin)\n",
+      "new": "        if (run.end - run.begin >= run_end - run_begin)\n",
+      "expect": "survived",
+      "note": "of equally long runs the LAST is taken, not the first: SURVIVES, no test has two runs of one length in a saturated sweep (a gap the move kept; the walk itself is held by StepPlateaus)",
+      "args": [
+        "-tc=StepDetector: *,StepPlateaus: *"
+      ]
+    },
+    {
+      "id": "U4",
+      "file": "src/core/src/stepsaturated.cpp",
+      "old": "        if (run.end - run.begin > run_end - run_begin)\n",
+      "new": "        if (run.end - run.begin < run_end - run_begin)\n",
+      "expect": "caught",
+      "note": "the SHORTEST run is taken",
+      "args": [
+        "-tc=StepDetector: *,StepPlateaus: *"
+      ]
+    }
+  ]
+}

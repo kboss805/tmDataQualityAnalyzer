@@ -7,390 +7,16 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstddef>
-#include <string>
 #include <vector>
 
 #include "constants.h"
 #include "containerutil.h"
+#include "stepplateaus.h"
+#include "stepsaturated.h"
+
+using namespace stepplateaus;
 
 namespace {
-
-/// One flag per sample. Deliberately not `std::vector<bool>`: that specialisation is a
-/// bit-packed proxy container (no real references, no data()), which is a trap here
-/// rather than a saving.
-using Flags = std::vector<char>;
-
-/// Median of a copy of @p values (returns 0 for an empty input).
-double median(std::vector<double> values)
-{
-    if (values.empty())
-    {
-        return 0.0;
-    }
-    std::sort(values.begin(), values.end());
-    const int mid = intSize(values) / 2;
-    if (intSize(values) % 2 == 0)
-    {
-        return 0.5 * (values[mid - 1] + values[mid]);
-    }
-    return values[mid];
-}
-
-/// Median magnitude of the change between adjacent values (0 for fewer than two).
-double medianAdjacentGap(const std::vector<double>& values)
-{
-    std::vector<double> gaps;
-    for (int i = 1; i < intSize(values); i++)
-    {
-        gaps.push_back(std::fabs(values[i] - values[i - 1]));
-    }
-    return median(gaps);
-}
-
-/// True when a level sits at the very top or bottom of the converter's range -
-/// the receiver had no headroom left, so the dwell is not a measurement.
-bool isRailedLevel(double value)
-{
-    const double full_scale = PCMConstants::kMaxRawSampleValue;
-    return value >= CalibrationConstants::kSaturatedRawFraction * full_scale
-           || value <= (1.0 - CalibrationConstants::kSaturatedRawFraction) * full_scale;
-}
-
-/// Where each step transition happened, and which step each one lands on.
-struct DwellGrid
-{
-    std::vector<int> boundaries;  ///< Derivative indices where a transition happened.
-    std::vector<int> slot;        ///< Step index each boundary lands on.
-    double       dwell = 0.0; ///< Median samples per dwell.
-};
-
-/// Builds the dwell grid from the TRANSITIONS rather than the plateau spans.
-///
-/// A plateau's end is not reliably on the grid - noise shatters the tail of a
-/// dwell into runs too short to confirm, which on the step_cal recording ends
-/// R_RCVR1's 36 dB plateau a third of a dwell early. A plateau's BEGIN is always
-/// inside its own dwell, though (the transition samples either side are marked
-/// unstable), so counting whole dwells between transitions places every level.
-///
-/// Returns false when the recording cannot support a grid: a sweep whose dwells
-/// were not each held for the same length of time keeps the linear fallback
-/// rather than being handed a silently mis-numbered profile.
-bool buildDwellGrid(const std::vector<double>& deriv, double majorEdge, DwellGrid& out)
-{
-    out = DwellGrid{};
-
-    for (int i = 0; i < intSize(deriv); i++)
-    {
-        if (std::fabs(deriv[i]) < majorEdge)
-        {
-            continue;
-        }
-        // One transition can smear across the window that straddles it, so
-        // marks a sample or two apart are the same boundary.
-        if (out.boundaries.empty() || i - out.boundaries.back() > 2)
-        {
-            out.boundaries.push_back(i);
-        }
-    }
-    if (intSize(out.boundaries) < 2)
-    {
-        return false;
-    }
-    std::vector<double> spacings;
-    for (int i = 1; i < intSize(out.boundaries); i++)
-    {
-        spacings.push_back(out.boundaries[i] - out.boundaries[i - 1]);
-    }
-    out.dwell = median(spacings);
-    if (out.dwell <= 0.0)
-    {
-        return false;
-    }
-    // Step index of each boundary. A gap of two dwells means one step never
-    // produced a transition of its own - the railed pair at the top, or a
-    // dwell noise ate - and the numbering must skip it rather than shift.
-    out.slot.assign(intSize(out.boundaries), 0);
-    for (int i = 1; i < intSize(out.boundaries); i++)
-    {
-        const double gap     = (out.boundaries[i] - out.boundaries[i - 1]) / out.dwell;
-        const int    spanned = static_cast<int>(std::llround(gap));
-        if (spanned < 1 || std::fabs(gap - spanned) > CalibrationConstants::kMaxDwellSlotError)
-        {
-            return false; // dwells were not held for a uniform time; do not guess
-        }
-        out.slot[i] = out.slot[i - 1] + spanned;
-    }
-    return true;
-}
-
-/// A dwell inside the sweep that never confirmed a plateau is not missing
-/// from the RECORDING, only from plateau detection - the grid says exactly
-/// where it is. Leaving it out is not neutral: interpolating straight across
-/// the hole assumes the receiver is linear there, and an out-of-tolerance
-/// receiver is not. On the step_cal recording, L_RCVR1's 24 dB dwell sits at
-/// 28556 counts; bridged from 18 dB to 30 dB it read 23.09 dB. So measure it
-/// directly: the median of its settled tail, between the two transitions
-/// that bound it. Only a gap of exactly one dwell qualifies (a wider one
-/// holds several steps that cannot be told apart), the value must fall
-/// between its measured neighbours, and railed dwells above the top
-/// measured step stay unresolved - there is nothing there to measure.
-void measureUnconfirmedDwells(const std::vector<double>& rawValues,
-                             const std::vector<StepDefinition>& steps,
-                             const DwellGrid& grid,
-                             int top_slot,
-                             int confirm_samples,
-                             Flags& paired,
-                             std::vector<double>& raw_of_slot,
-                             CalibrationProfile& profile)
-{
-    const std::vector<int>& boundaries    = grid.boundaries;
-    const std::vector<int>& boundary_slot = grid.slot;
-    const int expected = intSize(steps);
-for (int i = 0; i + 1 < intSize(boundaries); i++)
-{
-    if (boundary_slot[i + 1] - boundary_slot[i] != 1)
-    {
-        continue;
-    }
-    const int slot = boundary_slot[i] + 1;
-    // Slots are counted from the run's first level, so a transition before the
-    // run has a negative one: that dwell is not part of the sweep.
-    if (slot < 0 || slot >= top_slot || paired[slot])
-    {
-        continue;
-    }
-    int below = slot - 1;
-    while (below >= 0 && !paired[below])
-    {
-        below--;
-    }
-    int above = slot + 1;
-    while (above < expected && !paired[above])
-    {
-        above++;
-    }
-    if (below < 0 || above >= expected)
-    {
-        continue;
-    }
-    // The tail of the dwell, clear of both transitions: settling has died
-    // out by then, and the sample straddling the next edge is excluded.
-    const int lo = std::max(boundaries[i] + 2, boundaries[i + 1] - confirm_samples);
-    const int hi = boundaries[i + 1];
-    if (hi - lo < CalibrationConstants::kMinConfirmSamples)
-    {
-        continue;
-    }
-    std::vector<double> tail;
-    tail.reserve(hi - lo);
-    for (int j = lo; j < hi; j++)
-    {
-        tail.push_back(rawValues[j]);
-    }
-    const double level = median(tail);
-    const double lower = std::min(raw_of_slot[below], raw_of_slot[above]);
-    const double upper = std::max(raw_of_slot[below], raw_of_slot[above]);
-    if (level <= lower || level >= upper)
-    {
-        continue; // not between its neighbours: not a clean dwell, leave the hole
-    }
-    CalibrationPoint point;
-    point.rawAvg = level;
-    point.trueDb = steps[slot].db;
-    profile.points.push_back(point);
-    paired[slot]      = true;
-    raw_of_slot[slot] = level;
-}
-}
-
-/// One confirmed settled run of samples: [begin, end).
-struct Plateau
-{
-    int begin;
-    int end;
-};
-
-/// A coalesced level: the settled value plus the sample span it was measured
-/// over. The span is what lets the saturated-top fallback tell a plateau
-/// covering two dwells from two plateaus covering one each.
-struct Level
-{
-    double value;
-    int    begin;
-    int    end;
-};
-
-/// Sample-to-sample difference of @p raw (one shorter than its input).
-std::vector<double> sampleDerivative(const std::vector<double>& raw)
-{
-    std::vector<double> deriv;
-    // reserve() takes an unsigned count: for an empty series the "one fewer" is -1, which
-    // a std::vector reads as 18 quintillion elements, so it is clamped at zero.
-    deriv.reserve(static_cast<std::size_t>(std::max(0, intSize(raw) - 1)));
-    for (int i = 1; i < intSize(raw); i++)
-    {
-        deriv.push_back(raw[i] - raw[i - 1]);
-    }
-    return deriv;
-}
-
-/// Robust (MAD-based) standard-deviation estimate of @p values. Sizes the
-/// derivative threshold adaptively per channel.
-double robustStdDev(const std::vector<double>& values)
-{
-    if (values.empty())
-    {
-        return 0.0;
-    }
-    const double med = median(values);
-    std::vector<double> abs_dev;
-    abs_dev.reserve(intSize(values));
-    for (double v : values)
-    {
-        abs_dev.push_back(std::fabs(v - med));
-    }
-    // 1.4826 scales the median absolute deviation to a Gaussian std-dev estimate.
-    return 1.4826 * median(abs_dev);
-}
-
-/// Robust spread of the derivative, measured over the LIVE samples only.
-///
-/// Samples pinned at the series' floor or ceiling are left out. A receiver
-/// parked at the converter's zero, or driven onto its rail, repeats one value
-/// exactly: a run of perfect-zero derivatives that says nothing about the noise
-/// on the live steps. On a real cal recording (pre-sweep at 0, top steps railed
-/// at 65472, post-sweep back at 0) that is a third of the series, and it drags
-/// the estimate far under the live steps' own jitter. An undersized threshold
-/// then either splits a noisy dwell into two plateaus a few tens of counts apart
-/// - consuming a pairing slot and shifting every step below it by one - or
-/// shatters a dwell into runs too short to confirm, losing the step altogether.
-///
-/// A wholly pinned series (a dead or railed channel) has no live samples; it
-/// falls back to the full derivative so it still reads as noiseless and flat.
-double liveNoiseSigma(const std::vector<double>& raw, const std::vector<double>& deriv)
-{
-    const auto [floor_it, ceiling_it] = std::minmax_element(raw.cbegin(), raw.cend());
-    std::vector<double> live;
-    live.reserve(intSize(deriv));
-    for (int i = 0; i < intSize(deriv); i++)
-    {
-        const bool pinned = raw[i] == raw[i + 1]
-                            && (raw[i] == *floor_it || raw[i] == *ceiling_it);
-        if (!pinned)
-        {
-            live.push_back(deriv[i]);
-        }
-    }
-    return robustStdDev(live.empty() ? deriv : live);
-}
-
-/// Marks samples that are NOT part of a transition. A transition at derivative
-/// index i sits between raw[i] and raw[i+1], so both endpoints are marked
-/// unstable and plateaus exclude the moving region.
-Flags markStableSamples(const std::vector<double>& deriv, int sampleCount, double threshold)
-{
-    Flags stable(sampleCount, true);
-    for (int i = 0; i < intSize(deriv); i++)
-    {
-        if (std::fabs(deriv[i]) > threshold)
-        {
-            stable[i]     = false;
-            stable[i + 1] = false;
-        }
-    }
-    return stable;
-}
-
-/// Maximal runs of stable samples that hold for at least @p confirmSamples, so a
-/// transient or partial-jump blip is not mistaken for a settled step.
-std::vector<Plateau> confirmedPlateaus(const Flags& stable, int sampleCount, int confirmSamples)
-{
-    std::vector<Plateau> plateaus;
-    int run_begin = -1;
-    for (int i = 0; i <= sampleCount; i++)
-    {
-        const bool is_stable = (i < sampleCount) && stable[i];
-        if (is_stable && run_begin < 0)
-        {
-            run_begin = i;
-        }
-        else if (!is_stable && run_begin >= 0)
-        {
-            if (i - run_begin >= confirmSamples)
-            {
-                plateaus.push_back(Plateau{run_begin, i});
-            }
-            run_begin = -1;
-        }
-    }
-    return plateaus;
-}
-
-/// Each plateau's settled value and span.
-///
-/// The value averages the confirmation window at the END of the plateau (the
-/// samples immediately before the next transition) rather than its start: any
-/// settling after a jump has had the rest of the plateau to die out by then, so
-/// this avoids transition contamination without needing a separate trim
-/// fraction.
-std::vector<Level> levelsOf(const std::vector<double>& raw,
-                        const std::vector<Plateau>& plateaus,
-                        int confirmSamples)
-{
-    std::vector<Level> levels;
-    levels.reserve(intSize(plateaus));
-    for (const Plateau& p : plateaus)
-    {
-        const int lo = std::max(p.begin, p.end - confirmSamples);
-        double sum = 0.0;
-        for (int i = lo; i < p.end; i++)
-        {
-            sum += raw[i];
-        }
-        levels.push_back(Level{sum / (p.end - lo), p.begin, p.end});
-    }
-    return levels;
-}
-
-/// Merges adjacent levels within @p tolerance into one, keeping the later (more
-/// settled) value and extending the span across both halves.
-std::vector<Level> coalesceLevels(const std::vector<Level>& in, double tolerance)
-{
-    std::vector<Level> out;
-    for (const Level& level : in)
-    {
-        if (!out.empty() && std::fabs(level.value - out.back().value) <= tolerance)
-        {
-            out.back().value = level.value;
-            out.back().end   = level.end;
-        }
-        else
-        {
-            out.push_back(level);
-        }
-    }
-    return out;
-}
-
-std::vector<double> valuesOf(const std::vector<Level>& levels)
-{
-    std::vector<double> values;
-    values.reserve(intSize(levels));
-    for (const Level& level : levels)
-    {
-        values.push_back(level.value);
-    }
-    return values;
-}
-
-/// A level change smaller than the edge threshold is not a real transition.
-int transitionDirection(double delta, double threshold)
-{
-    if (delta > threshold) return 1;
-    if (delta < -threshold) return -1;
-    return 0;
-}
 
 /// Selects one clean calibration sweep: the first maximal run of
 /// CONSECUTIVE plateaus, at least `expected` long, whose settled averages move
@@ -413,231 +39,37 @@ int selectSweepStart(const std::vector<double>& plateauAvg, int expected,
 {
     runLevels = 0;
     // Find the FIRST maximal run of plateaus whose settled averages move strictly
-// in one direction, long enough to hold the whole sweep, and take its LAST
-// `expected` plateaus.
-//
-// A real cal recording is, in time order:
-//   [signal-generator turn-on transient] [the sweep: step 0 .. step N-1]
-//   [optional operator return ramp back down]
-// The sweep climbs monotonically to its peak step and then reverses (the ramp)
-// or the recording ends. The turn-on transient sits on the low-signal side
-// just ahead of the sweep and moves in the SAME direction into step 0, so it
-// extends the first monotonic run by one (or more) plateau at its START. Taking
-// the run's LAST `expected` plateaus drops that leading transient while keeping
-// the genuine sweep, and pairs them with the steps in time order below.
-//
-// This is direction-agnostic, which matters because receiver polarity sets the
-// raw-count direction: a normal receiver's raw count rises with signal, an
-// inverted / negative-slope receiver's falls. Using the run's own direction
-// (rather than anchoring on a max/min raw extreme) avoids locking onto the
-// return ramp, which on a full pyramid/valley recording forms an equally valid
-// monotonic run in the opposite half.
-int run_start = -1;
-for (int begin = 0; begin + 1 < intSize(plateauAvg) && run_start < 0; )
-{
-    const int dir = transitionDirection(plateauAvg[begin + 1] - plateauAvg[begin], threshold);
-    if (dir == 0)
-    {
-        begin++; // sub-threshold step: not a real transition, skip
-        continue;
-    }
-    int end = begin + 1;
-    while (end + 1 < intSize(plateauAvg) &&
-           transitionDirection(plateauAvg[end + 1] - plateauAvg[end], threshold) == dir)
-    {
-        end++;
-    }
-    // Maximal monotonic run is plateaus[begin..end].
-    if (end - begin + 1 >= expected)
-    {
-        run_start = end - (expected - 1); // keep the last `expected` of the run
-        runLevels = end - begin + 1;
-    }
-    else
-    {
-        begin = end; // too short; the reversal starts the next run here
-    }
-}
-return run_start;
-}
-
-/// Saturated top: calibrates the steps that stayed in range.
-/// 
-/// A receiver whose gain is set too high for the injected levels runs off the
-/// end of its converter partway through the sweep: every dwell from there on
-/// reads the same full-scale count, so the recording physically cannot hold
-/// `expected` distinct levels and no threshold will find them. Those railed
-/// dwells are not measurements - the receiver had no headroom left - so they
-/// are dropped rather than paired, and the profile covers the steps below.
-/// interpolateCalibration() already clamps above its top point, so a raw value
-/// that reaches the rail in the main run reads the top measured step's dB
-/// rather than a number invented by extrapolating past the data.
-/// 
-/// Pairing the survivors needs to know WHICH steps they are, and position
-/// alone cannot say once a dwell is missing from the middle (noise can shatter
-/// one into runs too short to confirm, which is what L_RCVR1 does on
-/// the step_cal recording). The generator holds every step for the same length of
-/// time, so the TRANSITIONS between them fall on a regular grid (buildDwellGrid)
-/// - each level's step index is the number of whole dwells between the run's
-/// first level and the dwell its first sample sits in. The grid comes from the
-/// transitions rather than the plateau spans because a plateau's end is not
-/// reliably on it (noise can shatter a dwell's tail), while a plateau's begin is
-/// always inside its own dwell. A recording whose dwells are not regular fails
-/// the check and keeps the linear fallback rather than guessing.
-bool calibrateSaturatedTop(const std::vector<double>& rawValues,
-                           const std::vector<double>& deriv,
-                           const std::vector<Level>& levels,
-                           const std::vector<StepDefinition>& steps,
-                           double nominal_threshold,
-                           int confirm_samples,
-                           StepDetector::Result& result)
-{
-    const int expected = intSize(steps);
-    if (intSize(levels) < 2)
-    {
-        return false;
-    }
-    const std::vector<double> values = valuesOf(levels);
-
-    // Longest monotonic run, by the same rule the full-sweep selection uses
-    // but of any length - here the run is short BECAUSE the top railed.
-    int run_begin = 0;
-    int run_end   = 0;
-    for (int begin = 0; begin + 1 < intSize(values); )
-    {
-        const int dir = transitionDirection(values[begin + 1] - values[begin], nominal_threshold);
-        if (dir == 0)
-        {
-            begin++;
-            continue;
-        }
-        int end = begin + 1;
-        while (end + 1 < intSize(values)
-               && transitionDirection(values[end + 1] - values[end], nominal_threshold) == dir)
-        {
-            end++;
-        }
-        if (end - begin > run_end - run_begin)
-        {
-            run_begin = begin;
-            run_end   = end;
-        }
-        begin = end;
-    }
-    if (run_end <= run_begin)
-    {
-        return false;
-    }
-
-    // Drop the railed dwells at the TOP of the run only: a pinned level at its
-    // start is the pre-sweep level, which is a real measurement of a real step.
-    int last   = run_end;
-    int railed = 0;
-    while (last > run_begin && isRailedLevel(values[last]))
-    {
-        last--;
-        railed++;
-    }
-    if (railed == 0)
-    {
-        return false; // a short run with nothing railed is a different failure
-    }
-    const int measured = last - run_begin + 1;
-    if (measured < std::max(CalibrationConstants::kMinPartialProfileSteps, expected / 2))
-    {
-        return false; // too little of the sweep survived to be worth a profile
-    }
-
-    // The dwell grid comes from the TRANSITIONS, not from the plateau spans.
-    // A plateau's end is not reliably on the grid - noise shatters the tail of
-    // a dwell into runs too short to confirm, which on the step_cal recording ends
-    // R_RCVR1's 36 dB plateau a third of a dwell early. A plateau's BEGIN is
-    // always inside its own dwell, though (the transition samples either side
-    // are marked unstable), so counting whole dwells between transitions
-    // places every level.
-    const double major_edge =
-        CalibrationConstants::kMajorEdgeFractionOfStep
-        * medianAdjacentGap(std::vector<double>(values.begin() + run_begin,
-                                                values.begin() + run_end + 1));
-    DwellGrid grid;
-    if (!buildDwellGrid(deriv, major_edge, grid))
-    {
-        return false;
-    }
-    // Each level belongs to the dwell its first sample sits in. The run's
-    // first level is taken to be step 0: unlike the full-sweep path there is
-    // no spare level to drop as a turn-on transient, because the whole reason
-    // this path runs is that levels are MISSING.
+    // in one direction, long enough to hold the whole sweep, and take its LAST
+    // `expected` plateaus.
     //
-    // The grid counts dwells from the first transition in the RECORDING, which
-    // need not be the run's: a turn-on transient above the 0 dB level, before
-    // the sweep reverses into it, adds a transition of its own. So every slot is
-    // taken relative to the run's first level - otherwise that transient shifts
-    // the whole numbering up one step (5000, 1000, 2000, 3000, rail read 1000 as
-    // 6 dB and left 0 dB unresolved).
-    auto slotOf = [&](int begin_sample) {
-        int slot = 0;
-        for (int i = 0; i < intSize(grid.boundaries); i++)
+    // A real cal recording is, in time order:
+    //   [signal-generator turn-on transient] [the sweep: step 0 .. step N-1]
+    //   [optional operator return ramp back down]
+    // The sweep climbs monotonically to its peak step and then reverses (the ramp)
+    // or the recording ends. The turn-on transient sits on the low-signal side
+    // just ahead of the sweep and moves in the SAME direction into step 0, so it
+    // extends the first monotonic run by one (or more) plateau at its START. Taking
+    // the run's LAST `expected` plateaus drops that leading transient while keeping
+    // the genuine sweep, and pairs them with the steps in time order below.
+    //
+    // This is direction-agnostic, which matters because receiver polarity sets the
+    // raw-count direction: a normal receiver's raw count rises with signal, an
+    // inverted / negative-slope receiver's falls. Using the run's own direction
+    // (rather than anchoring on a max/min raw extreme) avoids locking onto the
+    // return ramp, which on a full pyramid/valley recording forms an equally valid
+    // monotonic run in the opposite half.
+    int run_start = -1;
+    forEachMonotonicRun(plateauAvg, threshold, [&](const Run& run) {
+        // The maximal monotonic run is plateaus[run.begin..run.end].
+        if (run.end - run.begin + 1 < expected)
         {
-            if (begin_sample > grid.boundaries[i])
-            {
-                slot = grid.slot[i] + 1;
-            }
+            return RunWalk::Continue; // too short; the reversal starts the next run here
         }
-        return slot;
-    };
-    const int run_first_slot = slotOf(levels[run_begin].begin);
-    for (int& slot : grid.slot)
-    {
-        slot -= run_first_slot;
-    }
-    std::vector<int> step_slots;
-    for (int k = run_begin; k <= last; k++)
-    {
-        const int slot = slotOf(levels[k].begin);
-        if (slot < 0 || slot >= expected
-            || (!step_slots.empty() && slot <= step_slots.back()))
-        {
-            return false;
-        }
-        step_slots.push_back(slot);
-    }
-
-    CalibrationProfile& profile = result.profile;
-    profile.points.clear();
-    profile.points.reserve(measured);
-    Flags   paired(expected, false);
-    std::vector<double> raw_of_slot(expected, 0.0);
-    for (int i = 0; i < measured; i++)
-    {
-        CalibrationPoint point;
-        point.rawAvg = values[run_begin + i];
-        point.trueDb = steps[step_slots[i]].db;
-        profile.points.push_back(point);
-        paired[step_slots[i]]      = true;
-        raw_of_slot[step_slots[i]] = point.rawAvg;
-    }
-
-    // Dwells the grid can see but plateau detection missed are measured here,
-    // not left as holes for interpolation to bridge.
-    measureUnconfirmedDwells(rawValues, steps, grid, step_slots.back(), confirm_samples,
-                             paired, raw_of_slot, profile);
-    std::sort(profile.points.begin(), profile.points.end(),
-              [](const CalibrationPoint& a, const CalibrationPoint& b) {
-                  return a.rawAvg < b.rawAvg;
-              });
-    for (int s = 0; s < expected; s++)
-    {
-        if (!paired[s])
-        {
-            result.unresolvedDb.push_back(steps[s].db);
-        }
-    }
-    profile.valid      = true;
-    result.saturated   = true;
-    result.sweepLevels = run_end - run_begin + 1;
-    result.outcome   = CalibrationOutcome::Calibrated;
-    return true;
+        run_start = run.end - (expected - 1); // keep the last `expected` of the run
+        runLevels = run.end - run.begin + 1;
+        return RunWalk::Stop;
+    });
+    return run_start;
 }
 
 } // namespace
@@ -791,8 +223,8 @@ StepDetector::Result StepDetector::detect(const std::vector<double>& rawValues,
 
     if (run_start < 0)
     {
-        if (calibrateSaturatedTop(rawValues, deriv, nominal_levels, steps,
-                                  nominal_threshold, confirm_samples, result))
+        if (stepsaturated::calibrateSaturatedTop(rawValues, deriv, nominal_levels, steps,
+                                              nominal_threshold, confirm_samples, result))
         {
             return result; // partial profile over the steps that stayed in range
         }
@@ -820,10 +252,7 @@ StepDetector::Result StepDetector::detect(const std::vector<double>& rawValues,
         pt.trueDb = steps[k].db;
         profile.points.push_back(pt);
     }
-    std::sort(profile.points.begin(), profile.points.end(),
-              [](const CalibrationPoint& a, const CalibrationPoint& b) {
-                  return a.rawAvg < b.rawAvg;
-              });
+    sortByRawAvg(profile.points);
 
     profile.valid  = true;
     result.outcome = CalibrationOutcome::Calibrated;
