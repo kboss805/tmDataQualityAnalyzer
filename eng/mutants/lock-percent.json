@@ -1,0 +1,40 @@
+{
+  "suite": "native",
+  "args": [
+    "-tc=FrameProcessor: *"
+  ],
+  "mutants": [
+    {
+      "id": "L1",
+      "file": "src/core/include/frameprocessor.h",
+      "old": "static_cast<double>(total_bits_in_window)) * 100.0",
+      "new": "static_cast<double>(total_bits_in_window)) * 99.0",
+      "expect": "caught",
+      "note": "the lock percentage is scaled by 99"
+    },
+    {
+      "id": "L2",
+      "file": "src/core/include/frameprocessor.h",
+      "old": "(static_cast<double>(valid_bits_in_window) / static_cast<double>(total_bits_in_window))",
+      "new": "(static_cast<double>(total_bits_in_window - valid_bits_in_window) / static_cast<double>(total_bits_in_window))",
+      "expect": "caught",
+      "note": "the percentage of bits OUT of lock"
+    },
+    {
+      "id": "L3",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "recordTimeSample(state.current_time_sample, state.n_samples, state.lockPercent(),",
+      "new": "recordTimeSample(state.current_time_sample, state.n_samples, 0.0,",
+      "expect": "caught",
+      "note": "the last, flushed window reports no lock"
+    },
+    {
+      "id": "L4",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "recordTimeSample(s.current_time_sample, s.n_samples, s.lockPercent(),",
+      "new": "recordTimeSample(s.current_time_sample, s.n_samples, 100.0,",
+      "expect": "caught",
+      "note": "every window that closes in the stream reports full lock"
+    }
+  ]
+}

@@ -118,6 +118,14 @@ private:
         std::vector<double> channel_sums;
         // Lock-percentage counters (reset each output window).
         uint64_t valid_bits_in_window = 0, total_bits_in_window = 0;
+        /// This window's lock percentage: the share of its bits seen in lock, 0 when it saw none. The valid bits are only
+        /// counted together with the total and only while in lock, so it never exceeds 100 and needs no clamp.
+        double lockPercent() const
+        {
+            return total_bits_in_window > 0
+                       ? (static_cast<double>(valid_bits_in_window) / static_cast<double>(total_bits_in_window)) * 100.0
+                       : 0.0;
+        }
         uint64_t accumulated_missed_frames = 0; ///< Monotonic across the run.
         // Run totals / diagnostics.
         uint64_t total_syncs_found = 0, total_frames_extracted = 0, rows_written = 0;
