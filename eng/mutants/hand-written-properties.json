@@ -3,7 +3,15 @@
   "args": [
     "-stopOnFail",
     "-class",
-    "TmDq.App.Tests.AroundTheChartTests"
+    "TmDq.App.Tests.ChartPlotStateTests",
+    "-class",
+    "TmDq.App.Tests.ChartMenuCommandTests",
+    "-class",
+    "TmDq.App.Tests.CustomizeViewStateTests",
+    "-class",
+    "TmDq.App.Tests.ChartViewTests",
+    "-class",
+    "TmDq.App.Tests.ChartPromptWindowTests"
   ],
   "mutants": [
     {
@@ -118,7 +126,15 @@
       "args": [
         "-stopOnFail",
         "-class",
-        "TmDq.App.Tests.AroundTheChartTests"
+        "TmDq.App.Tests.ChartPlotStateTests",
+        "-class",
+        "TmDq.App.Tests.ChartMenuCommandTests",
+        "-class",
+        "TmDq.App.Tests.CustomizeViewStateTests",
+        "-class",
+        "TmDq.App.Tests.ChartViewTests",
+        "-class",
+        "TmDq.App.Tests.ChartPromptWindowTests"
       ],
       "expect": "caught",
       "note": "a choice in an open menu is never told it was checked"
@@ -131,7 +147,15 @@
       "args": [
         "-stopOnFail",
         "-class",
-        "TmDq.App.Tests.AroundTheChartTests"
+        "TmDq.App.Tests.ChartPlotStateTests",
+        "-class",
+        "TmDq.App.Tests.ChartMenuCommandTests",
+        "-class",
+        "TmDq.App.Tests.CustomizeViewStateTests",
+        "-class",
+        "TmDq.App.Tests.ChartViewTests",
+        "-class",
+        "TmDq.App.Tests.ChartPromptWindowTests"
       ],
       "expect": "caught",
       "note": "a stream row's box says nothing when it changes"
@@ -144,7 +168,15 @@
       "args": [
         "-stopOnFail",
         "-class",
-        "TmDq.App.Tests.AroundTheChartTests"
+        "TmDq.App.Tests.ChartPlotStateTests",
+        "-class",
+        "TmDq.App.Tests.ChartMenuCommandTests",
+        "-class",
+        "TmDq.App.Tests.CustomizeViewStateTests",
+        "-class",
+        "TmDq.App.Tests.ChartViewTests",
+        "-class",
+        "TmDq.App.Tests.ChartPromptWindowTests"
       ],
       "expect": "caught",
       "note": "a stream row's swatch does not repaint when a colour is picked"
@@ -157,7 +189,15 @@
       "args": [
         "-stopOnFail",
         "-class",
-        "TmDq.App.Tests.AroundTheChartTests"
+        "TmDq.App.Tests.ChartPlotStateTests",
+        "-class",
+        "TmDq.App.Tests.ChartMenuCommandTests",
+        "-class",
+        "TmDq.App.Tests.CustomizeViewStateTests",
+        "-class",
+        "TmDq.App.Tests.ChartViewTests",
+        "-class",
+        "TmDq.App.Tests.ChartPromptWindowTests"
       ],
       "expect": "caught",
       "note": "a stream row's swatch picks nothing"
@@ -170,7 +210,15 @@
       "args": [
         "-stopOnFail",
         "-class",
-        "TmDq.App.Tests.AroundTheChartTests"
+        "TmDq.App.Tests.ChartPlotStateTests",
+        "-class",
+        "TmDq.App.Tests.ChartMenuCommandTests",
+        "-class",
+        "TmDq.App.Tests.CustomizeViewStateTests",
+        "-class",
+        "TmDq.App.Tests.ChartViewTests",
+        "-class",
+        "TmDq.App.Tests.ChartPromptWindowTests"
       ],
       "expect": "caught",
       "note": "Select None checks every SNR channel"
@@ -183,7 +231,15 @@
       "args": [
         "-stopOnFail",
         "-class",
-        "TmDq.App.Tests.AroundTheChartTests"
+        "TmDq.App.Tests.ChartPlotStateTests",
+        "-class",
+        "TmDq.App.Tests.ChartMenuCommandTests",
+        "-class",
+        "TmDq.App.Tests.CustomizeViewStateTests",
+        "-class",
+        "TmDq.App.Tests.ChartViewTests",
+        "-class",
+        "TmDq.App.Tests.ChartPromptWindowTests"
       ],
       "expect": "caught",
       "note": "Change color renames"

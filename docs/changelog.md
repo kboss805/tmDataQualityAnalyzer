@@ -12,6 +12,24 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### `AroundTheChartTests` is five classes (follow-up audit Q5, app half)
+
+`AroundTheChartTests.cs` held 54 tests in one class of about 1,800 lines, in five parts a comment line each divided:
+the plot's state, the commands behind the menu, Customize View's state, the view, and the prompts' windows. Each part is
+a class of its own now, named for what it holds, and the helpers more than one part used are in one static class.
+
+- **`ChartPlotStateTests`, `ChartMenuCommandTests`, `CustomizeViewStateTests`, `ChartViewTests`,
+  `ChartPromptWindowTests`** in `tests/TmDq.App.Tests/`; the plots built from the fixtures (`LockPlot`, `Mixed`, ...),
+  `FakePrompts`, the shown view (`Show`, `Shown`) and the prompts' window helpers (`Owner`, `Press`, `Closed`) are in
+  `Support/AroundTheChartSupport.cs`, imported with `using static`. Every test moved as it was: names and bodies are
+  unchanged, and all five stay in the native-core collection, so they still run one at a time.
+- **The kept mutant lists** that ran `-class TmDq.App.Tests.AroundTheChartTests` (`app-dialog-scaffolding.json`,
+  `hand-written-properties.json`, `plot-zoom-and-legend.json`) name the five classes, so each mutant still runs the same
+  tests.
+- **Checked.** The app suite: 725 tests, 691 passed and 34 not run, as before. The three kept lists through
+  `eng\mutate.ps1`, each verdict as its list says: `app-dialog-scaffolding.json` 10 CAUGHT and C1 SURVIVED (recorded so),
+  `hand-written-properties.json` 14 of 14 CAUGHT, `plot-zoom-and-legend.json` 13 of 13 CAUGHT. Baselines: unchanged.
+
 #### Three kept mutants say what they now do (follow-up audit)
 
 The regression run over the moved ABI tests (the last change) showed three kept mutants whose recorded expectation no
