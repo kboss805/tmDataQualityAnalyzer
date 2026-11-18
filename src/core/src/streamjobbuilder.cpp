@@ -9,6 +9,7 @@
 #include <system_error>
 
 #include "framesetup.h"
+#include "receiverparamsfile.h"
 #include "framesync.h"
 #include "textfile.h"
 

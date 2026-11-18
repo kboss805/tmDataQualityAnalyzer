@@ -606,10 +606,14 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
 6. **ProcessingEvents / EventReporter** (`processingevents.h`) - how the reader, the workers and the extractor report
    log lines, errors, progress and completion; the ABI relays them to the host. **IntervalGate** (`intervalgate.h`) is
    the clock-injected gate that throttles the reader's progress reports.
-7. **FrameSetup** (`framesetup`) - the frame's word map and calibration table, built per job; reads and writes the
-   receiver-parameters file. `resolveReceiverWordMap` is the one resolution of a Receiver SNR stream's word map (the
+7. **FrameSetup** (`framesetup`) - the frame's word map (its parameters, loaded from and written to TOML) and its
+   linear calibration and step-calibration profiles, built per job. Two modules came out of it: **`receiverparamsfile`**
+   (the receiver-parameters file as a whole - the five scalar settings beside the word map, read, written and saved -
+   beside `framesyncfile`; its `resolveReceiverWordMap` is the one resolution of a Receiver SNR stream's word map (the
    named file, else the shipped default, else the sequential map; an unusable default is passed over with a warning),
-   called by both the job builder and the calibration extractor, whose profiles are matched to the run's words.
+   called by both the job builder and the calibration extractor, whose profiles are matched to the run's words), and
+   **`receivernames`** (the naming rules: `<channel>_RCVR<N>` written, and the number and the channel part read back;
+   the default word map, the calibration summary, the series builder and the CSV column schema all go through it).
 8. **framesync** (`framesync.h`) - the shared decode of a pattern and mask, and `applyAcquisition`, which builds every
    raw-affecting field of a run's parameters (the main run and the calibration extractor both go through it).
 9. **Stream job builder** (`streamjobbuilder`, the function `buildStreamJob`) - turns one stream's settings into a processing job: validates the pattern,
@@ -994,9 +998,13 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
   slowest costs alone, asserted as ratios, never milliseconds.
 - **EventReporter** (`test_eventreporter`) and **IntervalGate** (`test_intervalgate`) - the null-safe forwarder every
   source reports through, and the progress throttle, with injected time.
-- **FrameSetup** (`test_framesetup`) - the word map, the linear calibration for every range and polarity, channel and
-  receiver names, the receiver-parameters file (both key spellings, round trips, the exact file written, the default
-  map), and which step-calibration profiles attach.
+- **FrameSetup** (`test_framesetup`) - the word map, the linear calibration for every range and polarity, the default
+  map, and which step-calibration profiles attach.
+- **ReceiverParamsFile** (`test_receiverparamsfile`) - the receiver-parameters file: both key spellings, round trips,
+  the exact file written, the fallback to the default map, a word map that fails to load being replaced rather than
+  mixed, and a save that cannot write saying so.
+- **ReceiverNames** (`test_receivernames`) - the prefix for each channel position, the name made from a channel and a
+  receiver, and the number and the channel part read back (a whole decimal number, or none; a negative one kept).
 - **FrameSync** (`test_framesync`) - hex parsing, the pattern and mask decode, `applyAcquisition` setting every
   raw-affecting field and no other, and the full sync mask.
 - **StreamJob** (`test_streamjob`) - one stream's settings into a job: validation and its messages, the word-map

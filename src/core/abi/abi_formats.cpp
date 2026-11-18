@@ -20,6 +20,7 @@
 #include "csvseriesparser.h"
 #include "csvserieswriter.h"
 #include "framesetup.h"
+#include "receiverparamsfile.h"
 #include "framesyncfile.h"
 #include "templatematcher.h"
 
@@ -173,7 +174,7 @@ int32_t tmdq_receiver_params_read(const char* path_utf8, const tmdq_receiver_par
         start = toCore(given);
     }
     return tmdq::guarded("tmdq_receiver_params_read", [&]() -> int32_t {
-        const tmdq_receiver_params result = toAbi(FrameSetup::readReceiverParams(tmdq::pathFromUtf8(path_utf8), start));
+        const tmdq_receiver_params result = toAbi(readReceiverParams(tmdq::pathFromUtf8(path_utf8), start));
         tmdq::writeStruct(result, kReceiverParamsMinimum, out);
         return TMDQ_OK;
     });
@@ -196,7 +197,7 @@ int32_t tmdq_receiver_params_save(const char* path_utf8, const tmdq_receiver_par
     }
     return tmdq::guarded("tmdq_receiver_params_save", [&]() -> int32_t {
         std::string error;
-        if (!FrameSetup::saveReceiverParamsFile(tmdq::pathFromUtf8(path_utf8), toCore(given),
+        if (!saveReceiverParamsFile(tmdq::pathFromUtf8(path_utf8), toCore(given),
                                                 word_map_source_utf8 ? tmdq::pathFromUtf8(word_map_source_utf8)
                                                                      : std::filesystem::path(),
                                                 num_words_in_minor_frame, error))

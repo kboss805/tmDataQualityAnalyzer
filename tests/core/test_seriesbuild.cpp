@@ -26,6 +26,7 @@
 #include "csvseriesparser.h"
 #include "doctest.h"
 #include "processedstreamdata.h"
+#include "receivernames.h"
 #include "seriesbuilder.h"
 #include "seriescolumnschema.h"
 #include "test_support.h"
@@ -1330,7 +1331,7 @@ TEST_CASE("seriesbuild: a spec views the processed data without copying it")
 TEST_CASE("seriesbuild: a receiver number is the whole decimal number after the last _RCVR, as written, or none")
 {
     // The series builder, the CSV column schema and FrameSetup read the number after "_RCVR" with one function
-    // (FrameSetup::receiverNumberInName, pinned in test_framesetup.cpp); unlike receiverIndexFromName it keeps a
+    // (receivernames::receiverNumberInName, pinned in test_framesetup.cpp); unlike receiverIndexFromName it keeps a
     // negative number, as v2.14.2 did, which only a hand-edited name can carry.
     ProcessedStreamData d = stream("Rcvr", 40, 0, 0, { kT0, kT0 + 1 }, { 90, 95 }, { 0, 3 },
                                    { { "L_RCVR-3", { -80, -79 } }, { "L_RCVR0", { -80, -79 } }, { "L_RCVR3x", { -80, -79 } },

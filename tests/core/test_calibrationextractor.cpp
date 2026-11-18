@@ -23,6 +23,7 @@
 #include "containerutil.h"
 #include "doctest.h"
 #include "framesetup.h"
+#include "receivernames.h"
 #include "framesync.h"
 #include "stepdetector.h"
 #include "streamjobbuilder.h"
@@ -1088,7 +1089,7 @@ TEST_CASE("CalibrationExtractor: the real step_cal recording pairs every step co
         {
             continue;
         }
-        calibrated_receivers.insert(FrameSetup::receiverIndexFromName(r.name));
+        calibrated_receivers.insert(receivernames::receiverIndexFromName(r.name));
         calibrated_channels++;
 
         // The regression this recording exists for: every step pairs with its OWN dwell. Noise used to split one high
@@ -1114,7 +1115,7 @@ TEST_CASE("CalibrationExtractor: the real step_cal recording pairs every step co
             // Receiver 1 alone: its gain is set too high for this sweep, so its top two steps both sit on the 65472 rail
             // and carry no measurement. It is calibrated over the range it could still resolve, and readings hold at the
             // top of that range instead of being extrapolated past it.
-            CHECK(FrameSetup::receiverIndexFromName(r.name) == 1);
+            CHECK(receivernames::receiverIndexFromName(r.name) == 1);
             CHECK(pts.back().trueDb == 48.0);
             CHECK_MESSAGE((std::count(r.unresolvedDb.begin(), r.unresolvedDb.end(), 54.0) > 0
                            && std::count(r.unresolvedDb.begin(), r.unresolvedDb.end(), 60.0) > 0),
@@ -1142,7 +1143,7 @@ TEST_CASE("CalibrationExtractor: the real step_cal recording pairs every step co
     // recording.
     for (const CalibrationChannelResult& r : results)
     {
-        if (FrameSetup::receiverIndexFromName(r.name) == 2)
+        if (receivernames::receiverIndexFromName(r.name) == 2)
         {
             CHECK(r.outcome == CalibrationOutcome::FlatNoSignal);
         }
@@ -1722,7 +1723,7 @@ TEST_CASE("CalibrationExtractor: a clip really removes the seconds it names")
         {
             if (r.profile.valid)
             {
-                receivers.insert(FrameSetup::receiverIndexFromName(r.name));
+                receivers.insert(receivernames::receiverIndexFromName(r.name));
             }
         }
         CHECK(calibratedCount(extractor) == 3);

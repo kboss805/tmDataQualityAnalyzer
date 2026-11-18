@@ -1,6 +1,9 @@
 /**
  * @file framesetup.h
- * @brief PCM frame parameter definitions and TOML-based frame setup loading.
+ * @brief PCM frame parameter definitions and the word map: the list of parameters, loaded from and written to TOML.
+ *
+ * The receiver-parameters FILE as a whole (the scalar settings beside the word map) is receiverparamsfile.h's; the
+ * naming rules for receiver parameters are receivernames.h's.
  */
 
 #ifndef FRAMESETUP_H
@@ -33,24 +36,6 @@ struct ParameterInfo
 };
 
 /**
- * @brief The scalar settings a receiver-parameters TOML carries alongside its
- *        word map.
- *
- * These are the five values the Receiver SNR dialog shows above the word map.
- * They live here, next to the word-map reader, so the file's two halves are
- * read and written in one place: a save that wrote only these produced a file
- * every consumer rejects for having no parameters.
- */
-struct ReceiverParams
-{
-    int    polarityIndex    = ReceiverConstants::kDefaultPolarityIndex;    ///< 0 = positive, 1 = negative.
-    int    slopeIndex       = ReceiverConstants::kDefaultSlopeIndex;       ///< Index into the voltage ranges.
-    double scaleDdBPerV     = PCMConstants::kDefaultScaleDdBPerV;    ///< Calibration scale, dB per volt.
-    int    numReceivers     = PCMConstants::kDefaultNumReceivers;    ///< Receivers contributing channels.
-    int    receiverChannels = PCMConstants::kDefaultReceiverChannels;///< Channels per receiver.
-};
-
-/**
  * @brief Loads and manages the list of PCM frame parameters.
  *
  * Parameters are read from a TOML file that maps receiver/channel names
@@ -76,7 +61,7 @@ public:
      * groups) parses successfully and leaves length() == 0, so every caller must
      * check length() before using the setup. Both do, and each reports a clearer
      * cause than a bare false would allow ("contains no parameters" vs. "check the
-     * word map"). saveReceiverParamsFile() refuses to write such a file in the
+     * word map"). writeReceiverParams() refuses to write such a file in the
      * first place.
      */
     bool tryLoadingFile(const std::filesystem::path& filename, int num_words_in_minor_frame);
@@ -90,29 +75,6 @@ public:
     /// Single-sourced because the word map's bounds check depends on it.
     static int wordsInMinorFrame(int bits_in_minor_frame);
 
-    /// Reads the scalar settings from a receiver-parameters TOML (the word map is
-    /// loaded separately by tryLoadingFile()). A key the file does not carry keeps
-    /// its value from @p defaults, so a caller can pass what it is already showing
-    /// and have a partial file change only what it actually specifies.
-    static ReceiverParams readReceiverParams(const std::filesystem::path& path,
-                                             const ReceiverParams& defaults = ReceiverParams());
-
-    /// Writes a complete receiver-parameters TOML — the scalars plus this setup's
-    /// word map. Refuses (returns false) when there is no word map to write.
-    bool writeReceiverParams(const std::filesystem::path& path, const ReceiverParams& params) const;
-
-    /// Writes a complete receiver-parameters file the way the Receiver SNR dialog
-    /// needs it: the word map comes from @p word_map_source when that names a
-    /// readable file, and otherwise is the default map for the params' receiver
-    /// counts — i.e. whichever map the stream would actually process with.
-    /// @return false with a reason in @p error if no usable map could be built or
-    ///         the file could not be written.
-    static bool saveReceiverParamsFile(const std::filesystem::path& path,
-                                       const ReceiverParams& params,
-                                       const std::filesystem::path& word_map_source,
-                                       int num_words_in_minor_frame,
-                                       std::string& error);
-
     int length() const; ///< @return Number of parameters.
 
     /// @return Mutable pointer to the parameter at index @p i.
@@ -125,36 +87,6 @@ public:
 
     /// Appends a parameter with the given name and zero-based word index.
     void addParameter(const std::string& name, int word);
-
-    /// Channel-position prefix for a 0-based channel index: "L"/"R"/"C" for the
-    /// known positions, "CH<n+1>" beyond them.
-    static std::string channelPrefix(int channel_index);
-
-    /// Canonical default parameter name "<prefix>_RCVR<receiver+1>" for a 0-based
-    /// channel and receiver index. The single source of truth shared by the main
-    /// processing run and the calibration extractor so their default word maps
-    /// agree on names (a divergence silently misattaches calibration profiles).
-    static std::string receiverParameterName(int channel_index, int receiver_index);
-
-    /// Inverse of receiverParameterName(): the 1-based receiver number carried by
-    /// a parameter name's "_RCVR<N>" suffix, or 0 when the name carries none.
-    ///
-    /// Returning 0 rather than failing is deliberate: a receiver-params TOML may
-    /// name its parameters anything at all, so callers that group by receiver
-    /// (the calibration summary) must degrade to listing the names themselves
-    /// rather than inventing a receiver number.
-    static int receiverIndexFromName(const std::string& name);
-
-    /// The number after the LAST "_RCVR" in a name, as written: 0 when there is no token or the text after it is not
-    /// a whole decimal number, and a negative number kept as it is. The series builder and the CSV column schema
-    /// read names with this (a hand-edited CSV header "_RCVR-7" was a receiver -7 in v2.14.2, and the recorded
-    /// digests of SeriesColumnSchema keep it so); receiverIndexFromName() is this, with a number that is not
-    /// positive made 0, because a calibration summary has no use for a receiver 0 or -7.
-    static int receiverNumberInName(const std::string& name);
-
-    /// The channel-position part of a "<prefix>_RCVR<N>" name ("L", "R", "C", …),
-    /// or the whole name when it carries no "_RCVR<N>" suffix.
-    static std::string channelPartOfName(const std::string& name);
 
     /// Builds the default receiver word map — NumReceivers x ReceiverChannels
     /// parameters named via receiverParameterName(), assigned sequential words —
@@ -180,31 +112,5 @@ private:
     static const std::vector<std::string> kSettingsGroups; ///< Reserved TOML group names to skip.
     std::vector<ParameterInfo> m_parameters;               ///< Ordered list of frame parameters.
 };
-
-/// `<appRoot>/settings/receiver_params/default.toml`, from UTF-8 @p appRoot: the word map a Receiver SNR stream falls
-/// back to when it names none.
-std::filesystem::path defaultReceiverParamsFile(const std::string& appRoot);
-
-/// What resolveReceiverWordMap() left to say besides the map.
-struct WordMapResolution
-{
-    std::string error;   ///< Why no map could be had; empty on success.
-    std::string warning; ///< Set when an unusable default file was passed over for the sequential map.
-};
-
-/**
- * @brief The word map of a Receiver SNR stream, into @p setup (emptied first), resolved the ONE way both passes use: the
- * main run's job builder and the calibration extractor. They must agree, because the extractor's profiles are matched to
- * the main run's channels by word (audit B10).
- *
- * A named @p explicitFile must exist and load ("... was not found." / "Failed to load ... Check the word map."). With
- * none named, @p defaultFile is loaded when it exists; when it is missing, or exists but cannot be used (the warning then
- * names it), the sequential map for @p numReceivers x @p receiverChannels is built. A map with no parameters is an error.
- *
- * @return false with the reason in @p out.error.
- */
-bool resolveReceiverWordMap(FrameSetup& setup, const std::filesystem::path& explicitFile,
-                            const std::filesystem::path& defaultFile, int numReceivers, int receiverChannels,
-                            int wordsInMinorFrame, WordMapResolution& out);
 
 #endif // FRAMESETUP_H

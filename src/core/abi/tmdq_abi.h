@@ -569,7 +569,7 @@ TMDQ_API int32_t tmdq_frame_sync_file_write(const char* path_utf8, const char* p
 /* --- the receiver-parameters file (revision 1) -------------------------------------------- */
 
 /// Reads a receiver-parameters file's scalar settings, as the Receiver SNR dialog loads it
-/// (FrameSetup::readReceiverParams). A key the file does not carry keeps its value from @p defaults, so a host
+/// (readReceiverParams). A key the file does not carry keeps its value from @p defaults, so a host
 /// passes what it is showing and gets back only what the file changes; a missing or unreadable file changes
 /// nothing. The counts are read from [Receivers] (Count, ChannelsPerReceiver), else from the older [Parameters]
 /// keys; a scale or a count that is not positive is ignored. @p defaults may be NULL for the application's defaults.
@@ -577,7 +577,7 @@ TMDQ_API int32_t tmdq_frame_sync_file_write(const char* path_utf8, const char* p
 TMDQ_API int32_t tmdq_receiver_params_read(const char* path_utf8, const tmdq_receiver_params* defaults,
                                            tmdq_receiver_params* out);
 /// Writes a complete receiver-parameters file, as the Receiver SNR dialog saves it
-/// (FrameSetup::saveReceiverParamsFile): the scalars, then a word map, which is @p word_map_source_utf8's when that
+/// (saveReceiverParamsFile): the scalars, then a word map, which is @p word_map_source_utf8's when that
 /// names a file that loads with at least one parameter in a frame of @p num_words_in_minor_frame words, and
 /// otherwise the default map for @p params' receiver counts. NULL or empty means the default map. The file is
 /// replaced, never merged. @return TMDQ_OK, TMDQ_ERR_BADARG (a NULL path or params, a struct_size that is too

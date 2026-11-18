@@ -117,7 +117,7 @@ Correctness/edge cases (off-by-one, overflow in the bit math — note `uint64_t`
 functions' `*_free`, the binding's `IDisposable`), threading (the core reports on its own threads; the app
 posts to the UI thread), naming and
 convention adherence (`docs/guide.md` "Coding Conventions"), and DRY against the single-source
-helpers (`FrameSetup::buildDefaultReceiverMap`, `channelPrefix`, `receiverParameterName`).
+helpers (`FrameSetup::buildDefaultReceiverMap`, `receivernames::channelPrefix`, `receivernames::receiverParameterName`).
 
 ## After review
 

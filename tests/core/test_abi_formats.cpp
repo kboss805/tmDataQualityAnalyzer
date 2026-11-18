@@ -1,6 +1,7 @@
 // The file formats through the C ABI (src/core/abi/abi_formats.cpp): the frame sync file, template matching, the CSV,
 // clock stamps, and the receiver parameters file (revision 1), each read and written like the core does.
 
+#include "receiverparamsfile.h"
 #include "test_abi_support.h"
 
 TEST_CASE("Abi: a frame sync file is read like the core")
@@ -466,7 +467,7 @@ TEST_CASE("Abi: a receiver parameters file is read like the core")
             tmdq_receiver_params out{};
             out.struct_size = sizeof(out);
             REQUIRE(tmdq_receiver_params_read(path.c_str(), &start, &out) == int(TMDQ_OK));
-            const ReceiverParams want = FrameSetup::readReceiverParams(textfile::pathFromUtf8(path), coreParams(start));
+            const ReceiverParams want = readReceiverParams(textfile::pathFromUtf8(path), coreParams(start));
             CHECK(describe(out) == describe(want));
             changed += describe(out) != describe(start);
         }
@@ -490,7 +491,7 @@ TEST_CASE("Abi: a receiver parameters file is read like the core")
 
 TEST_CASE("Abi: a receiver parameters file is saved like the core")
 {
-    // Each case saved through the ABI and through FrameSetup::saveReceiverParamsFile: the same verdict, the same
+    // Each case saved through the ABI and through saveReceiverParamsFile: the same verdict, the same
     // error text and the same bytes. Then what was saved reads back as the scalars that were saved.
     Scratch s;
     const std::string rasa = utf8Of(repoFile("settings/receiver_params/RASA.toml"));
@@ -515,7 +516,7 @@ TEST_CASE("Abi: a receiver parameters file is saved like the core")
         const int32_t status = tmdq_receiver_params_save(viaAbi.c_str(), &c.params, c.nullSource ? nullptr : c.source.c_str(), c.words);
         const std::string abiError = tmdq_last_error();
         std::string coreError;
-        const bool coreOk = FrameSetup::saveReceiverParamsFile(textfile::pathFromUtf8(viaCore), coreParams(c.params),
+        const bool coreOk = saveReceiverParamsFile(textfile::pathFromUtf8(viaCore), coreParams(c.params),
                                                                textfile::pathFromUtf8(c.source), c.words, coreError);
         CHECK((status == int(TMDQ_OK)) == coreOk);
         CHECK(slurp(viaAbi) == slurp(viaCore));
@@ -555,7 +556,7 @@ TEST_CASE("Abi: a receiver parameters file is saved like the core")
             fs::remove(textfile::pathFromUtf8(viaCore), ignored);
             const bool abiOk = tmdq_receiver_params_save(viaAbi.c_str(), &p, source.c_str(), words) == int(TMDQ_OK);
             std::string coreError;
-            const bool coreOk = FrameSetup::saveReceiverParamsFile(textfile::pathFromUtf8(viaCore), coreParams(p),
+            const bool coreOk = saveReceiverParamsFile(textfile::pathFromUtf8(viaCore), coreParams(p),
                                                                    textfile::pathFromUtf8(source), words, coreError);
             CHECK(abiOk == coreOk);
             CHECK(slurp(viaAbi) == slurp(viaCore));
