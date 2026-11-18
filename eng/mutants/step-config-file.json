@@ -1,0 +1,56 @@
+{
+  "suite": "native",
+  "args": [
+    "-tc=StepConfigFile: *"
+  ],
+  "mutants": [
+    {
+      "id": "C1",
+      "file": "src/core/src/stepconfigfile.cpp",
+      "old": "            if (textparse::asciiLower(key) == \"db\" && textparse::parseDouble(value, num))",
+      "new": "            if (key == \"db\" && textparse::parseDouble(value, num))",
+      "expect": "caught",
+      "note": "the key is matched with its case: `DB = 6` is not a level"
+    },
+    {
+      "id": "C2",
+      "file": "src/core/src/stepconfigfile.cpp",
+      "old": "    if (out.empty())\n    {\n        error = \"No [[Step]] entries found",
+      "new": "    if (out.size() > 1000000)\n    {\n        error = \"No [[Step]] entries found",
+      "expect": "caught",
+      "note": "a file with no steps is a success"
+    },
+    {
+      "id": "C3",
+      "file": "src/core/src/stepconfigfile.cpp",
+      "old": "    out.clear();\n\n    const TomlDocument doc",
+      "new": "    const TomlDocument doc",
+      "expect": "caught",
+      "note": "the output is not cleared first: a failed parse leaves the last file's steps"
+    },
+    {
+      "id": "C4",
+      "file": "src/core/src/stepconfigfile.cpp",
+      "old": "                step.db = num;\n",
+      "new": "",
+      "expect": "caught",
+      "note": "a step's level is never set: every step is 0 dB"
+    },
+    {
+      "id": "C5",
+      "file": "src/core/src/stepconfigfile.cpp",
+      "old": "return std::filesystem::is_regular_file(textfile::pathFromUtf8(utf8), ec);",
+      "new": "return std::filesystem::exists(textfile::pathFromUtf8(utf8), ec);",
+      "expect": "caught",
+      "note": "a directory where the step file should be is offered to the dialog"
+    },
+    {
+      "id": "C6",
+      "file": "src/core/src/stepconfigfile.cpp",
+      "old": "    if (!preferred.empty() && isFile(preferred))\n",
+      "new": "    if (!preferred.empty())\n",
+      "expect": "caught",
+      "note": "a stored step file that no longer exists is offered to the dialog"
+    }
+  ]
+}

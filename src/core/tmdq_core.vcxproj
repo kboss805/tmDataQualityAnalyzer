@@ -149,6 +149,7 @@
     <ClInclude Include="include\seriesbuilder.h" />
     <ClInclude Include="include\seriescolumnschema.h" />
     <ClInclude Include="include\seriesrange.h" />
+    <ClInclude Include="include\stepconfigfile.h" />
     <ClInclude Include="include\stepdetector.h" />
     <ClInclude Include="include\streamjobbuilder.h" />
     <ClInclude Include="include\templatematcher.h" />
@@ -193,6 +194,7 @@
     <ClCompile Include="src\receiverparamsfile.cpp" />
     <ClCompile Include="src\seriesbuilder.cpp" />
     <ClCompile Include="src\seriescolumnschema.cpp" />
+    <ClCompile Include="src\stepconfigfile.cpp" />
     <ClCompile Include="src\stepdetector.cpp" />
     <ClCompile Include="src\streamjobbuilder.cpp" />
     <ClCompile Include="src\templatematcher.cpp" />

@@ -147,6 +147,7 @@
     <ClCompile Include="test_receiverparamsfile.cpp" />
     <ClCompile Include="test_seriesbuild.cpp" />
     <ClCompile Include="test_seriescolumnschema.cpp" />
+    <ClCompile Include="test_stepconfigfile.cpp" />
     <ClCompile Include="test_stepdetector.cpp" />
     <ClCompile Include="test_streamjob.cpp" />
     <ClCompile Include="test_templatematcher.cpp" />
@@ -176,6 +177,7 @@
     <ClCompile Include="..\..\src\core\src\receiverparamsfile.cpp" />
     <ClCompile Include="..\..\src\core\src\seriesbuilder.cpp" />
     <ClCompile Include="..\..\src\core\src\seriescolumnschema.cpp" />
+    <ClCompile Include="..\..\src\core\src\stepconfigfile.cpp" />
     <ClCompile Include="..\..\src\core\src\stepdetector.cpp" />
     <ClCompile Include="..\..\src\core\src\streamjobbuilder.cpp" />
     <ClCompile Include="..\..\src\core\src\templatematcher.cpp" />

@@ -45,6 +45,7 @@
 #include "processedstreamdata.h"
 #include "seriesbuilder.h"
 #include "stepdetector.h"
+#include "stepconfigfile.h"
 #include "streamjobbuilder.h"
 #include "templatematcher.h"
 #include "test_support.h"
@@ -831,7 +832,7 @@ inline std::vector<double> shippedSteps()
 {
     std::vector<StepDefinition> steps;
     std::string error;
-    REQUIRE_MESSAGE(StepDetector::parseStepConfig(repoFile("settings/rcvr_cals/default.toml"), steps, error), error);
+    REQUIRE_MESSAGE(parseStepConfig(repoFile("settings/rcvr_cals/default.toml"), steps, error), error);
     std::vector<double> db;
     for (const StepDefinition& s : steps)
         db.push_back(s.db);

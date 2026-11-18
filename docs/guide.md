@@ -618,8 +618,9 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
    raw-affecting field of a run's parameters (the main run and the calibration extractor both go through it).
 9. **Stream job builder** (`streamjobbuilder`, the function `buildStreamJob`) - turns one stream's settings into a processing job: validates the pattern,
    mask and frame length, builds the word map (through `resolveReceiverWordMap`), applies the linear calibration and attaches step-calibration profiles, or says why it refuses.
-10. **StepDetector** (`stepdetector`) - *US5.3*: parses the `[[Step]]` step file and finds the step plateaus in a raw
-    series, building a per-channel `CalibrationProfile`.
+10. **StepDetector** (`stepdetector`) - *US5.3*: finds the step plateaus in a raw series, building a per-channel
+    `CalibrationProfile`; **`stepconfigfile`** reads the `[[Step]]` step file it pairs them with, and finds the one the
+    Extract Calibration dialog opens with (beside `framesyncfile` and `receiverparamsfile`).
 11. **CalibrationExtractor** (`calibrationextractor`, with `calibrationrequest`) - *US5.3*: a raw extraction over a
     calibration recording through the same reader and worker, then the step detector per channel, and the report.
 12. **TomlDocument** (`tomldocument`, with `textfile`) - the TOML subset every settings file uses, sections in file
@@ -1009,8 +1010,10 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
   raw-affecting field and no other, and the full sync mask.
 - **StreamJob** (`test_streamjob`) - one stream's settings into a job: validation and its messages, the word-map
   sources, the calibration and its profiles.
-- **StepDetector** (`test_stepdetector`) - the step file (against the parser it replaced, over 4,000 generated files),
-  plateau detection on clean, noisy, inverted, split, railed and saturated sweeps, and the interpolation and its clamps.
+- **StepDetector** (`test_stepdetector`) - plateau detection on clean, noisy, inverted, split, railed and saturated
+  sweeps, and the interpolation and its clamps.
+- **StepConfigFile** (`test_stepconfigfile`) - the step file (against the parser it replaced, over 4,000 generated files),
+  its encodings and non-ASCII paths, its error messages, and which step file the dialog opens with.
 - **CalibrationExtractor** and **CalibrationRequest** (`test_calibrationextractor`, `test_calibrationrequest`) - whole
   extractions of `step_cal` and the committed `agc_rnrz-l_trc_testfile` against recorded numbers, clips, the report's exact text in every
   scenario, the lifecycle and cancel; and the request built from the dialog's fields with its refusals.
