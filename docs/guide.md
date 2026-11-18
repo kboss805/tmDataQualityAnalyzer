@@ -619,8 +619,12 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
 9. **Stream job builder** (`streamjobbuilder`, the function `buildStreamJob`) - turns one stream's settings into a processing job: validates the pattern,
    mask and frame length, builds the word map (through `resolveReceiverWordMap`), applies the linear calibration and attaches step-calibration profiles, or says why it refuses.
 10. **StepDetector** (`stepdetector`) - *US5.3*: finds the step plateaus in a raw series, building a per-channel
-    `CalibrationProfile`; **`stepconfigfile`** reads the `[[Step]]` step file it pairs them with, and finds the one the
-    Extract Calibration dialog opens with (beside `framesyncfile` and `receiverparamsfile`).
+    `CalibrationProfile`. Its parts: **`stepplateaus`** (the derivative and its noise, the stable samples, the confirmed
+    plateaus and their levels, and `forEachMonotonicRun`, the one walk over a run of levels that moves one way, which the
+    full-sweep selection uses to take the first run long enough and the saturated-top fallback the longest) and
+    **`stepsaturated`** (the fallback: a partial profile over the steps that stayed in range of a sweep whose top railed);
+    **`stepconfigfile`** reads the `[[Step]]` step file it pairs them with, and finds the one the Extract Calibration dialog
+    opens with (beside `framesyncfile` and `receiverparamsfile`).
 11. **CalibrationExtractor** (`calibrationextractor`, with `calibrationrequest`) - *US5.3*: a raw extraction over a
     calibration recording through the same reader and worker, then the step detector per channel, and the report.
 12. **TomlDocument** (`tomldocument`, with `textfile`) - the TOML subset every settings file uses, sections in file
@@ -1012,6 +1016,9 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
   sources, the calibration and its profiles.
 - **StepDetector** (`test_stepdetector`) - plateau detection on clean, noisy, inverted, split, railed and saturated
   sweeps, and the interpolation and its clamps.
+- **StepPlateaus** (`test_stepplateaus`) - what counts as a run (changes above the threshold, one way; a reversal ends one
+  and starts the next; a visitor can stop the walk), the transition direction, the sort of a profile's points, the merge of
+  levels and the medians.
 - **StepConfigFile** (`test_stepconfigfile`) - the step file (against the parser it replaced, over 4,000 generated files),
   its encodings and non-ASCII paths, its error messages, and which step file the dialog opens with.
 - **CalibrationExtractor** and **CalibrationRequest** (`test_calibrationextractor`, `test_calibrationrequest`) - whole

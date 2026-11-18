@@ -12,6 +12,34 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The step detector is three units, and its run scan and sort are written once (follow-up audit S4, second part)
+
+`stepdetector.cpp` (832 lines) held the plateau primitives, the saturated-top fallback (about 330 lines) and `detect` in one
+file, with the walk over a run of levels that moves one way written twice and the sort of a profile's points written
+twice. The three are separate units now and the two copies are one each. No change of behaviour.
+
+- **`stepplateaus`** (`stepplateaus.h`, `stepplateaus.cpp`; namespace `stepplateaus`): the derivative and its live noise, the
+  stable samples, the confirmed plateaus, their levels and the merge of levels, the medians, and `transitionDirection`,
+  which were in the file's anonymous namespace; with them **`forEachMonotonicRun`** and **`sortByRawAvg`**.
+- **The one run walk.** `selectSweepStart` took the FIRST run at least `expected` long and `calibrateSaturatedTop` the
+  LONGEST run of any length, each with its own copy of the scan: where a run begins (a change above the threshold), how it
+  ends (a reversal or a change within the threshold), and that the next is looked for from its last value. That is
+  `forEachMonotonicRun` (a visitor that says continue or stop, the walk `tmatswalk.h` has for data sources); the two uses
+  are a visitor each. The sort lambda is `sortByRawAvg`.
+- **`stepsaturated`** (`stepsaturated.h`, `stepsaturated.cpp`): `calibrateSaturatedTop` with the dwell grid and the
+  measurement of dwells plateau detection missed, in `namespace stepsaturated`.
+- **`stepdetector.cpp`** is 261 lines: `selectSweepStart` and `detect`. Two function bodies written at column 0
+  (`selectSweepStart`'s, and the loop in `measureUnconfirmedDwells`) are indented as the rest.
+- **Tests.** `test_stepplateaus.cpp` (8 cases: what counts as a run, both directions, the threshold boundary, a stop, the
+  sort, the merge, the medians); the 46 `StepDetector` cases hold both uses of the walk through `detect`.
+- **Checked.** `step-plateaus.json` (new, 11 mutants: the walk ending at a sub-threshold change, looking for the next run
+  after the last value, not stopping when told, a run ending only at a sub-threshold change, a boundary change counted,
+  the sort descending, the merge keeping the earlier value, and in the two uses a run exactly `expected` long taken as too
+  short, the first levels of a run taken, the shortest run taken): 10 CAUGHT; **U3** (of two equally long runs the last
+  is taken, not the first) SURVIVES and is recorded so, because no test has two runs of one length in a saturated sweep, a
+  gap the move kept. Native 524 test cases, 0 warnings; managed 399 total (398 passed, 1 skipped) and app 725 total (691 passed, 34 not run); the soak (eng\run_soak.ps1, Release core, all 34 runs, the calibrated ones included): every CSV export byte for byte what v2.14.2 exported. Baseline: native 516 -> 524.
+- **Left of S4:** the lock-% expression written twice in `frameprocessor.cpp`.
+
 #### The step-config file is its own module (follow-up audit S4, first part)
 
 `stepdetector.cpp` (909 lines) held about 80 that have nothing to do with detecting plateaus: the reader of the `[[Step]]`
