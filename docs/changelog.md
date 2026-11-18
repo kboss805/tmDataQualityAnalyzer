@@ -12,6 +12,22 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Three kept mutants say what they now do (follow-up audit)
+
+The regression run over the moved ABI tests (the last change) showed three kept mutants whose recorded expectation no
+  longer held, the same on the unchanged main. `RepoFilesTests` checks that a mutant's text is still in its file, not
+  what the mutant does, so nothing had said so.
+
+- **`abi-boundary-guards.json` G1 and G2** (the run's and the calibration's wait without the exception guard) are now
+  **survived**, noted as equivalent: since #315 a wait from the run's own callback, which joined its own thread and
+  threw, is refused before the guard (`reader-lifetime.json` holds that refusal), so nothing a caller can do makes
+  `wait()` throw. The guard stays as the exported function's last line of defence.
+- **`plot-envelope-index.json` N3** (the index never used) did not compile: `if (false && ...)` is a warning, which is
+  an error here. It is `index->size() == n + 1` now, which never holds and so has the same effect.
+- **Checked.** The three through `eng\mutate.ps1`: G1 and G2 SURVIVED, N3 CAUGHT, each as its list now says; managed 398
+  passed / 1 skipped. Only the two lists changed; no source or test did, and no baseline moved. The other kept lists
+  were not re-run for expectations here: any that has drifted the same way is found the same way, by running it.
+
 #### test_abi.cpp is six files, one for each part of the ABI (follow-up audit Q5, native half)
 
 `tests/core/test_abi.cpp` had grown to 4,213 lines: 960 of fixtures and helpers, then 63 cases for seven ABI sources,

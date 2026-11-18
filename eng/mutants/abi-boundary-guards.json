@@ -7,16 +7,16 @@
       "file": "src/core/abi/abi_run.cpp",
       "old": "        (void)tmdq::guarded(\"tmdq_run_wait\", [&]() -> int32_t {\n            run->runner.wait();\n            return TMDQ_OK;\n        });",
       "new": "        run->runner.wait();",
-      "expect": "caught",
-      "note": "the run's wait unguarded: from `finished` it joins its own thread and the exception leaves the exported function"
+      "expect": "survived",
+      "note": "equivalent since #315, and kept as a record: a wait from the run's own callback, which joined its own thread and threw, is refused before the guard (reader-lifetime.json holds that refusal), so nothing a caller can do makes runner.wait() throw; the guard is the exported function's last line of defence"
     },
     {
       "id": "G2",
       "file": "src/core/abi/abi_calibration.cpp",
       "old": "        (void)tmdq::guarded(\"tmdq_calibration_wait\", [&]() -> int32_t {\n            calibration->extractor.wait();\n            return TMDQ_OK;\n        });",
       "new": "        calibration->extractor.wait();",
-      "expect": "caught",
-      "note": "the calibration's wait unguarded, likewise"
+      "expect": "survived",
+      "note": "equivalent since #315, likewise"
     },
     {
       "id": "G3",
