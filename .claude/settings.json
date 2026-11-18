@@ -3,21 +3,6 @@
     "deny": [
       "Edit(third_party/irig106/**)",
       "Write(third_party/irig106/**)"
-    ],
-    "allow": [
-      "Bash(git status:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
-      "Bash(git add:*)",
-      "Bash(git rm:*)",
-      "Bash(gh pr view:*)",
-      "Bash(gh pr diff:*)",
-      "Bash(gh pr list:*)",
-      "Bash(gh pr status:*)",
-      "Bash(gh pr checks:*)",
-      "Bash(gh pr create:*)",
-      "Bash(gh run list:*)",
-      "Bash(gh run view:*)"
     ]
   }
 }

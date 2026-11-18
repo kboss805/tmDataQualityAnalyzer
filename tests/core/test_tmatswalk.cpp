@@ -41,7 +41,7 @@ struct Tree
             {
                 SuRDataSource& source = sources[next++];
                 text.push_back(track);
-                source.szTrackNumber = track.empty() ? nullptr : text.back().data();
+                source.szTrackNumber = (track == "<none>") ? nullptr : text.back().data();
                 if (previous != nullptr) previous->psuNext = &source;
                 else records[r].psuFirstDataSource = &source;
                 previous = &source;
@@ -89,8 +89,8 @@ TEST_CASE("TmatsWalk: a tree with no R records, or R records with no data source
 
 TEST_CASE("TmatsWalk: a track number is the channel the data source names, or none")
 {
-    // Absent (a null field, here an empty owner) and negative name no channel; text reads as 0, as atoi reads it; digits
-    // read as the number, with the leading space and zeros atoi skips.
-    const Tree tree({{"", "-1", "-27", "0", "5", "05", " 12", "abc", "7x"}});
-    CHECK(walked(tree) == std::vector<std::string>{"-", "-", "-", "0", "5", "5", "12", "0", "7"});
+    // Absent (a null field, "<none>" here), empty, blank, negative, text, a number with something after it and one too big
+    // for an int name no channel; digits read as the number, with surrounding whitespace, a leading '+' and zeros.
+    const Tree tree({{"<none>", "", " ", "-1", "-27", "abc", "7x", "99999999999", "0", "5", "05", " 12 ", "+5"}});
+    CHECK(walked(tree) == std::vector<std::string>{"-", "-", "-", "-", "-", "-", "-", "-", "0", "5", "5", "12", "5"});
 }

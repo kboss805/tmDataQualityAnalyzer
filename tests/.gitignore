@@ -16,3 +16,7 @@ data/test files/*
 # Real step-calibration recording (6.8 MB) with receivers far out of alignment -
 # pins the calibration-import resilience fixes against the file that exposed them.
 !data/test files/step_cal, example.ch10
+
+# Output of the Qt-era test runner (QtTest's results*.txt): nothing writes here any more, so a leftover folder is
+# not a change to commit.
+output/

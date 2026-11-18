@@ -268,10 +268,6 @@ internal static unsafe partial class Native
     // --- the chart's geometry (revision 2)
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
-    internal static partial int tmdq_chart_geometry(double* xs, double* ys, int count, int sortedX, ChartViewNative* view, out IntPtr geometry);
-
-    [LibraryImport(Dll)]
-    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
     internal static partial int tmdq_geometry_info_get(IntPtr geometry, GeometryInfoNative* info);
 
     [LibraryImport(Dll)]

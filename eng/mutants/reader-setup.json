@@ -63,8 +63,8 @@
     {
       "id": "S8",
       "file": "src/core/include/tmatswalk.h",
-      "old": "    if (track < 0)\n",
-      "new": "    if (track < -1000000)\n",
+      "old": "    if (!textparse::parseInteger(std::string(source.szTrackNumber), track) || track < 0)\n",
+      "new": "    if (!textparse::parseInteger(std::string(source.szTrackNumber), track) || track < -1000000)\n",
       "expect": "caught",
       "note": "a negative track number names a channel"
     },
@@ -131,6 +131,14 @@
       "new": "        m_report.error(\"File read error.\");\n        return false;\n    }",
       "expect": "caught",
       "note": "the text of a failed packet read in a run"
+    },
+    {
+      "id": "S17",
+      "file": "src/core/include/tmatswalk.h",
+      "old": "    if (!textparse::parseInteger(std::string(source.szTrackNumber), track) || track < 0)\n",
+      "new": "    if (false || track < 0)\n",
+      "expect": "caught",
+      "note": "a track number that is not a whole decimal number (text, empty, a number with something after it) names channel 0, as atoi read it"
     }
   ]
 }
