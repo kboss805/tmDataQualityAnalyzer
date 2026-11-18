@@ -295,17 +295,7 @@ bool FrameProcessor::process(const ProcessingParams& params, const FrameSetup* f
     // Flush the last set of accumulated samples.
     if (state.n_samples > 0)
     {
-        double lock_pct = 0.0;
-        if (state.total_bits_in_window > 0)
-        {
-            // valid_bits_in_window is only incremented together with
-            // total_bits_in_window and only while in lock, so it can never exceed
-            // it — lock_pct is already bounded at 100, no clamp needed (matching the
-            // in-loop computation above).
-            lock_pct = (static_cast<double>(state.valid_bits_in_window) /
-                        static_cast<double>(state.total_bits_in_window)) * 100.0;
-        }
-        recordTimeSample(state.current_time_sample, state.n_samples, lock_pct,
+        recordTimeSample(state.current_time_sample, state.n_samples, state.lockPercent(),
                          static_cast<double>(state.accumulated_missed_frames), enabled_params, state.channel_sums);
         state.rows_written++;
     }
@@ -336,13 +326,6 @@ void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
 {
     while (s.next_time_sample < current_time_eval)
     {
-        double lock_pct = 0.0;
-        if (s.total_bits_in_window > 0)
-        {
-            lock_pct = (static_cast<double>(s.valid_bits_in_window) /
-                        static_cast<double>(s.total_bits_in_window)) * 100.0;
-        }
-
         if (s.total_bits_in_window > 0)
         {
             // Bits were processed for this window — real data, whether or not any
@@ -352,7 +335,7 @@ void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
             // data-present dropouts double-counts and biases long-frame streams,
             // whose windows more often contain zero locked frames than short-frame
             // streams with many more frames per window.
-            recordTimeSample(s.current_time_sample, s.n_samples, lock_pct,
+            recordTimeSample(s.current_time_sample, s.n_samples, s.lockPercent(),
                              static_cast<double>(s.accumulated_missed_frames), enabled_params, s.channel_sums);
         }
         else

@@ -12,6 +12,20 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The lock percentage is computed once (follow-up audit S4, third part)
+
+`FrameProcessor` computed a window's lock percentage in two places, with the same expression: when a window closes in the
+stream (`closeElapsedWindows`) and when the last, partly filled one is flushed at the end of the run. It is
+`ScanState::lockPercent()` now, beside the two counters it is made from. No change of behaviour.
+
+- **`ScanState::lockPercent()`**: the share of the window's bits seen in lock, 0 when it saw none. The valid bits are only
+  counted together with the total and only while in lock, so it never exceeds 100 and needs no clamp (the note that said so
+  at the flush moved with it). The two sites call it.
+- **Checked.** `lock-percent.json` (new, 4 mutants: scaled by 99, the share out of lock, the flushed window reporting no
+  lock, every closed window reporting full lock): 4 of 4 CAUGHT. Native 524 test cases, 0 warnings; managed 399 total (398 passed, 1 skipped) and app
+  725 total (691 passed, 34 not run); the soak (eng\run_soak.ps1, Release core, all 34 runs): every CSV export byte for byte what v2.14.2 exported. Baselines: unchanged.
+- This finishes S4 (its first two parts: the step-config file, and the plateau and saturated-top units).
+
 #### The step detector is three units, and its run scan and sort are written once (follow-up audit S4, second part)
 
 `stepdetector.cpp` (832 lines) held the plateau primitives, the saturated-top fallback (about 330 lines) and `detect` in one
