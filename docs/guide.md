@@ -1052,8 +1052,12 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   gestures), `PlotDraftTests` (the draft a gesture - the wheel, a drag, a held pan or zoom key - paints on a heavy plot
   and the full picture after it, a dropout in both, the draft's lines and band outlines one device pixel thick at 2x and 3x
   display scaling, an export never drafted, each long series' index and when it goes, the cached layer and the indexes
-  released when the chart leaves the window), `AroundTheChartTests` (legend and what rebuilds it, the zoom rule, chips,
-  menu, keys, Customize View, prompts, and which notifications repaint the data layer).
+  released when the chart leaves the window), and five classes around the chart, which share `Support\AroundTheChartSupport`:
+  `ChartPlotStateTests` (the plot's state the legend, chips and menu read, and which notifications repaint the data
+  layer), `ChartMenuCommandTests` (the right-click menu's commands, asked through a fake of the prompts),
+  `CustomizeViewStateTests` (Customize View's rows and what a choice in it does), `ChartViewTests` (the legend and what
+  rebuilds it, the zoom rule, chips, menu, keys, read from the controls and from rendered frames) and
+  `ChartPromptWindowTests` (each prompt's window: OK answers, Cancel does not).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `StatusBarTests` (the bar's place, colour and hairline, its marks, its trimming), `MenuStyleTests` (no icons, the accent row and white text, the dimmed shortcut, the row height and inset), `DialogAnatomyTests`

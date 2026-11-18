@@ -88,7 +88,7 @@
       "file": "src/TmDq.App/Platform/WindowPlotPrompts.cs",
       "old": "        customize.AskThrough(new WindowPlotPrompts(window));\n",
       "new": "",
-      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AroundTheChartTests"],
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ChartPlotStateTests", "-class", "TmDq.App.Tests.ChartMenuCommandTests", "-class", "TmDq.App.Tests.CustomizeViewStateTests", "-class", "TmDq.App.Tests.ChartViewTests", "-class", "TmDq.App.Tests.ChartPromptWindowTests"],
       "expect": "caught",
       "note": "Customize View's own questions (a colour, a name) are asked over the main window, not over the dialog"
     },
@@ -97,7 +97,7 @@
       "file": "src/TmDq.App/Views/Plot/PlotView.axaml.cs",
       "old": "get => _prompts ??= new NoPlotPrompts();",
       "new": "get => _prompts ??= null!;",
-      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AroundTheChartTests"],
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ChartPlotStateTests", "-class", "TmDq.App.Tests.ChartMenuCommandTests", "-class", "TmDq.App.Tests.CustomizeViewStateTests", "-class", "TmDq.App.Tests.ChartViewTests", "-class", "TmDq.App.Tests.ChartPromptWindowTests"],
       "expect": "caught",
       "note": "a view with no prompts handed in has none to ask through"
     }
