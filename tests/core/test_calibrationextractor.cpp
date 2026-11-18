@@ -26,6 +26,7 @@
 #include "receivernames.h"
 #include "framesync.h"
 #include "stepdetector.h"
+#include "stepconfigfile.h"
 #include "streamjobbuilder.h"
 #include "test_support.h"
 
@@ -291,7 +292,7 @@ void buildRealRequest(CalibrationExtractor::Request& req)
 
     std::vector<StepDefinition> steps;
     std::string step_error;
-    REQUIRE_MESSAGE(StepDetector::parseStepConfig(repoFile(fs::path("settings") / "rcvr_cals" / "default.toml"), steps,
+    REQUIRE_MESSAGE(parseStepConfig(repoFile(fs::path("settings") / "rcvr_cals" / "default.toml"), steps,
                                                   step_error),
                     step_error);
     REQUIRE_FALSE(steps.empty());
@@ -317,7 +318,7 @@ void buildStepCalRequest(CalibrationExtractor::Request& req, const fs::path& ste
     REQUIRE_MESSAGE(reader.loadChannels(file), reader.lastError());
     std::vector<StepDefinition> steps;
     std::string step_error;
-    REQUIRE_MESSAGE(StepDetector::parseStepConfig(repoFile(step_toml), steps, step_error),
+    REQUIRE_MESSAGE(parseStepConfig(repoFile(step_toml), steps, step_error),
                     step_toml.string() << ": " << step_error);
     req.calFilename   = file;
     req.timeChannelId = reader.getCurrentTimeChannelID();

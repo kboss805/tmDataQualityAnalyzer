@@ -33,6 +33,7 @@
 #include "packetqueue.h"
 #include "processedstreamdata.h"
 #include "stepdetector.h"
+#include "stepconfigfile.h"
 #include "test_support.h"
 
 using namespace tmdq_test;
@@ -928,7 +929,7 @@ TEST_CASE("FrameProcessor: a calibration round trip on a real recording produces
 
     std::vector<StepDefinition> steps;
     std::string step_error;
-    REQUIRE_MESSAGE(StepDetector::parseStepConfig(repoFile(fs::path("settings") / "rcvr_cals" / "default.toml"), steps,
+    REQUIRE_MESSAGE(parseStepConfig(repoFile(fs::path("settings") / "rcvr_cals" / "default.toml"), steps,
                                                   step_error),
                     step_error);
     REQUIRE_FALSE(steps.empty());

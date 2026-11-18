@@ -12,6 +12,24 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The step-config file is its own module (follow-up audit S4, first part)
+
+`stepdetector.cpp` (909 lines) held about 80 that have nothing to do with detecting plateaus: the reader of the `[[Step]]`
+file and the choice of which step file the Extract Calibration dialog opens with. They are `stepconfigfile` now, free
+functions beside `framesyncfile` and `receiverparamsfile`. No change of behaviour: the code moved as it was, with its tests.
+
+- **`stepconfigfile`** (`stepconfigfile.h`, `stepconfigfile.cpp`): `parseStepConfig` and `initialStepConfigPath`, which were
+  static members of `StepDetector`. `stepdetector.cpp` is 832 lines and no longer includes `textfile.h`, `textparse.h`
+  or `tomldocument.h`. The ABI (`abi_calibration.cpp`), five native test files and three comments name the new home.
+- **Tests.** `test_stepconfigfile.cpp` (15 cases, now `StepConfigFile: ...`, with the parser it replaced kept as an oracle
+  over 4,000 generated files); `test_stepdetector.cpp` keeps its other 46.
+- **Checked.** `step-config-file.json` (new, 6 mutants: the key matched with its case, a file with no steps taken for a
+  success, the output not cleared first, a level never set, a directory taken for the step file, a stored step file that
+  no longer exists offered): 6 of 6 CAUGHT. Native 516 test cases, 0 warnings; managed 399 total (398 passed, 1 skipped) and app 725 total (691 passed, 34 not run).
+  Baselines: unchanged.
+- **Left of S4:** the saturated-top fallback and the plateau primitives in `stepdetector.cpp`, with the monotonic-run scan
+  and the sort each written twice, and the lock-% expression written twice in `frameprocessor.cpp`; each its own change.
+
 #### `FrameSetup` is the word map: the receiver-parameters file and the naming rules are modules of their own (follow-up audit S2, second part)
 
 `FrameSetup` was the word-map container, the reader and writer of the receiver-parameters file, the naming rules for

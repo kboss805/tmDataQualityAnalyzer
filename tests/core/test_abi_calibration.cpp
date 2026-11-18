@@ -8,7 +8,7 @@ TEST_CASE("Abi: the step file is read like the core")
     const std::string path = rootUtf8() + "/settings/rcvr_cals/default.toml";
     std::vector<StepDefinition> want;
     std::string error;
-    REQUIRE_MESSAGE(StepDetector::parseStepConfig(textfile::pathFromUtf8(path), want, error), error);
+    REQUIRE_MESSAGE(parseStepConfig(textfile::pathFromUtf8(path), want, error), error);
     REQUIRE(want.size() > 5);
 
     tmdq_steps* steps = nullptr;
@@ -25,14 +25,14 @@ TEST_CASE("Abi: the step file is read like the core")
     tmdq_steps* none = reinterpret_cast<tmdq_steps*>(std::uintptr_t{1});
     std::vector<StepDefinition> ignored;
     const std::string missing = tempUtf8() + "/tst_abi_no_such_steps.toml";
-    REQUIRE(!StepDetector::parseStepConfig(textfile::pathFromUtf8(missing), ignored, error));
+    REQUIRE(!parseStepConfig(textfile::pathFromUtf8(missing), ignored, error));
     CHECK(tmdq_steps_parse(missing.c_str(), &none) == int(TMDQ_ERR_PREPARE));
     REQUIRE(none == nullptr);
     CHECK(std::string(tmdq_last_error()) == error);
 
     Scratch dir;
     const std::string emptyPath = writeFile(dir.filePath("empty.toml"), "# no steps here\n");
-    REQUIRE(!StepDetector::parseStepConfig(textfile::pathFromUtf8(emptyPath), ignored, error));
+    REQUIRE(!parseStepConfig(textfile::pathFromUtf8(emptyPath), ignored, error));
     CHECK(tmdq_steps_parse(emptyPath.c_str(), &none) == int(TMDQ_ERR_PREPARE));
     CHECK(std::string(tmdq_last_error()) == error);
 
@@ -48,7 +48,7 @@ TEST_CASE("Abi: the step file is read like the core")
 TEST_CASE("Abi: the initial step file path is written snprintf-style")
 {
     const std::string root = rootUtf8();
-    const std::string want = StepDetector::initialStepConfigPath(root, std::string());
+    const std::string want = initialStepConfigPath(root, std::string());
     REQUIRE_MESSAGE(!want.empty(), "the shipped default step file should be found under the project root");
 
     // Measuring, then writing exactly, then writing into a buffer that is too small.
@@ -66,7 +66,7 @@ TEST_CASE("Abi: the initial step file path is written snprintf-style")
     const std::string preferred = root + "/settings/rcvr_cals/TRC.toml";
     std::vector<char> big(512, 'x');
     REQUIRE(tmdq_step_config_initial_path(root.c_str(), preferred.c_str(), big.data(), int(big.size())) > 0);
-    CHECK(std::string(big.data()) == StepDetector::initialStepConfigPath(root, preferred));
+    CHECK(std::string(big.data()) == initialStepConfigPath(root, preferred));
     CHECK(std::string(big.data()) == preferred);
     std::fill(big.begin(), big.end(), 'x');
     tmdq_step_config_initial_path(root.c_str(), (root + "/no/such.toml").c_str(), big.data(), int(big.size()));
@@ -74,7 +74,7 @@ TEST_CASE("Abi: the initial step file path is written snprintf-style")
 
     // No app root and nothing preferred: empty.
     std::fill(big.begin(), big.end(), 'x');
-    REQUIRE(tmdq_step_config_initial_path(nullptr, nullptr, big.data(), int(big.size())) == int(StepDetector::initialStepConfigPath(std::string(), std::string()).size()));
+    REQUIRE(tmdq_step_config_initial_path(nullptr, nullptr, big.data(), int(big.size())) == int(initialStepConfigPath(std::string(), std::string()).size()));
 
     // A buffer and capacity that do not make sense are an error, not a write.
     CHECK(tmdq_step_config_initial_path(root.c_str(), nullptr, nullptr, 10) == -1);

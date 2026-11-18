@@ -2,7 +2,7 @@
  * @file abi_calibration.cpp
  * @brief Step files and calibration extraction, through the C ABI.
  *
- * Only translation. Reading a step file is `StepDetector::parseStepConfig`; turning the dialog's inputs into the
+ * Only translation. Reading a step file is `parseStepConfig`; turning the dialog's inputs into the
  * extractor's request (the sync text decoded like the main run, the default word map resolved like the main
  * run) is `buildCalibrationRequest`; the extraction itself is `CalibrationExtractor`. The rules are theirs, not
  * this file's, so the extraction cannot disagree with the main run about the bitstream or the word map.
@@ -22,6 +22,7 @@
 #include "calibrationprofile.h"
 #include "calibrationrequest.h"
 #include "stepdetector.h"
+#include "stepconfigfile.h"
 
 namespace {
 
@@ -81,7 +82,7 @@ int32_t tmdq_steps_parse(const char* path_utf8, tmdq_steps** out)
     return tmdq::guarded("tmdq_steps_parse", [&]() -> int32_t {
         std::vector<StepDefinition> steps;
         std::string error;
-        if (!StepDetector::parseStepConfig(tmdq::pathFromUtf8(path_utf8), steps, error))
+        if (!parseStepConfig(tmdq::pathFromUtf8(path_utf8), steps, error))
         {
             tmdq::setError(error.empty() ? std::string("the step file could not be read") : error);
             return TMDQ_ERR_PREPARE;
@@ -108,7 +109,7 @@ int32_t tmdq_step_config_initial_path(const char* app_root_utf8, const char* pre
     tmdq::clearError();
     int32_t length = -1;
     const int32_t status = tmdq::guarded("tmdq_step_config_initial_path", [&]() -> int32_t {
-        length = tmdq::copyText(StepDetector::initialStepConfigPath(tmdq::textOf(app_root_utf8), tmdq::textOf(preferred_utf8)),
+        length = tmdq::copyText(initialStepConfigPath(tmdq::textOf(app_root_utf8), tmdq::textOf(preferred_utf8)),
                                 buffer, capacity);
         if (length < 0)
         {
