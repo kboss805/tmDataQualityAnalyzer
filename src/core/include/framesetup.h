@@ -29,7 +29,6 @@ struct ParameterInfo
     int word = -1;              ///< Zero-based word index within the minor frame.
     double slope = 0.0;         ///< Calibration slope (dB per raw count).
     double scale = 0.0;         ///< Calibration offset applied before slope.
-    double sample_sum = 0.0;    ///< Running sum of RAW counts in the window; calibration is applied once to the windowed average.
     CalibrationProfile profile; ///< Optional non-linear step calibration (US5.3); linear math used when invalid.
 };
 

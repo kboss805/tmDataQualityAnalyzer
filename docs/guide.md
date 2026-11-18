@@ -598,7 +598,8 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
 4. **FrameProcessor** (`frameprocessor`) - the per-stream worker: drains its queue, runs the bit-serial frame-sync
    scanner (acquire and lock, off-phase rejection, bit-span lock %), and accumulates lock %, missed frames and (Receiver
    SNR) calibrated channel values into a `ProcessedStreamData`; derandomizes and inverts as told, and applies the linear
-   slope and offset or a non-linear `CalibrationProfile` per channel.
+   slope and offset or a non-linear `CalibrationProfile` per channel. It reads its word map through a `const FrameSetup*`
+   and never changes it: the window's running sums of raw counts are the scan's own (`ScanState::channel_sums`).
 5. **PipelineRunner** (`pipelinerunner`) - owns a run's lifecycle: the queues, the reader and one worker thread per
    stream, joined before it reports the end. Its input is a `StreamJob` per stream: the validated `ProcessingParams` and
    the shared `FrameSetup`.

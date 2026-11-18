@@ -110,7 +110,7 @@ void FrameSetup::addParameter(const std::string& name, int word)
     ParameterInfo parameter;
     parameter.name = name;
     parameter.word = word;
-    // slope/scale/sample_sum default to 0 via NSDMIs
+    // slope/scale default to 0 via NSDMIs
 
     m_parameters.push_back(parameter);
 }
@@ -133,7 +133,6 @@ void FrameSetup::applyLinearCalibration(int polarity_index, int slope_index, dou
         {
             param.scale = voltage_lower / (voltage_upper - voltage_lower) * PCMConstants::kMaxRawSampleValue;
         }
-        param.sample_sum = 0;
     }
 }
 

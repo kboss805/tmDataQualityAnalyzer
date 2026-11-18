@@ -143,13 +143,12 @@ TEST_CASE("FrameSetup: addParameter appends an enabled parameter with nothing el
     CHECK(p->word == 5);
     CHECK(p->slope == 0.0);
     CHECK(p->scale == 0.0);
-    CHECK(p->sample_sum == 0.0);
     CHECK(!p->profile.valid);
 
-    // The mutable overload is the same parameter, so a worker's running sum lands where the reader sees it.
-    fs.getParameter(1)->sample_sum = 42.0;
+    // The mutable overload is the same parameter, so a change made through it is seen through the const one.
+    fs.getParameter(1)->slope = 42.0;
     const FrameSetup& view = fs;
-    CHECK(view.getParameter(1)->sample_sum == 42.0);
+    CHECK(view.getParameter(1)->slope == 42.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -169,7 +168,6 @@ TEST_CASE("FrameSetup: tryLoadingFile reads a valid file")
     CHECK(p0->word == 0);  // TOML Word=1, stored as 0
     CHECK(p0->slope == 0.0);
     CHECK(p0->scale == 0.0);
-    CHECK(p0->sample_sum == 0.0);
 
     const ParameterInfo* p1 = fs.getParameter(1);
     REQUIRE(p1 != nullptr);
@@ -539,14 +537,12 @@ TEST_CASE("FrameSetup: the linear calibration maps the raw range onto the voltag
         FrameSetup fs;
         fs.addParameter("A", 0);
         fs.addParameter("B", 1);
-        fs.getParameter(0)->sample_sum = 123.0;
         fs.applyLinearCalibration(c.polarity, c.slope_index, c.scale_dB_per_V);
         for (int i = 0; i < fs.length(); i++)
         {
             const ParameterInfo* p = fs.getParameter(i);
             CHECK(p->slope == doctest::Approx(c.slope).epsilon(1e-12));
             CHECK(p->scale == doctest::Approx(c.scale).epsilon(1e-12));
-            CHECK(p->sample_sum == 0.0);       // a fresh window
         }
         // What the worker computes from a raw count: (raw + scale) * slope, so the two ends of the raw range land on
         // the two ends of the dB range in the order polarity says.

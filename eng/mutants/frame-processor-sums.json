@@ -1,0 +1,40 @@
+{
+  "suite": "native",
+  "args": [
+    "-tc=FrameProcessor: *"
+  ],
+  "mutants": [
+    {
+      "id": "W1",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "        channel_sums[i] = 0;\n",
+      "new": "",
+      "expect": "caught",
+      "note": "a window's sum is not cleared when the window closes: every window after the first averages all before it"
+    },
+    {
+      "id": "W2",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "                        s.channel_sums[i] += static_cast<double>(raw_value);",
+      "new": "                        s.channel_sums[0] += static_cast<double>(raw_value);",
+      "expect": "caught",
+      "note": "every word is summed into the first channel"
+    },
+    {
+      "id": "W3",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "    state.channel_sums.assign(enabled_params.size(), 0.0);",
+      "new": "    state.channel_sums.assign(enabled_params.size(), 1000.0);",
+      "expect": "caught",
+      "note": "a run starts with a sum already in every channel"
+    },
+    {
+      "id": "W4",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "            const double mean_raw = channel_sums[i] / n_samples;",
+      "new": "            const double mean_raw = channel_sums[0] / n_samples;",
+      "expect": "caught",
+      "note": "every channel reports the first channel's average"
+    }
+  ]
+}
