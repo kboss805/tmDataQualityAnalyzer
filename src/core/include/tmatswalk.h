@@ -9,10 +9,12 @@
 #ifndef TMATSWALK_H
 #define TMATSWALK_H
 
-#include <cstdlib>
 #include <optional>
+#include <string>
 
 #include "i106_decode_tmats.h"
+
+#include "textparse.h"
 
 namespace tmatswalk {
 
@@ -42,9 +44,11 @@ void forEachDataSource(const Irig106::SuTmatsInfo& info, Visit&& visit)
 /**
  * @brief The channel a data source is recorded on (its TMATS track number), or no value if it names none.
  *
- * A data source with no track number names none, and neither does a negative one: a channel id is not negative, and a
- * negative number would index out of bounds. Text reads as 0, as `atoi` reads it - a malformed number is not told from
- * channel 0 here.
+ * A data source with no track number names none, and neither does one that is not a whole decimal number (empty, text,
+ * a number with something after it, one too big for an int) or that is negative: a channel id is not negative, and a
+ * negative number would index out of bounds. The number is read as the rest of the application reads one
+ * (`textparse::parseInteger`: surrounding whitespace and a leading '+' are fine). It was read with `atoi`, which reads
+ * "abc" and an empty field as channel 0, so a malformed track number named the first channel.
  */
 [[nodiscard]] inline std::optional<int> trackNumber(const Irig106::SuRDataSource& source)
 {
@@ -52,8 +56,8 @@ void forEachDataSource(const Irig106::SuTmatsInfo& info, Visit&& visit)
     {
         return std::nullopt;
     }
-    const int track = atoi(source.szTrackNumber);   // NOLINT(bugprone-unchecked-string-to-number-conversion): see above: text is 0
-    if (track < 0)
+    int track = 0;
+    if (!textparse::parseInteger(std::string(source.szTrackNumber), track) || track < 0)
     {
         return std::nullopt;
     }

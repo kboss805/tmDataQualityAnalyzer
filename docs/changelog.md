@@ -12,6 +12,46 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The loose ends of the follow-up audit (D6, A4, T12, a TMATS track number, a stray folder)
+
+What was left after the queue: each checked to still be real before it was changed, and three decided with the owner.
+
+- **A4, build hardening.** `SDLCheck` is on in both native projects and control flow guard (`/guard:cf`) in Release, for the
+  DLL and for the test executable that compiles the same sources. Measured first: identical Release builds with and
+  without, the throughput bench alternated three times each, pinned to the performance cores - the 4-stream run took a
+  median 11.6 s hardened against 12.1 s before, with under 1% between runs. The hardened build was not slower; the 5% is
+  a code-layout effect, not a benefit of the flags. `dumpbin /loadconfig` shows a real guard table in the hardened
+  Release DLL (180 targets) and in the hardened test executable (2,855), and none in the unhardened executable. The DLL reads recordings whose bytes nobody here controls, and control flow
+  guard makes a corrupted indirect call harder to turn into a jump to code of an attacker's choice; `/sdl` adds a few
+  security warnings, which are errors here already, and a few runtime guards (`/GS` was on).
+- **T12.** `.claude/.claudeignore` is deleted, with the exception in `.gitignore` that tracked it: Claude Code does not read
+  such a file, and the one protection that matters, no edits to `third_party/irig106`, is the deny rule in
+  `.claude/settings.json`. The `allow` rules there (all `Bash(...)`, from before the project used Claude Code) are
+  removed at the owner's request; the deny rules stay.
+- **D6.** The P/Invoke declaration of `tmdq_chart_geometry` in `Interop/Native.cs` is removed: nothing in the binding or its
+  tests called it (the chart calls `tmdq_chart_geometry_indexed`). The export stays in the ABI, whose C++ tests use it.
+  `tmdq_series_index_count` stays: `HandleTests` calls it.
+- **A TMATS track number is a whole decimal number, or none** (behaviour change). `tmatswalk::trackNumber` read the field
+  with `atoi`, which reads text, an empty field and `7x` as channel 0 (and is undefined on a number too big for an int), so
+  a malformed track number named the first channel in both readers. It reads it with `textparse::parseInteger` now:
+  text, empty, trailing text, out of range and negative name no channel; surrounding whitespace and a leading `+` are
+  fine. Pinned by `TmatsWalk` (13 values) and two channel-listing rows, `track-text` and `track-with-trailing-text`
+  (before this change they listed channel 0); `reader-setup.json` S8 is re-anchored and S17 added.
+- **`tests/.gitignore`** ignores `output/`, the folder of the Qt-era test runner (`results*.txt`), which nothing writes to
+  and git never tracked.
+- **Checked.** `reader-setup.json` S8, S12 and S17 CAUGHT. Native 524 test cases, 0 warnings, on the hardened build; managed
+  399 total (398 passed, 1 skipped) and app 725 total (691 passed, 34 not run); the soak on the hardened Release DLL (eng\run_soak.ps1, all 34 runs): every CSV export byte for byte what v2.14.2 exported. The other kept mutant lists were re-run for expectation drift (14 lists, 105 mutants): none had drifted (the three that had, G1, G2 and N3, were fixed in #330). Baselines: unchanged.
+- **The decoded-TMATS memory guard's limit is 8 MiB, not 2** (`a reader gives its decoded TMATS back`). It failed this
+  change's CI at 2056 KiB against 2048 with nothing leaked: the heap's growth over 400 loads varies from under 1 MiB to
+  nearly 2 between runs of the same executable (measured over dozens of runs, hardened and not). A leak is far above that:
+  with the destructor's free removed, 400 trees grow it by about 65 MB (160 KiB each). 8 MiB is four times the noise and an
+  eighth of a leak; the five leak mutants of `reader-lifetime.json` (T1-T5) are still CAUGHT.
+- **Not changed, and why.** `~Ch10PacketReader` throwing if the setup mutex cannot be locked: the mutex cannot fail to lock
+  here, and the destructor says so where it is annotated. `ManualFiguresTests.TheBatchConfirmationAndPlotFile` failed once
+  in its cleanup on CI (a recording still in use after the 3 s window) and passed on the re-run, in about fifteen runs: one
+  sighting, so the deliberate check that a file the library opened is released is left as it is; if it recurs, that
+  fixture's scratch folder should use `TryDeleteDirectory`.
+
 #### The lock percentage is computed once (follow-up audit S4, third part)
 
 `FrameProcessor` computed a window's lock percentage in two places, with the same expression: when a window closes in the

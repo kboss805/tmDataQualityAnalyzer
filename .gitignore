@@ -35,7 +35,6 @@ compile_flags.txt
 # AI tool settings — track shared config + project skills, ignore local/machine-specific files
 .claude/*
 !.claude/settings.json
-!.claude/.claudeignore
 !.claude/skills/
 !.claude/CLAUDE.md
 

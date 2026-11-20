@@ -378,6 +378,8 @@ TEST_CASE("Chapter10Reader: TMATS text decides which channels are listed and wha
         // all, names no channel, so the data source is not listed (the PCM channel's track is 26).
         {"track-negative", {{R"(R-1\TK1-27:26;)", R"(R-1\TK1-27:-6;)"}}, none, irig},
         {"track-missing", {{R"(R-1\TK1-27:26;)", R"(R-1\TX1-27:26;)"}}, none, irig},
+        {"track-text", {{R"(R-1\TK1-27:26;)", R"(R-1\TK1-27:ab;)"}}, none, irig},
+        {"track-with-trailing-text", {{R"(R-1\TK1-27:26;)", R"(R-1\TK1-27:2x;)"}}, none, irig},
         // Channel type (CDT-n): PCMIN, 01 and 09 are PCM; TIMEIN and 11 are time; the match is case-sensitive and
         // anything else is some other kind of channel that is not listed.
         {"type-01", {{cdt + "PCMIN;", cdt + "01   ;"}}, shown, irig},
