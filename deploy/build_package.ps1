@@ -84,6 +84,11 @@ Write-Host '[1/8] Building tmdq_core.dll (Release)...'
 & powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'eng\build_core_dll.ps1') -Configuration Release
 if ($LASTEXITCODE -ne 0) { throw 'build_core_dll.ps1 failed' }
 $CoreDll = Join-Path $Root 'out\Release\tmdq_core.dll'
+# What ships must be the Release core: a Debug one is about three times slower and nothing else here would say so (the
+# import allow-list in build_core_dll.ps1 admits the debug runtime). Checked now so a mistake costs seconds, and again on
+# the copy that is staged (step 4).
+& powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'eng\check_release_core.ps1') -Dll $CoreDll
+if ($LASTEXITCODE -ne 0) { throw 'the core just built is not a Release build (see above)' }
 
 # --- 2. Single-file, self-contained publish. ---
 Write-Host '[2/8] Publishing the application (self-contained, single-file)...'
@@ -160,6 +165,8 @@ $Unsigned = Join-Path $Stage 'unsigned'
 New-Item -ItemType Directory -Force -Path $Unsigned | Out-Null
 Get-ChildItem $Publish -File | Where-Object { $_.Extension -ne '.pdb' } | Copy-Item -Destination $Unsigned
 Copy-Item $CoreDll $AppDir
+& powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'eng\check_release_core.ps1') -Dll (Join-Path $AppDir 'tmdq_core.dll')
+if ($LASTEXITCODE -ne 0) { throw 'the core staged for the package is not a Release build (see above)' }
 # The shipped settings (TmDq.App.csproj copies the repository's settings\ into the publish): the Receiver SNR defaults
 # file the setup dialog opens on, the patterns and word maps its Load buttons start in, and receiver_params\default.toml,
 # the word map the core falls back to. The installer never overwrites them (US8.0).

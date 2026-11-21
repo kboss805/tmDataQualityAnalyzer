@@ -12,6 +12,34 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The package refuses a Debug core
+
+The release script builds the core in Release and stages `out\Release\tmdq_core.dll`, so a Debug core cannot reach the
+package as the script stands. But nothing *checked* that. `build_core_dll.ps1`'s import allow-list admits the debug runtime
+(`VCRUNTIME140D`, `MSVCP140D`, `ucrtbased`), so a Debug DLL passes it; and the step that copies the C++ runtime beside the
+DLL would stop on one, but with a message about a file missing from the redist folder, not about the build. A Debug core
+is unoptimised (the full PRN recording's first stream took about 14 s against 4.35 s, PR #264), and nothing about it looks
+wrong until someone times it.
+
+- **`eng\check_release_core.ps1`.** Reads the DLL's import list (`dumpbin /dependents`, loading the MSVC environment itself
+  as the build scripts do) and refuses the debug runtime in any case: `VCRUNTIME140D`, `VCRUNTIME140_1D`, `MSVCP140D`,
+  `CONCRT140D`, `VCOMP140D`, `ucrtbased`. It names what it found and says to build in Release. A DLL that lists no imports,
+  or no DLL at all, is a failure, not a pass. `-Imports` takes the list in place of a DLL, for the tests.
+- **Where it runs.** `deploy\build_package.ps1` checks the core straight after building it, so a mistake costs seconds and
+  not the packaging run, and again on the copy it stages to ship; either refusal stops the script.
+- **Tried by hand first, and it found a bug in itself:** every list reported "1 imports checked" and the empty list and the
+  Debug core both passed. PowerShell variables ignore case, so the local `$imports` was the typed `[string]$Imports`
+  parameter, and an array assigned to it collapses to one string. Renamed, with a comment saying why.
+- **Checked.** New `ReleaseCoreGuardTests` (16 cases, each running the real script): a real Release core's import list passes;
+  the numbered release runtimes (`VCRUNTIME140_1`, `MSVCP140_2`) are not mistaken for debug ones; each debug name is refused in
+  any case and named; a debug import is found first, last and alone; no imports and no file are failures; a bad invocation is
+  exit 2; the real `out\Release` core passes and the real `out\Debug` core is refused (a skip where that configuration
+  was not built - CI builds both); and `build_package.ps1` makes both calls, in those places, each stopping the script.
+  Mutants in `eng\mutants\release-core-guard.json`: 9 of 9 caught. One survived at first, and was the mutant's fault: it
+  dropped an inline `(?i)` from the pattern, but `-match` already ignores case, so nothing changed. The pattern lost the
+  flag (with a comment saying why) and the mutant now swaps `-match` for `-cmatch`.
+  Baseline: managed 398 -> 414 passed (399 -> 415 total). Native and app suites are untouched by this change.
+
 #### A sync match ignored in lock no longer costs the frame's words a bit
 
 Found by reading `FrameProcessor::scanBit` for a performance review. While locked, a sync-pattern match that is not on
