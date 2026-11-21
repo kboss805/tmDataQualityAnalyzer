@@ -15,8 +15,8 @@
     {
       "id": "W2",
       "file": "src/core/src/frameprocessor.cpp",
-      "old": "                        s.channel_sums[i] += static_cast<double>(raw_value);",
-      "new": "                        s.channel_sums[0] += static_cast<double>(raw_value);",
+      "old": "                    s.channel_sums[i] += static_cast<double>(raw_value);",
+      "new": "                    s.channel_sums[0] += static_cast<double>(raw_value);",
       "expect": "caught",
       "note": "every word is summed into the first channel"
     },

@@ -12,6 +12,25 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### A sync match ignored in lock no longer costs the frame's words a bit
+
+Found by reading `FrameProcessor::scanBit` for a performance review. While locked, a sync-pattern match that is not on
+the frame boundary is data that happens to look like the sync, and is ignored ("leave all state intact"). But the data-word
+`else` branch was the match's alternative, so the ignored match's bit was never counted towards the word being read:
+`data_word_bit_count` did not advance, and every later word of that frame was read one bit late.
+
+- **Who it hurt.** Receiver SNR: its channel values come from those words, so they were wrong for the frames hit. Frame
+  Sync Lock results do not read the words and were not affected. How often depends on the pattern: about one bit in 2^32
+  with a full 32-bit pattern, about one in 65,536 with a sparse mask such as 0x00FF00FF.
+- **The fix.** The match is a match only for the sync rules (`sync_match`); it is a bit of data for the word count whenever
+  it is not acted on. `total_syncs_found` still counts every match, which the failure report prints.
+- **Checked.** New `FrameProcessor: an off-phase sync while locked leaves the frame's words where they are`: a locked stream
+  whose middle frame's word 0 is 1001 (the sync itself), in both modes. Before the fix word 0 read as 2 and the average
+  was 2.33 instead of 4.67; it also checks the match is still counted and costs no frame, and that the lock holds
+  (36 of 40 bits). Mutants in `eng\mutants\off-phase-sync-word.json`. One kept mutant of `frame-processor-sums.json`
+  (W2) was re-anchored: the fix removed a level of braces, so its text moved left by four.
+  Baseline: native 524 -> 525.
+
 #### Configure Streams: the recording's two settings on one centred row
 
 The top of the dialog was out of line: the time channel's label and box and Legacy Chapter 10 sat on three different
