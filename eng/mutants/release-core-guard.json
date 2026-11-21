@@ -1,0 +1,79 @@
+{
+  "suite": "managed",
+  "args": ["-class", "TmDq.Core.Tests.ReleaseCoreGuardTests"],
+  "timeoutSeconds": 900,
+  "mutants": [
+    {
+      "id": "R1",
+      "file": "eng/check_release_core.ps1",
+      "old": "|ucrtbased)\\.dll$'",
+      "new": ")\\.dll$'",
+      "expect": "caught",
+      "note": "the debug UCRT is not refused"
+    },
+    {
+      "id": "R2",
+      "file": "eng/check_release_core.ps1",
+      "old": "|CONCRT|",
+      "new": "|",
+      "expect": "caught",
+      "note": "the debug concurrency runtime is not refused"
+    },
+    {
+      "id": "R3",
+      "file": "eng/check_release_core.ps1",
+      "old": "(?:_\\d+)?d)|ucrtbased",
+      "new": "(?:_\\d+)?d?)|ucrtbased",
+      "expect": "caught",
+      "note": "the release runtime's own VCRUNTIME140_1 and MSVCP140_1 are taken for debug ones"
+    },
+    {
+      "id": "R4",
+      "file": "eng/check_release_core.ps1",
+      "old": "{ $_ -match $debugRuntime }",
+      "new": "{ $_ -cmatch $debugRuntime }",
+      "expect": "caught",
+      "note": "the names are matched case-sensitively, and dumpbin's case is not ours to rely on (an inline (?i) was dropped from the pattern: -match already ignores case, so removing it was an equivalent mutant)"
+    },
+    {
+      "id": "R5",
+      "file": "eng/check_release_core.ps1",
+      "old": "if ($names.Count -eq 0) {",
+      "new": "if ($names.Count -lt 0) {",
+      "expect": "caught",
+      "note": "a DLL that lists no imports reads as clean"
+    },
+    {
+      "id": "R6",
+      "file": "eng/check_release_core.ps1",
+      "old": "and package that one.'\n    exit 1",
+      "new": "and package that one.'\n    exit 0",
+      "expect": "caught",
+      "note": "the debug runtime is found, said and let through"
+    },
+    {
+      "id": "R7",
+      "file": "eng/check_release_core.ps1",
+      "old": "-or ($Dll -and $PSBoundParameters.ContainsKey('Imports'))",
+      "new": "-or $false",
+      "expect": "caught",
+      "note": "both a DLL and a list are accepted, and one of them is silently ignored"
+    },
+    {
+      "id": "R8",
+      "file": "deploy/build_package.ps1",
+      "old": "if ($LASTEXITCODE -ne 0) { throw 'the core staged for the package is not a Release build (see above)' }",
+      "new": "$null = $LASTEXITCODE",
+      "expect": "caught",
+      "note": "a refusal of the staged core prints and the packaging carries on"
+    },
+    {
+      "id": "R9",
+      "file": "deploy/build_package.ps1",
+      "old": "if ($LASTEXITCODE -ne 0) { throw 'the core just built is not a Release build (see above)' }",
+      "new": "$null = $LASTEXITCODE",
+      "expect": "caught",
+      "note": "a refusal of the core just built prints and the packaging carries on"
+    }
+  ]
+}
