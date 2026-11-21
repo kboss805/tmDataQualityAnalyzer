@@ -157,7 +157,9 @@ powershell -ExecutionPolicy Bypass -File deploy\build_package.ps1
 ```
 
 It performs (and prints progress for) all of: the consistency check (`-ReleaseMode`) → the signing
-pre-flight → `tmdq_core.dll` in Release → a self-contained **single-file** publish → the manifest check
+pre-flight → `tmdq_core.dll` in Release, checked (`eng\check_release_core.ps1`: it must not import the debug
+C runtime, which is what a Debug core looks like; checked again on the staged copy) → a self-contained
+**single-file** publish → the manifest check
 (UTF-8 code page) → staging (settings, the VC++ runtime the DLL imports, the licence, the generated
 `THIRD-PARTY-NOTICES.txt`) → signing **our two binaries only** (the exe and `tmdq_core.dll`; it refuses to
 sign anything else it finds unsigned) → verifying every PE file's signature → a smoke run of the staged
