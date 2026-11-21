@@ -388,68 +388,69 @@ void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val,
     const bool in_lock = (s.sync_count != UINT64_MAX) && (s.sync_count >= s.min_syncs);
 
     // Check for sync word
-    if (s.bits_loaded >= s.sync_pat_len &&
-        (s.test_word & s.sync_mask) == s.sync_pat)
+    const bool sync_match = s.bits_loaded >= s.sync_pat_len && (s.test_word & s.sync_mask) == s.sync_pat;
+    if (sync_match)
     {
         s.total_syncs_found++;
+    }
 
-        // In LOCK state, ignore false positives (off-phase matches). Only process
-        // sync matches at the exact expected frame boundary so that PRN data patterns
-        // cannot disrupt word collection.
-        bool at_boundary = (s.minor_frame_bit_count == s.bits_in_frame);
-        if (!in_lock || at_boundary)
+    // In LOCK state, ignore false positives (off-phase matches). Only process
+    // sync matches at the exact expected frame boundary so that PRN data patterns
+    // cannot disrupt word collection.
+    const bool at_boundary = (s.minor_frame_bit_count == s.bits_in_frame);
+    if (sync_match && (!in_lock || at_boundary))
+    {
+        if (at_boundary)
         {
-            if (at_boundary)
-            {
-                s.sync_count++;
-                s.boundary_syncs++;
-            }
-            else
-            {
-                // Off-phase acquisition: a sync match that is NOT on a frame boundary.
-                // boundary_syncs is deliberately not incremented here - it used to be,
-                // which made the failure diagnostic report an off-phase match as
-                // "boundary-aligned" and told operators the opposite of the truth.
-                s.sync_count = 1;
-            }
-
-            // Only extract a sample once the sync match is boundary-aligned; an
-            // off-phase match (re-acquiring lock) must not be treated as a confirmed
-            // frame, or PRN data can be sampled as if it were locked.
-            if (at_boundary && s.sync_count >= s.min_syncs && s.save_data > 1)
-            {
-                for (std::size_t i = 0; i < enabled_params.size(); i++)
-                {
-                    const ParameterInfo* param = enabled_params[i];
-                    if (param->word >= 0 &&
-                        param->word < static_cast<int>(s.words_in_frame))
-                    {
-                        int64_t raw_value = static_cast<int64_t>(s.frame_words[param->word] & s.word_mask);
-                        // Accumulate RAW counts; calibration (linear or non-linear)
-                        // is applied once to the windowed average in
-                        // recordTimeSample(). Averaging raw first is required for
-                        // the non-linear profile: the profile maps averaged-raw ->
-                        // true dB, so mean(interpolate(raw)) would bias each plateau
-                        // off the true step value. For linear cal the two orders are
-                        // identical.
-                        s.channel_sums[i] += static_cast<double>(raw_value);
-                    }
-                }
-
-                s.n_samples++;
-                s.total_frames_extracted++;
-            }
-
-            s.minor_frame_bit_count = 0;
-            s.minor_frame_word_count = 1;
-            s.data_word_bit_count = 0;
-            s.save_data = 1;
+            s.sync_count++;
+            s.boundary_syncs++;
         }
-        // else: in_lock && !at_boundary — false positive, leave all state intact.
+        else
+        {
+            // Off-phase acquisition: a sync match that is NOT on a frame boundary.
+            // boundary_syncs is deliberately not incremented here - it used to be,
+            // which made the failure diagnostic report an off-phase match as
+            // "boundary-aligned" and told operators the opposite of the truth.
+            s.sync_count = 1;
+        }
+
+        // Only extract a sample once the sync match is boundary-aligned; an
+        // off-phase match (re-acquiring lock) must not be treated as a confirmed
+        // frame, or PRN data can be sampled as if it were locked.
+        if (at_boundary && s.sync_count >= s.min_syncs && s.save_data > 1)
+        {
+            for (std::size_t i = 0; i < enabled_params.size(); i++)
+            {
+                const ParameterInfo* param = enabled_params[i];
+                if (param->word >= 0 &&
+                    param->word < static_cast<int>(s.words_in_frame))
+                {
+                    int64_t raw_value = static_cast<int64_t>(s.frame_words[param->word] & s.word_mask);
+                    // Accumulate RAW counts; calibration (linear or non-linear)
+                    // is applied once to the windowed average in
+                    // recordTimeSample(). Averaging raw first is required for
+                    // the non-linear profile: the profile maps averaged-raw ->
+                    // true dB, so mean(interpolate(raw)) would bias each plateau
+                    // off the true step value. For linear cal the two orders are
+                    // identical.
+                    s.channel_sums[i] += static_cast<double>(raw_value);
+                }
+            }
+
+            s.n_samples++;
+            s.total_frames_extracted++;
+        }
+
+        s.minor_frame_bit_count = 0;
+        s.minor_frame_word_count = 1;
+        s.data_word_bit_count = 0;
+        s.save_data = 1;
     }
     else
     {
-        // Accumulate data word bits between sync patterns
+        // Accumulate data word bits between sync patterns. A match ignored in lock is one of them: it is data that
+        // happens to look like the sync, and its bit belongs to the word being read. Leaving it out (as this did) read
+        // every later word of the frame one bit late.
         if (s.save_data == 1)
         {
             s.data_word_bit_count++;

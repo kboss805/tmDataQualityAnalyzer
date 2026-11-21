@@ -1,0 +1,30 @@
+{
+  "suite": "native",
+  "args": ["-tc=FrameProcessor: *"],
+  "mutants": [
+    {
+      "id": "W1",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "    else\n    {\n        // Accumulate data word bits between sync patterns. A match ignored in lock is one of them",
+      "new": "    else if (!sync_match)\n    {\n        // Accumulate data word bits between sync patterns. A match ignored in lock is one of them",
+      "expect": "caught",
+      "note": "the defect fixed here: the bit of a match ignored in lock left out of the word count, so the frame's later words are read one bit late"
+    },
+    {
+      "id": "W2",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "    if (sync_match && (!in_lock || at_boundary))",
+      "new": "    if (sync_match)",
+      "expect": "caught",
+      "note": "an off-phase match honoured in lock restarts the frame mid-word"
+    },
+    {
+      "id": "W3",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "    if (sync_match)\n    {\n        s.total_syncs_found++;",
+      "new": "    if (sync_match && !in_lock)\n    {\n        s.total_syncs_found++;",
+      "expect": "caught",
+      "note": "every match is a sync found, the ones in lock included"
+    }
+  ]
+}

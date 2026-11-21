@@ -1275,6 +1275,37 @@ TEST_CASE("FrameProcessor: frames are extracted only after the minimum number of
     }
 }
 
+TEST_CASE("FrameProcessor: an off-phase sync while locked leaves the frame's words where they are")
+{
+    // In lock, a match off the frame boundary is data that happens to look like the sync, so it is ignored - and its
+    // bit is still a bit of the word being read. The middle frame's word 0 is 1001, the sync itself, so the pattern
+    // matches at the word's last bit, four bits into a locked frame. That bit used to be dropped from the word count,
+    // so word 0 was read one bit late, as 0010 = 2, and the average was (1 + 2 + 4) / 3.
+    const std::string bits = stream({1, 9, 4});
+    for (const StreamMode mode : {StreamMode::ReceiverChannelInfo, StreamMode::FrameSyncLockStats})
+    {
+        INFO("mode " << static_cast<int>(mode));
+        ProcessingParams p = timedParams(mode, true);
+        p.samplePeriodSec = 1e9;
+        FrameSetup setup;
+        addWord0(setup);
+        Capture events;
+        const ProcessedStreamData r = runPackets(p, &setup, {{bits}}, &events);
+        // The match is counted as found (the leading sync, three boundary syncs and it) and costs no frame.
+        CHECK(joined(events.logs).find("5 syncs found, 3 frames extracted.") != std::string::npos);
+        if (mode == StreamMode::ReceiverChannelInfo)
+        {
+            REQUIRE(r.channels.size() == 1);
+            checkSeries(r.channels[0].values, {(1.0 + 9.0 + 4.0) / 3}, "the average of word 0");
+        }
+        else
+        {
+            // The lock holds: every bit after the leading sync's four is in lock.
+            checkSeries(r.lockPercent, {100.0 * 36 / 40}, "the lock percentage");
+        }
+    }
+}
+
 TEST_CASE("FrameProcessor: every word of the map becomes a channel, each calibrated as (raw + offset) x slope")
 {
     // Word 0 is 5 then 6. A word the frame does not have (before it, or past its two words) stays at zero rather than
