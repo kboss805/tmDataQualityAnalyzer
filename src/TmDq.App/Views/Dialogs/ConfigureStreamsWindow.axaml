@@ -38,18 +38,28 @@
     </c:DialogFooter>
   <StackPanel Margin="{DynamicResource ContentDialogPadding}" Spacing="8">
     <!-- The recording's own settings: both describe the file, not a stream. -->
-    <StackPanel Orientation="Horizontal" Spacing="8">
-      <TextBlock Text="Time Channel:" VerticalAlignment="Center" />
-      <ComboBox x:Name="TimeChannel" MinWidth="200" ItemsSource="{Binding TimeChannelItems}"
-                SelectedIndex="{Binding TimeChannelIndex}" IsEnabled="{Binding HasTimeChannels}"
-                ToolTip.Tip="IRIG time channel used to timestamp frame samples. Required for calibration extraction." />
-      <ToggleSwitch x:Name="LegacyChapter10" Content="Legacy Chapter 10" Margin="16,0,0,0" IsChecked="{Binding LegacyChapter10}">
+    <!-- One row, every item centred on it. The label is a TextBlock beside the switch rather than the switch's own
+         Content: Fluent stacks Content ABOVE the switch, which made this row taller than the combo box and left the
+         time channel's label and box on different centre lines. -->
+    <!-- The time channel is on the left; Legacy Chapter 10 is docked to the right edge, in line with the stream list's
+         last column, so the two groups are apart however wide the dialog is. -->
+    <DockPanel>
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
         <ToolTip.Tip>
           <TextBlock TextWrapping="Wrap" MaxWidth="420"
                      Text="Turn this on for recordings from older equipment. If no stream in this file finds frame sync, this is the first thing to try. It applies to the whole recording, not to one channel. (Technically: ordinary Chapter 10 recordings store the PCM payload with each pair of bytes swapped, and the reader undoes that before searching for sync. Legacy recordings do not, so this turns that step off.)" />
         </ToolTip.Tip>
-      </ToggleSwitch>
-    </StackPanel>
+        <TextBlock Text="Legacy Chapter 10" VerticalAlignment="Center" />
+        <ToggleSwitch x:Name="LegacyChapter10" VerticalAlignment="Center" IsChecked="{Binding LegacyChapter10}"
+                      AutomationProperties.Name="Legacy Chapter 10" />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <TextBlock Text="Time Channel:" VerticalAlignment="Center" />
+        <ComboBox x:Name="TimeChannel" MinWidth="200" VerticalAlignment="Center" ItemsSource="{Binding TimeChannelItems}"
+                  SelectedIndex="{Binding TimeChannelIndex}" IsEnabled="{Binding HasTimeChannels}"
+                  ToolTip.Tip="IRIG time channel used to timestamp frame samples. Required for calibration extraction." />
+      </StackPanel>
+    </DockPanel>
 
     <Grid ColumnDefinitions="70,260,12,160,80,60" Margin="0,8,0,0">
       <TextBlock Grid.Column="0" Classes="header" Text="Process" />

@@ -12,6 +12,27 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Configure Streams: the recording's two settings on one centred row
+
+The top of the dialog was out of line: the time channel's label and box and Legacy Chapter 10 sat on three different
+centre lines. Fluent stacks a `ToggleSwitch`'s `Content` *above* the switch, so the toggle was 56 px tall in a row the
+combo box (32 px) was top-aligned in. Rendered and measured before the change (centre of each item, in window pixels):
+label 52, combo box 40, toggle 52, with "Legacy Chapter 10" over the switch at y=33 and the switch itself at 64.
+
+- **One row, one centre line.** "Legacy Chapter 10" is a `TextBlock` beside the switch rather than its `Content` (the switch
+  keeps `AutomationProperties.Name`, and the tooltip covers label and switch), and the label, the box, the second label
+  and the switch are all `VerticalAlignment="Center"`. After: every centre at 40.0, and the dialog is 24 px shorter.
+- **Two groups, with room between them.** The time channel is on the left and Legacy Chapter 10 is docked to the right
+  edge, flush with the stream list's last column, so the groups stay apart however wide the dialog is (roughly 165 px at its
+  usual width, read off the render, where it was 16 px).
+- **Checked.** New `StreamWindowsTests.TheRecordingsSettingsShareOneRowCentredOnOneLine` measures each centre, that the switch
+  is no taller than the box, that the label is beside the switch, that the switch's right edge is the list's, and that the
+  groups are at least 48 px apart. Run against the old XAML it fails (expected centre 40, actual 52). The manual's
+  figures were re-rendered with `eng\build_manual.ps1`: the three that show this dialog changed
+  (`Config Streams Dialg`, `walk-fs-02-configure-streams`, `walk-snr-01-mode-select`); the two others the script also
+  touched are the known unstable captures (run-log timestamps, one checkbox corner) and were left as they were.
+  Baseline: app 691 -> 692 passed.
+
 #### The loose ends of the follow-up audit (D6, A4, T12, a TMATS track number, a stray folder)
 
 What was left after the queue: each checked to still be real before it was changed, and three decided with the owner.

@@ -70,6 +70,36 @@ public sealed class StreamWindowsTests
     }
 
     [AvaloniaFact]
+    public void TheRecordingsSettingsShareOneRowCentredOnOneLine()
+    {
+        // Fluent stacks a ToggleSwitch's Content above the switch, which once made this row 56 px tall with the time
+        // channel's label, its box and the switch's label each on a different centre line. The label is its own
+        // TextBlock now, and every item in the row is centred on the box's centre.
+        var w = Shown(new ConfigureStreamsWindow { DataContext = Configure() });
+        ComboBox time = w.FindControl<ComboBox>("TimeChannel")!;
+        ToggleSwitch legacy = w.FindControl<ToggleSwitch>("LegacyChapter10")!;
+        double Centre(Control c) => InWindow(c, w).Center.Y;
+        TextBlock Label(string text) =>
+            w.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == text);
+
+        double line = Centre(time);
+        Assert.Equal(line, Centre(Label("Time Channel:")), 0.5);
+        Assert.Equal(line, Centre(Label("Legacy Chapter 10")), 0.5);
+        Assert.Equal(line, Centre(legacy), 0.5);
+        Assert.Equal(time.Bounds.Height, legacy.Bounds.Height, 0.5);   // no taller than the box: the row is one line
+        Assert.True(InWindow(Label("Legacy Chapter 10"), w).Right <= InWindow(legacy, w).X, "the label is beside the switch, not over it");
+
+        // Legacy Chapter 10 is docked to the right edge, in line with the stream list's last column, and well clear of
+        // the time channel's box.
+        Grid header = w.GetVisualDescendants().OfType<Grid>()
+            .Single(g => g.Children.OfType<TextBlock>().Any(t => t.Text == "Process"));
+        Assert.Equal(InWindow(header, w).Right, InWindow(legacy, w).Right, 0.5);
+        double gap = InWindow(Label("Legacy Chapter 10"), w).X - InWindow(time, w).Right;
+        Assert.True(gap >= 48, $"the two groups are {gap} px apart");
+        w.Close();
+    }
+
+    [AvaloniaFact]
     public void TheHeaderAndTheRowsOfTheStreamListHaveTheSameColumns()
     {
         // The two grids each spell their columns in the XAML (a header and a row template cannot share one), and the
