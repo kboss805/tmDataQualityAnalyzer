@@ -12,6 +12,50 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### App and binding leftovers of the cleanup audit (B4, S17, F2, F5, C6, D6), and the Qt wording out of the app and its tests
+
+The second of three PRs finishing the items the audit's follow-up listed as done in part. One behaviour changes, a failure that was
+dropped is now said; the rest are moves, renames and one binding made to ask the core.
+
+- **B4: a calibration run whose observer threw is a failure, said.** `ICalibrationRunning` gains `ObserverException` (the core's
+  `CalibrationRun` already kept the first exception an observer threw, as the processing run does, and `StreamsRun` already logged
+  it); `ExtractCalibrationViewModel` reads it after the wait, before the result, and shows "A report from the core could not be
+  handled: ..." as the calibration's failure, with no profiles. The other half of B4 (`GetResult` outside the `try`) was fixed
+  earlier.
+- **S17: the root the application was handed is the root it falls back to.** `MainWindowViewModel` keeps `_appRoot` (the
+  `AppRoot` of its services, else the process's folder) and the Export and Batch dialogs start there when no folder was used
+  yet, where each fell back to `AppContext.BaseDirectory` on its own. The product passes the same folder both ways, so nothing
+  changes there; a host that hands another root now gets it. `SessionExport.WriteLog`, a file-format rule (CR LF, UTF-8 without a
+  byte-order mark, ending in a line end), is `SessionLog.WriteTo`, beside `PlainText`.
+- **F2: widely used types have a file named for them.** `PreferencesStore`, `PlotSeries` and `RunLogOrder` left `Preferences.cs`,
+  `PlotViewModel.cs` and `StreamsRun.cs` verbatim; `Services/IExportServices.cs`, named for none of its three interfaces, is
+  `IDataFilePicker.cs`, `IExportDialog.cs` and `IPlotImageExporter.cs`. `docs/guide.md` says the rule.
+- **F5: two test classes named for what they hold.** `WalkingSkeletonTests` is `OpenToChartTests` (Open to run to chart) and
+  `MainWindowTests` is `MainWindowStartupTests` (the window as it opens; `ShellTests` holds what it does once open). The kept
+  mutation lists, `test_app.ps1`, the guide and the parity record's test pointers follow.
+- **C6: two names made alike.** The receiver-parameters ABI field `scale_db_per_v` is `scale_d_db_per_v`, as the stream config's
+  is and as the C# `ScaleDdBPerV` already was (`tmdq_abi.h`, `abi_formats.cpp`, the managed `ReceiverParamsNative` and the
+  layout tests); a name only, the struct's size and offsets are unchanged and the ABI revision stays. `ConfigureStreamsViewModel.Title`
+  is a `const` like the other four dialogs' (its window binds it with `x:Static`); `StreamSetupViewModel.Title` stays an
+  instance property because it names the stream.
+- **D6: `SeriesIndex.Count` is the core's answer** (`tmdq_series_index_count`), not a managed copy, so it throws
+  `ObjectDisposedException` once the index is disposed, as `Handle` does. The silent fallback in `ChartGeometry.Build` (an index over
+  another number of values is left out and the series walked) stays, now with its reason beside it: a stale index must never stop a
+  frame being drawn, so the core's `TMDQ_ERR_BADARG` for that case is not reached from C# on purpose. `tmdq_chart_geometry` is
+  already the indexed export with no index inside the ABI, so the four-argument `Build` reaches it that way.
+- **Qt wording.** "The Qt application" and "QSettings" are reworded in the app project, its tests and its test summaries. Kept on
+  purpose: the soak manifest's `qt` key and the soak test's messages that name it (they name v2.14.2's recorded output, as
+  `run_soak.ps1` says).
+
+How it was checked. Native 528 of 528; managed 415 total, 0 failed (2 skipped here: the probe, and the Debug-core guard, which skips
+in a worktree without a Debug DLL); app **812** total (one more than before: the observer case), 0 failed, 34 not run. New cases: a
+run whose observer threw (a fake runner that fails the test if its result is asked for), Export opening in the handed root, and a
+disposed index's `Count`. Mutation lists: `eng/mutants/calibration-observer.json` (B1, S1 to S3 caught, B2 caught after rewriting it
+to compile; B3, the product runner hiding the core's exception, survives on purpose: the test's runner stands in for the core, and
+the core's own `ObserverException` is held by the managed library's tests) and `eng/mutants/series-index-count.json` (D1 to D3
+caught). `plot-index-binding.json` (4 of 4), `apply-template-busy.json` (7 of 7) and `run-log-order.json` (5 caught, 2 survive,
+as marked) were re-anchored to the moved text and re-run.
+
 #### Core and build leftovers of the cleanup audit (S4, S6, C3, A4), and the Qt wording out of core and tooling
 
 The audit's follow-up listed the items done in part; this finishes the core and build ones. No behaviour of the application changes.

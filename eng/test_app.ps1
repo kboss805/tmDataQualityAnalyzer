@@ -12,7 +12,7 @@
        record of what the UI tests ran under there.
     3. Runs the test exe directly (an xunit v3 test project is an executable) and fails on a non-zero exit.
 
-    WalkingSkeletonTests process a committed recording through out\<Configuration>\tmdq_core.dll (build it
+    OpenToChartTests process a committed recording through out\<Configuration>\tmdq_core.dll (build it
     with eng\build_core_dll.ps1; TMDQ_CORE_DLL overrides). Works under Windows PowerShell 5.1 and PowerShell 7.
 
     Usage:

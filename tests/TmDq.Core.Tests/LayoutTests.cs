@@ -148,7 +148,7 @@ public class LayoutTests
             Row(typeof(FrameSyncFileInfoNative), "PatternUtf8", 32), Row(typeof(FrameSyncFileInfoNative), "MaskUtf8", 40),
             Row(typeof(ReceiverParamsNative), "PolarityIndex", 4), Row(typeof(ReceiverParamsNative), "SlopeIndex", 8),
             Row(typeof(ReceiverParamsNative), "NumReceivers", 12), Row(typeof(ReceiverParamsNative), "ReceiverChannels", 16),
-            Row(typeof(ReceiverParamsNative), "ScaleDbPerV", 24),
+            Row(typeof(ReceiverParamsNative), "ScaleDdBPerV", 24),
             Row(typeof(ChartViewNative), "XLower", 8), Row(typeof(ChartViewNative), "XUpper", 16),
             Row(typeof(ChartViewNative), "YLower", 24), Row(typeof(ChartViewNative), "YUpper", 32),
             Row(typeof(ChartViewNative), "Left", 40), Row(typeof(ChartViewNative), "Top", 48),

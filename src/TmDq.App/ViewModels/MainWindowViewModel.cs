@@ -47,6 +47,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     private readonly ShellPreferences _shell;
     private readonly SessionExport _export;
     private readonly BatchRunner _batch;
+    private readonly string _appRoot;
     private readonly List<ProcessedSource> _sources = new();
     private List<MenuChoice>? _recentMenu;
     private string _runningFile = string.Empty;
@@ -70,7 +71,8 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         _help = services.Help;
         Log = new SessionLog(services.Clock);
         _export = new SessionExport(Plot, Log, services.ImageExporter, Report);
-        _batch = new BatchRunner(this, Plot, Log, _export, services.AppRoot ?? AppContext.BaseDirectory);
+        _appRoot = services.AppRoot ?? AppContext.BaseDirectory;
+        _batch = new BatchRunner(this, Plot, Log, _export, _appRoot);
         OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy && _picker is not null);
         ImportCsvCommand = new AsyncRelayCommand(PickAndImportAsync, () => !IsBusy && _files is not null);
         ExportCommand = new AsyncRelayCommand(ExportAsync, () => !IsBusy && Plot.HasData && _exportDialog is not null);
@@ -316,7 +318,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
 
     private async Task ExportAsync()
     {
-        (string image, string data, string log) = ExportViewModel.DefaultPaths(LastFolder ?? AppContext.BaseDirectory, Plot.Title);
+        (string image, string data, string log) = ExportViewModel.DefaultPaths(LastFolder ?? _appRoot, Plot.Title);
         var choice = new ExportViewModel(image, data, log, _files);
         await _exportDialog!.ShowAsync(choice);
         if (choice.Accepted) await ExportAsync(choice);
@@ -425,7 +427,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         {
             IsBusy = false;
         }
-        var confirm = new BatchApplyViewModel(checks, LastFolder ?? AppContext.BaseDirectory, _templateFiles);
+        var confirm = new BatchApplyViewModel(checks, LastFolder ?? _appRoot, _templateFiles);
         await _templateDialogs!.ConfirmBatchAsync(confirm);
         if (!confirm.Accepted || confirm.Matched.Count == 0) return;
         await RunBatchAsync(template, confirm.Matched, confirm.ExportPerFile ? confirm.OutputFolder.Trim() : null, confirm.ReuseAppearance);

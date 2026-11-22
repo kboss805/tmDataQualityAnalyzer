@@ -1,3 +1,4 @@
+using System;
 using TmDq.Core;
 
 namespace TmDq.App.Models.Processing;
@@ -15,6 +16,7 @@ public sealed class CoreCalibrationRunner : ICalibrationRunner
         public bool IsRunning => run.IsRunning;
         public void Cancel() => run.Cancel();
         public void Wait() => run.Wait();
+        public Exception? ObserverException => run.ObserverException;
         public CalibrationResult GetResult() => run.GetResult();
         public void Dispose() => run.Dispose();
     }

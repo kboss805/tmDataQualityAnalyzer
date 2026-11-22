@@ -13,9 +13,9 @@ using Xunit;
 
 namespace TmDq.App.Tests;
 
-/// <summary>The main window as the skeleton has it (plan step 3.1): its title, the version its log opens with, and
-/// its size, laid out by the real theme.</summary>
-public sealed class MainWindowTests
+/// <summary>The main window as it opens: its title, the version its log opens with, and its size, laid out by the real
+/// theme. What the window does once it is open (title bar, menu, sidebar, themes) is <c>ShellTests</c>'.</summary>
+public sealed class MainWindowStartupTests
 {
     private static MainWindow Show()
     {

@@ -536,7 +536,7 @@ profile, so a batch processes with the linear calibration.
   line opens that recording, as a file association does. With `TMDQ_SMOKE_REPORT=<file>` set as well, the application skips
   Configure Streams, runs the recording's first PCM channel with the Frame Sync Lock defaults (`FirstChannelRun`), writes
   one result line to the file and exits (0 when the stream was processed, 1 when not, 2 when the report could not be
-  written: `Startup.RunSmokeAsync`, which `WalkingSkeletonTests` runs): the installer's clean-machine test
+  written: `Startup.RunSmokeAsync`, which `OpenToChartTests` runs): the installer's clean-machine test
   proves the whole path, native core included, with it.
 - **Windows:** every window with a view model is XAML (`MainWindow`, `ConfigureStreamsWindow`, `StreamSetupWindow`,
   `ExtractCalibrationWindow`, `ProcessingWindow`, `ExportWindow`, `BatchApplyWindow`, `CustomizeViewWindow`), each
@@ -698,7 +698,10 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
   the root, import into every .NET project. The application is in folders by MVVM layer, each its own namespace:
   - `Models/` (`Streams`, `Processing`, `Settings`, `Templates`, `Logging`, `Export`, `Help`): the rules, the files and
     the core's runs, no UI. A seam a model implements is a model's too: `IStreamConfigurator`, `IRunLog` and
-    `ICalibrationRunner` (with the product's `CoreCalibrationRunner`) are in `Models/Processing`.
+    `ICalibrationRunner` (with the product's `CoreCalibrationRunner`) are in `Models/Processing`. A type used
+    widely has a file named for it (`PreferencesStore`, `PlotSeries`, `RunLogOrder`, one file to a `Services`
+    interface); a small one stays beside its owner. A run's observer that throws is caught at the core's boundary and
+    kept as the run's `ObserverException`; both runs' callers read it after `Wait()` and say so.
   - `ViewModels/`: the main window's view model and its parts (`MainWindowServices`, `ShellPreferences`,
     `SessionExport`, `BatchRunner`, with `IRunHost` beside it) and `MenuChoice`, which both menus use; the dialogs'
     in `ViewModels/Dialogs/` (with `DialogViewModel`, their base, and `DialogConfigurator`, which builds Configure
@@ -1087,7 +1090,7 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
 
 **The application** (`tests/TmDq.App.Tests`, on the headless platform with Skia drawing):
 
-- **The run:** `WalkingSkeletonTests` (Open to the drawn chart on the PRN sample, failures, the smoke report),
+- **The run:** `OpenToChartTests` (Open to the drawn chart on the PRN sample, failures, the smoke report),
   `CompositionRootTests` (`App.Compose`: every service the menu needs wired, the window's view model and the plot's prompts, the preferences read from their folder, beside the exe for a portable copy, and the theme following them and the menu; the smoke test keeping nothing and running the defaults end to end),
   `ProcessingTests` (the log, the progress dialog and its Cancel, its token source released with the run, the run's lines in the order the core promises: the job lines,
   the summary, then each thread's own lines in order, the reader's and the streams' interleaving as they come; a report the observer could not handle, said and not dropped), `SeveralStreamsTests`.
@@ -1109,7 +1112,7 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `StatusBarTests` (the bar's place, colour and hairline, its marks, its trimming), `MenuStyleTests` (no icons, the accent row and white text, the dimmed shortcut, the row height and inset), `DialogAnatomyTests`
   (every window kind's footer band, padding, button widths and spacing, accent and cancel, in both themes; a status text following the theme), `PreferencesTests`
-  (the preferences file, and v2.x's INI file left unread), `MainWindowTests`.
+  (the preferences file, and v2.x's INI file left unread), `MainWindowStartupTests`.
 - **The layers:** `LayerTests` reads every model, view model and service type as compiled, its methods' code
   included. It fails on a model that reaches a view model, a service, a view or `Platform`; on a view model or service
   that reaches a view or `Platform`; on a view that reaches `Platform`; on any model, view model or service that reaches

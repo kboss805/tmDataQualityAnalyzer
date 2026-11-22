@@ -404,7 +404,7 @@ tmdq_receiver_params abiParams(int polarity, int slope, double scale, int receiv
     p.struct_size = sizeof(p);
     p.polarity_index = polarity;
     p.slope_index = slope;
-    p.scale_db_per_v = scale;
+    p.scale_d_db_per_v = scale;
     p.num_receivers = receivers;
     p.receiver_channels = channels;
     return p;
@@ -415,7 +415,7 @@ ReceiverParams coreParams(const tmdq_receiver_params& p)
     ReceiverParams r;
     r.polarityIndex = p.polarity_index;
     r.slopeIndex = p.slope_index;
-    r.scaleDdBPerV = p.scale_db_per_v;
+    r.scaleDdBPerV = p.scale_d_db_per_v;
     r.numReceivers = p.num_receivers;
     r.receiverChannels = p.receiver_channels;
     return r;
@@ -630,7 +630,7 @@ TEST_CASE("Abi: bad arguments to the receiver parameter functions are refused")
     result.p.struct_size = sizeof(Bigger);
     result.extra[0] = 0x12345678;
     REQUIRE(tmdq_receiver_params_read(path.c_str(), &defaults.p, &result.p) == int(TMDQ_OK));
-    CHECK(result.p.scale_db_per_v == 5.0);
+    CHECK(result.p.scale_d_db_per_v == 5.0);
     CHECK(result.p.num_receivers == 2);
     CHECK(result.extra[0] == 0x12345678);
 

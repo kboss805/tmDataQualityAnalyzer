@@ -1,0 +1,60 @@
+{
+  "suite": "app",
+  "args": ["-stopOnFail"],
+  "mutants": [
+    {
+      "id": "B1",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "could not be handled: \" + failure.Message);\n                return;",
+      "new": "could not be handled: \" + failure.Message);",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.CalibrationDialogTests"],
+      "expect": "caught",
+      "note": "an observer that threw is said, and then the result is asked for and shown anyway"
+    },
+    {
+      "id": "B2",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "if (run.ObserverException is { } failure)\n            {\n                SetCal(CalibrationStatusKind.Fail, \"A report",
+      "new": "if (run.ObserverException is { } failure && failure.Message.Length < 0)\n            {\n                SetCal(CalibrationStatusKind.Fail, \"A report",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.CalibrationDialogTests"],
+      "expect": "caught",
+      "note": "the calibration run's ObserverException is never read, as it was before audit B4"
+    },
+    {
+      "id": "B3",
+      "file": "src/TmDq.App/Models/Processing/CoreCalibrationRunner.cs",
+      "old": "public Exception? ObserverException => run.ObserverException;",
+      "new": "public Exception? ObserverException => null;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.CalibrationDialogTests"],
+      "expect": "survived",
+      "note": "the product's runner hides the core's exception: the test's runner stands in for the core and cannot see it, and the core cannot be made to throw from an observer here (the managed library's own tests hold ObserverException)"
+    },
+    {
+      "id": "S1",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "ExportViewModel.DefaultPaths(LastFolder ?? _appRoot, Plot.Title);",
+      "new": "ExportViewModel.DefaultPaths(LastFolder ?? AppContext.BaseDirectory, Plot.Title);",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "Export opens in the process's folder, not the root the application was handed"
+    },
+    {
+      "id": "S2",
+      "file": "src/TmDq.App/Models/Logging/SessionLog.cs",
+      "old": "new UTF8Encoding(false)",
+      "new": "new UTF8Encoding(true)",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "the exported log gets a byte-order mark"
+    },
+    {
+      "id": "S3",
+      "file": "src/TmDq.App/Models/Logging/SessionLog.cs",
+      "old": "if (!text.EndsWith(\"\\r\\n\", StringComparison.Ordinal)) text += \"\\r\\n\";",
+      "new": "",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "the exported log does not end with a line end"
+    }
+  ]
+}

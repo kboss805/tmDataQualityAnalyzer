@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using TmDq.App.Models.Export;
 using TmDq.App.Models.Logging;
@@ -53,7 +51,7 @@ internal sealed class SessionExport
         if (choice.ExportImage) Note(await ImageAsync(choice.ImagePath), "plot image");
         if (choice.ExportLog)
         {
-            bool ok = WriteLog(choice.LogPath);
+            bool ok = _log.WriteTo(choice.LogPath);
             if (ok) _log.Success("Log exported to " + choice.LogPath);
             else _log.Error("Error: Failed to export log to " + choice.LogPath);
             Note(ok, "log file");
@@ -86,22 +84,5 @@ internal sealed class SessionExport
         if (ok) _log.Success(done + path);
         else _log.Error(failed + path);
         return ok;
-    }
-
-    /// <summary>The log as v2.14.2's export wrote it (US6.2): each line as the sidebar shows it, CR LF line ends,
-    /// UTF-8 without a byte-order mark, ending with a line end.</summary>
-    private bool WriteLog(string path)
-    {
-        string text = _log.PlainText.Replace("\n", "\r\n", StringComparison.Ordinal);
-        if (!text.EndsWith("\r\n", StringComparison.Ordinal)) text += "\r\n";
-        try
-        {
-            File.WriteAllText(path, text, new UTF8Encoding(false));
-            return true;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            return false;
-        }
     }
 }

@@ -30,11 +30,11 @@ public sealed unsafe class SeriesIndex : IDisposable
             Library.Check(Native.tmdq_series_index_build(p, ys.Length, out SeriesIndexHandle handle));
             _handle = handle;
         }
-        Count = ys.Length;
     }
 
-    /// <summary>How many values it was built over.</summary>
-    public int Count { get; }
+    /// <summary>How many values it was built over, as the core holds it.</summary>
+    /// <exception cref="ObjectDisposedException">The index was disposed.</exception>
+    public int Count => Native.tmdq_series_index_count(Handle);
 
     internal SeriesIndexHandle Handle
     {
@@ -70,7 +70,7 @@ public static unsafe class ChartGeometry
     /// counts) drawn in <paramref name="view"/>. With <paramref name="sortedX"/> (see <see cref="IsSortedX"/>) only the
     /// samples in view, and one each side, are walked.</summary>
     public static SeriesGeometry Build(ReadOnlySpan<double> xs, ReadOnlySpan<double> ys, bool sortedX, ChartView view) =>
-        Build(xs, ys, sortedX, view, null);
+        Build(xs, ys, sortedX, view, null);   // tmdq_chart_geometry is the indexed export with no index, in the ABI itself
 
     /// <summary><see cref="Build(ReadOnlySpan{double}, ReadOnlySpan{double}, bool, ChartView)"/> with the series'
     /// <paramref name="index"/>: drawn from its envelope, the series is looked up in the index rather than walked, so a
@@ -84,6 +84,10 @@ public static unsafe class ChartGeometry
         int count = Math.Min(xs.Length, ys.Length);
         ChartViewNative v = ToNative(view);
         IntPtr geometry;
+        // An index built over another number of values than the series now has is left out and the series walked:
+        // the same picture, only slower, and a stale index (a series that grew or shrank) must never stop a frame
+        // being drawn. So the core's TMDQ_ERR_BADARG for a count mismatch is not reached from here, on purpose; the
+        // ABI keeps it for a host that hands an index over without this check.
         SeriesIndexHandle handle = index is not null && index.Count == count ? index.Handle : SeriesIndexHandle.None;
         fixed (double* px = xs)
         fixed (double* py = ys)

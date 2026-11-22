@@ -18,7 +18,7 @@ namespace TmDq.App.Tests;
 /// <summary>
 /// The application's icon (assets\icon.ico, made from docs\design\icon_image.png by eng\gen_app_icon.py): in the exe,
 /// where Explorer, the taskbar and the shortcuts find it, and on every window, for the title bar and Alt+Tab. v3.0.0
-/// shipped with neither: the Qt application's icon came from its .rc file, which the port left behind.
+/// shipped with neither: v2.x's icon came from its .rc file, which the port left behind.
 /// </summary>
 public sealed class IconTests
 {

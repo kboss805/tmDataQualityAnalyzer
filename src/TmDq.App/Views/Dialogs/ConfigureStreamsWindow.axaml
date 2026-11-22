@@ -4,7 +4,7 @@
         xmlns:c="using:TmDq.App.Views.Controls"
         x:Class="TmDq.App.Views.Dialogs.ConfigureStreamsWindow"
         x:DataType="vm:ConfigureStreamsViewModel"
-        Title="{Binding Title}"
+        Title="{x:Static vm:ConfigureStreamsViewModel.Title}"
         SizeToContent="WidthAndHeight"
         CanResize="False"
         ShowInTaskbar="False"
