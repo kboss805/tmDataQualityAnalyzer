@@ -121,7 +121,7 @@ internal sealed class BatchRunner
         {
             string baseName = MainWindowViewModel.BaseName(Path.GetFileName(source.FilePath));
             _plot.SetVisibleSource(source.SourceId);
-            _export.SourceCsv(Path.Combine(folder, baseName + ".csv"), source.SourceId);
+            await _export.SourceCsvAsync(Path.Combine(folder, baseName + ".csv"), source.SourceId);
 
             if (!_export.CanWriteImages) continue;
             if (frameSync)

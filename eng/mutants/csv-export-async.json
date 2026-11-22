@@ -1,0 +1,69 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.ExportImportTests"
+  ],
+  "mutants": [
+    {
+      "id": "C1",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        return Task.Run(() => PlotCsv.Write(path, columns, clock));",
+      "new": "        return Task.FromResult(PlotCsv.Write(path, columns, clock));",
+      "expect": "caught",
+      "note": "the data is written on the calling thread, which is the freeze: the task is complete when the call returns"
+    },
+    {
+      "id": "C2",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        return Task.Run(() => PlotCsv.Write(path, columns, clock));",
+      "new": "        return Task.Run(() => PlotCsv.Write(path, PlotCsv.Columns(_series, sourceId), clock));",
+      "expect": "caught",
+      "note": "the columns are taken on the pool thread, after the plot may have been replaced"
+    },
+    {
+      "id": "C3",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        if (IsBusy) return;\n        IsBusy = true;\n        try\n        {\n            await _export.WriteAsync(choice);",
+      "new": "        if (IsBusy) return;\n        try\n        {\n            await _export.WriteAsync(choice);",
+      "expect": "caught",
+      "note": "the window is not busy while the data is written, so a second export or an open can start"
+    },
+    {
+      "id": "C4",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        if (IsBusy) return;\n        IsBusy = true;\n        try\n        {\n            await _export.WriteAsync(choice);",
+      "new": "        IsBusy = true;\n        try\n        {\n            await _export.WriteAsync(choice);",
+      "expect": "caught",
+      "note": "a second export while one is writing is taken, and writes the same file at the same time"
+    },
+    {
+      "id": "C5",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        finally\n        {\n            IsBusy = false;\n        }\n    }\n\n    // ---- templates and batch",
+      "new": "        finally\n        {\n        }\n    }\n\n    // ---- templates and batch",
+      "expect": "caught",
+      "note": "the window stays busy after the export"
+    },
+    {
+      "id": "C6",
+      "file": "src/TmDq.App/ViewModels/SessionExport.cs",
+      "old": "            _report(\"Exporting data...\", LogLevel.Info);\n",
+      "new": "",
+      "expect": "caught",
+      "note": "nothing on the status line while the data is written"
+    },
+    {
+      "id": "C7",
+      "file": "src/TmDq.App/ViewModels/BatchRunner.cs",
+      "old": "            await _export.SourceCsvAsync(Path.Combine(folder, baseName + \".csv\"), source.SourceId);",
+      "new": "            _ = _export.SourceCsvAsync(Path.Combine(folder, baseName + \".csv\"), source.SourceId);",
+      "expect": "caught",
+      "note": "the batch does not wait for a recording's CSV, so the next one's view change races the write",
+      "args": [
+        "-class",
+        "TmDq.App.Tests.TemplateBatchTests"
+      ]
+    }
+  ]
+}

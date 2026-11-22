@@ -12,6 +12,30 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Export writes the data off the UI thread: no freeze
+
+Export Data and a batch's per-file CSVs ran `PlotViewModel.ExportCsv` on the UI thread. For the 4.6 GB PRN-AGC recording
+at 100 ms (56 series, 2.27 million points, a 32 MB file) that is 0.7 s with the window unresponsive (Release core, measured
+three times: 706, 714 and 705 ms); nearly all of it is the core's writer sorting and formatting the rows, so a larger
+recording or a finer period freezes it for longer. The write now runs on a pool thread:
+
+- **`PlotViewModel.ExportCsvAsync`** is the partner of `LoadCsvAsync`: it takes what is written (the columns and the clock)
+  on the calling thread, before its first await, then writes it with `Task.Run`. The series' arrays are never written to once
+  a series exists, so the snapshot shares them (no copy); a plot cleared or replaced during the write does not change the file.
+  `ExportCsv` stays as the synchronous form, for the tests and the soak, as `LoadCsv` stays beside `LoadCsvAsync`.
+- **`MainWindowViewModel.ExportAsync(choice)`** is busy while it writes (`IsBusy`: Open, Import, Export, templates and Recent
+  Files are disabled, and a second export is ignored, as the other long operations are), and `SessionExport` says
+  "Exporting data..." on the status line until the sentence about what was written replaces it. The data is still written first, then
+  the image, then the log, so the log still says where the other two went.
+- **A batch** awaits each recording's CSV (`SourceCsvAsync`) before it changes the view for the next, as it did.
+- The file's bytes are unchanged: the soak's 34 runs still match v2.14.2's exports, and a new test compares the async file with the
+  synchronous one. The core's writer is not changed; making it faster (it sorts every sample, though each series is already in order)
+  is a separate piece of work.
+
+How it was checked: two new tests in `ExportImportTests` (the task is not complete when the call returns and the file holds what the
+plot held when asked; the window is busy during the write and takes no second export) and the mutation list
+`eng/mutants/csv-export-async.json` (7 mutants, all caught: the write on the calling thread, the columns taken late, the window not busy, a second export taken, busy left on, no status line, a batch not waiting for the CSV). App baseline 692 -> 694 passed (726 -> 728 total, 34 not run).
+
 #### The scan skips through a frame it is locked on, 4.1x faster again, with the same answers
 
 The step before this one made each bit cheaper; this one stops looking at most bits. In lock, nothing the state machine
