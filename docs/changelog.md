@@ -10,6 +10,23 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
+### Unreleased
+
+#### US10.0: a user story for importing a third-party application's CSV (planned)
+
+`docs/guide.md` has a new story, **US10.0: Import a CSV file written by a third-party application**, marked **Planned**. The
+sample the user supplied, `tests/data/test files/av_snr_log.csv` (1.3 MB), shows the layout: `Time, Name, Polarity, Stream 1 ...
+Stream 30`, an ISO 8601 UTC time to the millisecond, and three rows to a sample (HPol, VPol and Comb, in any order). Each column
+after the polarization is a channel of its own, as each receiver is, so 30 channels of three polarizations give 90 series; they
+keep the file's H, V and C language, not the application's L, R and C. Importing asks first what the file is, in a selection dialog:
+**Standalone Telemetry Receivers…** (this application's own export, US6.3) or **AV Phased Array Antenna…** (this story's layout). A phased
+array log is never exported (the third party's system writes it), so Export Data leaves its series out. The story's eight criteria are open (`[ ]`) and say so; what the values are (metric, unit, axis), the
+series' names, whether 90 series start visible and what several unit names do are listed in it as still to settle. Two
+sentences that said every story was Complete now say US1.0 to US9.0 are, and US6.3's scope notes that US10.0 adds one
+third-party layout to the importer it described as only for this application's own files. `tests/.gitignore` lists the sample
+(it ignores every file under `data/test files/` that is not named there) so that it is committed and CI can read it.
+Documentation and the fixture list only; no code changed and no baseline moved.
+
 ### v3.2.0 — The VS Code look, a much faster scan, and a calmer window
 
 The first release since v3.1.0 (2026-11-08). What a user sees: the application is drawn in VS Code's Dark Modern and Light Modern (flush panes, hairlines, a grey title bar, 13 px text), its menu is four submenus, a status bar is back, every number is a validated text box, Export no longer freezes the window, a heavy plot pans and zooms smoothly, and the frame-sync scan takes about a seventh of the time with byte-identical output. One fix changes numbers: Receiver SNR words were read one bit late in the rare frame where data looked like the sync while locked. The rest is the whole-tree cleanup audit, finished by #348 to #350, which changes no behaviour. The entries below are in the order they landed, newest first.
@@ -136,21 +153,6 @@ it mutated, and R1 to R3 re-run caught.
 `deploy/RELEASENOTES.txt` said v3.0.0's window "now opens at 1280 x 800". The window opens at 1920 x 1080 (`MainWindow.DefaultSize`,
 the user story in `docs/guide.md`), so the line now says that. Found by the cleanup audit (M6); the user confirmed the size. Text
 only, in the notes shipped with the installer; no code changed and no baseline moved. The release consistency check passes.
-
-#### US10.0: a user story for importing a third-party application's CSV (planned)
-
-`docs/guide.md` has a new story, **US10.0: Import a CSV file written by a third-party application**, marked **Planned**. The
-sample the user supplied, `tests/data/test files/av_snr_log.csv` (1.3 MB), shows the layout: `Time, Name, Polarity, Stream 1 ...
-Stream 30`, an ISO 8601 UTC time to the millisecond, and three rows to a sample (HPol, VPol and Comb, in any order). Each column
-after the polarization is a channel of its own, as each receiver is, so 30 channels of three polarizations give 90 series; they
-keep the file's H, V and C language, not the application's L, R and C. Importing asks first what the file is, in a selection dialog:
-**Standalone Telemetry Receivers…** (this application's own export, US6.3) or **AV Phased Array Antenna…** (this story's layout). A phased
-array log is never exported (the third party's system writes it), so Export Data leaves its series out. The story's eight criteria are open (`[ ]`) and say so; what the values are (metric, unit, axis), the
-series' names, whether 90 series start visible and what several unit names do are listed in it as still to settle. Two
-sentences that said every story was Complete now say US1.0 to US9.0 are, and US6.3's scope notes that US10.0 adds one
-third-party layout to the importer it described as only for this application's own files. `tests/.gitignore` lists the sample
-(it ignores every file under `data/test files/` that is not named there) so that it is committed and CI can read it.
-Documentation and the fixture list only; no code changed and no baseline moved.
 
 #### A test that read a freshly written 20 MB CSV no longer fails when the file is held for a moment
 
