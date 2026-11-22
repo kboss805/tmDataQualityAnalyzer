@@ -15,9 +15,9 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ## User Stories
 
-The stories below follow the workflow a first-time user takes through the application: open a file and choose what to process (US1), define the per-stream parameters (US2), view the resulting data-quality metrics (US3), customize the plot (US4), manage configuration files and calibration (US5), export and re-import results (US6), and the cross-cutting concerns of input validation (US7), installation (US8), and theming (US9).
+The stories below follow the workflow a first-time user takes through the application: open a file and choose what to process (US1), define the per-stream parameters (US2), view the resulting data-quality metrics (US3), customize the plot (US4), manage configuration files and calibration (US5), export and re-import results (US6), and the cross-cutting concerns of input validation (US7), installation (US8), and theming (US9); US10 imports another application's CSV.
 
-**Status: all user stories are Complete** — implemented, tested and shipped. Every acceptance criterion below is delivered functionality (`[x]`), each held by a test or a recorded manual check (`docs/records/parity.md` maps those of v3.0.0; the criteria added since have no row in it), and each story carries a **Complete** marker in its heading. New work is tracked as new stories appended after US9.0.
+**Status: US1.0 to US9.0 are Complete** — implemented, tested and shipped. Every acceptance criterion of those is delivered functionality (`[x]`), each held by a test or a recorded manual check (`docs/records/parity.md` maps those of v3.0.0; the criteria added since have no row in it), and each of those stories carries a **Complete** marker in its heading. New work is tracked as new stories appended after US9.0: **US10.0** (a third-party CSV import) is **Planned**, its criteria open (`[ ]`) until it is built and tested.
 
 ### US1.0: Open a Ch10 file and configure which streams to process — Complete
 
@@ -359,7 +359,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Imported data can be re-exported (CSV/image) and the recent-files list records the imported CSV.
 - [x] A CSV that is not in the application's export format (e.g. the legacy `Day,Time,…` layout, a wrong/missing header, or a file with no parseable data rows) is rejected with a clear error in the log rather than producing garbage series.
 - [x] Malformed or short data rows are skipped, and the user is informed how many rows were skipped.
-  - **Scope:** The import is the core's CSV parser (`CsvSeriesParser`, through `PlotCsv.Parse`) behind `PlotViewModel.LoadCsv` / `LoadCsvAsync`, the matched partner of the export (`PlotViewModel.ExportCsv` / `ExportCsvAsync`, the core's `CsvSeriesWriter`; the app writes it off the UI thread, with the window busy and the columns taken before the first await); the app adds the entry points (the menu, drag and drop, Recent Files) and the error reporting. It does not add a CSV import dialog with column mapping, and it does not attempt to import arbitrary third-party CSVs — only files this application produced.
+  - **Scope:** The import is the core's CSV parser (`CsvSeriesParser`, through `PlotCsv.Parse`) behind `PlotViewModel.LoadCsv` / `LoadCsvAsync`, the matched partner of the export (`PlotViewModel.ExportCsv` / `ExportCsvAsync`, the core's `CsvSeriesWriter`; the app writes it off the UI thread, with the window busy and the columns taken before the first await); the app adds the entry points (the menu, drag and drop, Recent Files) and the error reporting. It does not add a CSV import dialog with column mapping, and it does not attempt to import arbitrary third-party CSVs — only files this application produced (US10.0 adds one third-party layout).
 
 ### US7.0: Error Checking — Complete
 
@@ -415,6 +415,23 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] A status bar sits under the log and the chart, in the chrome's colour under a hairline, and says in one short sentence the last thing that happened, so there is an answer with the log hidden: what is under way ("Processing x.ch10..."), what finished ("Finished processing x.ch10: 3 streams.", "Imported x.csv.", "Saved template t.json.", "Exported data, plot image and log file.", "Batch complete: 2 processed, 1 skipped."), what was cancelled, or what went wrong. A success, a warning (finished with something left out) or an error is marked (a tick, a warning sign, a cross) in Fluent's status colour; what is under way, and the first prompt, is not. The sentence is the bar's alone: every path, stream and reason is in the log, and where an action failed the bar says so and points there ("Could not read the template. See the log."). The version is the log's first line and in Help > About, not in the bar. A sentence longer than the bar is cut with an ellipsis and whole in its tooltip.
 - [x] A status is painted by what it means, in Fluent's status colours for the theme: success, caution (a warning), critical, or neutral (pending). The log's lines, Configure Streams' ready marks, the setup dialog's problems and calibration label, the batch confirmation's glyphs and Extract Calibration's two status lines all take them (`SystemFillColorSuccess`, `Caution`, `Critical`, `Neutral`), and follow a change of theme; none has a colour of its own.
 - [x] A series that is too pale to read on the light theme's white is drawn darker there, and only there: a colour whose contrast against the chart's background is below 2.0 (WCAG's ratio) is drawn with its channels scaled down by the least that reaches 2.0 (`ChartPalette.SeriesColor`), in the plot's line and band and in the legend's swatch, so the Receiver SNR yellow and the paler shades beyond the primaries are legible and the other five primaries are unchanged. The dark theme draws every series in its own colour. The colour a series is given, saves in a template and shows in Customize View is always its own.
+
+### US10.0: Import a CSV file written by a third-party application — Planned
+
+**As a** telemetry engineer or data analyst
+**I want to** open a CSV file written by another application, whose time column is ISO 8601 time and whose every sample carries three measurements, one for each polarization (H, V and combined)
+**So that** I can plot another system's data with the same tools as the data this application measures, and compare the two, without converting the file by hand.
+
+**Acceptance Criteria:**
+
+- [ ] The user opens such a file through the entry points US6.3 has: **Import/Export > Import from CSV…**, drag-and-drop of a `.csv` file, and the Recent Files list. The application recognises the layout from the file's header, as it does its own export format; there is no format choice and no column-mapping dialog.
+- [ ] The time column is read as ISO 8601 date and time of day, to the millisecond, and placed on the plot's time axis the way the application's own `Time (DOY:HH:MM:SS.mmm)` column is.
+- [ ] Each row gives three samples at its time, one per polarization: H, V and combined. The plot shows three series, each named so that its polarization is plain in the legend, the Customize View dialog and the exported CSV.
+- [ ] Imported series populate the plot, the on-plot legend and Customize View as processed data does (axis auto-ranging, time window, visibility toggles, colours), and can be exported again (CSV, image) and recorded in the Recent Files list.
+- [ ] A file that is in neither the application's export format nor this layout (a wrong or missing header, a time that is not ISO 8601, or no parseable data rows) is rejected with a clear error in the log, not turned into garbage series.
+- [ ] A malformed or short row is skipped, and the user is told how many were.
+  - **Scope:** like US6.3's import it is the core's CSV parser behind `PlotViewModel.LoadCsv` / `LoadCsvAsync`; it adds one recognised layout, not a general CSV importer. It replaces US6.3's rule that only files this application produced are imported, for this one layout.
+  - **To settle against the sample file** (the file is added to `tests/data` by the user; it is the reference the tests read): the header's exact column names; the ISO 8601 form (date and time separator, fractional-second digits, `Z` or an offset: which zone the time axis uses); what the three measurements are (their metric, unit and axis: Receiver SNR, AGC or something else), and whether a polarization is ever empty in a row. Each answer becomes a criterion here, and the sample becomes a test.
 
 ## Tech Stack
 

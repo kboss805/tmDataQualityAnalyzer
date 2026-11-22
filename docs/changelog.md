@@ -12,6 +12,17 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### US10.0: a user story for importing a third-party application's CSV (planned)
+
+`docs/guide.md` has a new story, **US10.0: Import a CSV file written by a third-party application**, marked **Planned**: the
+file's time column is ISO 8601 and each sample carries three measurements, one per polarization (H, V and combined). Its six
+criteria are open (`[ ]`); the file's header, the exact ISO form (and its time zone), and what the three measurements are
+(metric, unit, axis) are listed in the story as to be settled against a sample file the user will add to `tests/data`, which
+the tests will read. Two sentences that said every story was Complete now say US1.0 to US9.0 are, and US6.3's scope notes that
+US10.0 adds one third-party layout to the importer it described as only for this application's own files. Documentation
+only; no code changed and no baseline moved. When the sample arrives it needs an exception in `tests/.gitignore`, which ignores
+every file under `data/test files/` that is not listed there.
+
 #### A test that read a freshly written 20 MB CSV no longer fails when the file is held for a moment
 
 `TheDataIsWrittenOffTheCallingThreadFromWhatThePlotHeldWhenAsked` (added with the off-thread export) failed four runs out of four,
