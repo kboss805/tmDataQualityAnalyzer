@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -26,6 +27,7 @@
 #include "irig106ch10.h"
 #include "i106_time.h"
 #include "i106_decode_tmats.h"
+#include "i106_decode_pcmf1.h"
 
 #include "processingevents.h"
 #include "processingparams.h"
@@ -33,13 +35,22 @@
 class PacketQueue;
 
 /**
- * @brief Per-channel bookkeeping used by the irig106 C helper layer.
+ * @brief What the reader holds for one track number the TMATS names: for a PCM source the decoder's attributes for it.
+ *
+ * A track number whose source is not PCM, or has no data type, still has an entry (so a later source claiming the same
+ * number is ignored), with no attributes.
  */
-typedef struct SuChanInfo
+struct ChannelInfo
 {
-    Irig106::SuRDataSource* psuRDataSrc;    ///< Pointer to the TMATS R-record data source.
-    void*                   psuAttributes;  ///< Pointer to decoded attributes (type varies).
-} SuChanInfo;
+    /// Gives back the buffers the decoder allocated for the attributes, then the attributes themselves.
+    struct PcmAttributesDeleter
+    {
+        void operator()(Irig106::SuPcmF1_Attributes* attributes) const;
+    };
+
+    /// The decoded attributes of a PCM source; null for a source that is not PCM, or whose attributes could not be allocated.
+    std::unique_ptr<Irig106::SuPcmF1_Attributes, PcmAttributesDeleter> pcm;
+};
 
 /**
  * @brief Reads a Ch10 file once and dispatches PCM packets to stream queues.
@@ -91,12 +102,10 @@ public:
     void setEvents(std::shared_ptr<ProcessingEvents> events);
 
 private:
-    /// Frees the per-channel attribute table.
-    static void freeChanInfoTable(std::vector<SuChanInfo*>& channel_info);
-    /// Builds per-channel attribute structures from TMATS metadata.
+    /// Builds per-channel attribute structures from TMATS metadata, by track number.
     static Irig106::EnI106Status assembleAttributesFromTMATS(
         Irig106::SuTmatsInfo* tmats_info,
-        std::vector<SuChanInfo*>& channel_info);
+        std::map<int, ChannelInfo>& channel_info);
 
     /// Grows m_buffer to at least @p required bytes. Returns false on failure.
     bool readPacket();
@@ -111,7 +120,7 @@ private:
     Irig106::SuI106Ch10Header m_header;
     std::vector<uint8_t>  m_buffer;
     Irig106::SuTmatsInfo  m_tmats_info;
-    std::vector<SuChanInfo*>  m_channel_info;
+    std::map<int, ChannelInfo> m_channel_info; ///< By track number. Emptied before the tree is freed, which its attributes were set up from.
     Irig106::SuIrig106Time m_irig_time;
     int64_t               m_total_file_size = 0;
     int                   m_time_channel_id = -1;

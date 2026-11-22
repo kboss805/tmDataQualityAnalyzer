@@ -34,7 +34,7 @@ namespace TmDq.App.Tests;
 
 /// <summary>
 /// Export and import (plan step 4.5): the plot as CSV, as an image and the log as text, the Export dialog, and an
-/// exported CSV read back, with v2.14.2's rejections and messages. The CSV oracle is v2.14.2 (the Qt application)
+/// exported CSV read back, with v2.14.2's rejections and messages. The CSV oracle is v2.14.2
 /// itself: each committed recording was processed by its pipeline into its plot and exported by it, once, and
 /// the app must write the very same bytes.
 /// </summary>
@@ -926,6 +926,13 @@ public sealed class ExportImportTests
             fresh.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "a", 1, 0, X2, X2) });
             await fresh.ExportCommand.ExecuteAsync(null);
             Assert.Equal(ExportViewModel.DefaultPaths(AppContext.BaseDirectory, PlotViewModel.DefaultTitle).Image, dialog.Shown!.ImagePath);
+
+            // The root the application was handed is the folder it falls back to, not the process's own (audit S17).
+            string root = Path.Combine(Path.GetTempPath(), "tmdq-approot");
+            var rooted = new MainWindowViewModel(new MainWindowServices { ExportDialog = dialog, AppRoot = root });
+            rooted.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "a", 1, 0, X2, X2) });
+            await rooted.ExportCommand.ExecuteAsync(null);
+            Assert.Equal(ExportViewModel.DefaultPaths(root, PlotViewModel.DefaultTitle).Image, dialog.Shown!.ImagePath);
         }
         finally
         {

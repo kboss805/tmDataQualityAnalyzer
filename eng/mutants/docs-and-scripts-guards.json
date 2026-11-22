@@ -1,0 +1,46 @@
+{
+  "suite": "managed",
+  "args": ["-class", "TmDq.Core.Tests.RepoFilesTests"],
+  "mutants": [
+    {
+      "id": "G1",
+      "file": "docs/future_plans/README.md",
+      "old": "[`../records/ci_runner.md`](../records/ci_runner.md)",
+      "new": "[`../records/ci_runner.md`](../records/ci_runnerr.md)",
+      "expect": "caught",
+      "note": "a relative link in the documentation goes to nothing"
+    },
+    {
+      "id": "G2",
+      "file": "docs/guide.md",
+      "old": "## Tech Stack\n",
+      "new": "###### Tech Stack\n",
+      "expect": "caught",
+      "note": "a heading jumps several levels"
+    },
+    {
+      "id": "G3",
+      "file": "docs/guide.md",
+      "old": "- **Platform**: Windows x64.",
+      "new": "- **Platform**:\tWindows x64.",
+      "expect": "caught",
+      "note": "a tab in the documentation"
+    },
+    {
+      "id": "G4",
+      "file": "docs/guide.md",
+      "old": "- **Platform**: Windows x64.",
+      "new": "- **Platform**: Windows x64.\n```",
+      "expect": "caught",
+      "note": "a code fence left open, so the rest of the page is code"
+    },
+    {
+      "id": "G5",
+      "file": "eng/test_dotnet.ps1",
+      "old": "$exe = Get-TestExePath $root 'TmDq.Core.Tests' $Configuration",
+      "new": "$exe = Join-Path $root \"tests\\TmDq.Core.Tests\\bin\\$Configuration\\net10.0\\TmDq.Core.Tests.exe\"",
+      "expect": "caught",
+      "note": "a script types the target framework again instead of asking eng\\common.ps1"
+    }
+  ]
+}

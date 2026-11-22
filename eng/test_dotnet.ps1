@@ -39,7 +39,8 @@ if (-not $env:TMDQ_CORE_DLL) {
 }
 
 $project = Join-Path $root 'tests\TmDq.Core.Tests'
-$exe = Join-Path $project "bin\$Configuration\net10.0\TmDq.Core.Tests.exe"
+. (Join-Path $PSScriptRoot 'common.ps1')
+$exe = Get-TestExePath $root 'TmDq.Core.Tests' $Configuration
 
 $ErrorActionPreference = 'Continue'   # 5.1 turns native stderr into a terminating error
 if (-not $NoBuild) {

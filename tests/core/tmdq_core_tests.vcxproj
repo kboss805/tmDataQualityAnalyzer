@@ -84,9 +84,9 @@
            has to see the same doctest.
            TMDQ_ABI_STATIC: the C ABI is compiled into this executable (below) rather than imported from the DLL, so
            TMDQ_API is empty. -->
-      <PreprocessorDefinitions>UNICODE;_UNICODE;WIN32;WIN64;_ENABLE_EXTENDED_ALIGNED_STORAGE;DOCTEST_CONFIG_USE_STD_HEADERS;TMDQ_ABI_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>UNICODE;_UNICODE;WIN32;WIN64;DOCTEST_CONFIG_USE_STD_HEADERS;TMDQ_ABI_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <!-- As the DLL: level 4, every warning an error, the irig106 headers external. -->
-      <AdditionalOptions>/FS /utf-8 /Zc:__cplusplus /Zc:throwingNew /Zc:externConstexpr /wd4577 /wd4467 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/FS /utf-8 /Zc:__cplusplus /Zc:throwingNew %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -166,6 +166,7 @@
   <!-- The core the ported suites exercise: src\core\src\<name>.cpp, each also built by tmdq_core.vcxproj. -->
   <ItemGroup>
     <ClCompile Include="..\..\src\core\src\calibrationextractor.cpp" />
+    <ClCompile Include="..\..\src\core\src\calibrationreport.cpp" />
     <ClCompile Include="..\..\src\core\src\calibrationrequest.cpp" />
     <ClCompile Include="..\..\src\core\src\chartgeometry.cpp" />
     <ClCompile Include="..\..\src\core\src\ch10packetreader.cpp" />

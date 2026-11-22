@@ -293,8 +293,8 @@ application's `AddStream`.
 | tst_exportdialog::testExportButtonValidation | PORTED | ExportImportTests.cs::ExportWaitsForATickedRowAndAPathForEach, ::TheExportWindowHasItsThreeRowsAndEachFollowsItsBox |  |
 | tst_exportdialog::testLogRowDefaultsAndAccessors | PORTED | ExportImportTests.cs::TheDialogStartsWithTheImageTickedAndEachRowFollowsItsBox, ::TheExportWindowHasItsThreeRowsAndEachFollowsItsBox |  |
 | tst_exportdialog::testLogOnlyExportValidation | PORTED | ExportImportTests.cs::ExportWaitsForATickedRowAndAPathForEach |  |
-| tst_mainview::constructsAndDestroysWithoutCrash | PORTED | MainWindowTests.cs::TheWindowIsTitledTmDataQualityAnalyzer (and every MainWindow Show/Close) | Implicit |
-| tst_mainview::windowTitleIsNonEmpty | PORTED | MainWindowTests.cs::TheWindowIsTitledTmDataQualityAnalyzer | Checks the exact title |
+| tst_mainview::constructsAndDestroysWithoutCrash | PORTED | MainWindowStartupTests.cs::TheWindowIsTitledTmDataQualityAnalyzer (and every MainWindow Show/Close) | Implicit |
+| tst_mainview::windowTitleIsNonEmpty | PORTED | MainWindowStartupTests.cs::TheWindowIsTitledTmDataQualityAnalyzer | Checks the exact title |
 | tst_mainview::titleBarExists | PORTED | ShellTests.cs::TheTitleBarIsTheApplicationsOwnAndTellsWindowsWhatEachPartIs |  |
 | tst_mainview::supportedFileDetection | PORTED | PreferencesTests.cs::ARecordingOrAnExportedCsvIsOpenedByItsSuffix; ShellTests.cs::TheFirstRecordingOrCsvAmongTheFilesIsTheOneTaken | Same inputs, case-insensitive |
 | tst_mainview::openPathImportsCsv | PORTED | PreferencesTests.cs::ARecentFileOpensByItsSuffixAndNotWhileBusy; ShellTests.cs::ARecordingOrCsvDroppedOnTheWindowOpensAsRecentFilesOpensIt |  |
@@ -315,7 +315,7 @@ application's `AddStream`.
 | tst_mainviewmodel_helpers::buildStreamJobBuildsTheAcquisitionParameters | PORTED | test_framesync.cpp::"applyAcquisition …" cases; test_streamjob.cpp recorded rows; test_abi.cpp::"everySettingOfAStreamReachesTheJob", ::"theByteOrderOfTheFileReachesTheJob" | Sample periods, rate, words, swap, "Ch N" label |
 | tst_mainviewmodel_helpers::buildStreamJobReportsEachWayAConfigIsRejected | PORTED | test_streamjob.cpp::"the builder makes every generated job as the code it replaced did"; test_framesync.cpp::"resolveFrameSync reports the first problem…"; test_abi.cpp::"settingsTheCoreRejectsAreRefusedWithTheCoresMessage" | Empty-pattern message held only through the oracle comparison |
 | tst_mainviewmodel_helpers::openFileListsItsChannelsAndOffersThemAsStreams | PORTED | ConfigureStreamsTests.cs::EveryPcmChannelIsARowAndNothingIsCheckedYet; Core FileTests.cs::EachRecordingListsItsChannelsExactly; test_chapter10reader.cpp::"a combo-box index selects the channel at that position" |  |
-| tst_mainviewmodel_helpers::openFileOnAFileThatCannotBeReadReportsOneErrorAndKeepsNoChannels | PORTED | test_chapter10reader.cpp::"a failed load reports its reason and leaves no channels"; ProcessingTests.cs::AFileThatCannotBeOpenedIsLoggedInRed; WalkingSkeletonTests.cs::AFailedLoadClearsThePreviousRecordingsSeries | New tests use a junk file, not a missing one |
+| tst_mainviewmodel_helpers::openFileOnAFileThatCannotBeReadReportsOneErrorAndKeepsNoChannels | PORTED | test_chapter10reader.cpp::"a failed load reports its reason and leaves no channels"; ProcessingTests.cs::AFileThatCannotBeOpenedIsLoggedInRed; OpenToChartTests.cs::AFailedLoadClearsThePreviousRecordingsSeries | New tests use a junk file, not a missing one |
 | tst_mainviewmodel_helpers::openFileShowsANonAsciiChannelNameIntact | PORTED | test_chapter10reader.cpp::"TMATS text decides which channels are listed…" (row name-non-ascii) | Same patched fixture, but native only; no .NET test reads a non-ASCII channel name |
 
 ### The plot's view model, the chart, CSV and series building
@@ -428,7 +428,7 @@ application's `AddStream`.
 
 | Qt case | Verdict | Held by | Note |
 |---|---|---|---|
-| tst_streamconfigdialog::constructionWithEmptyConfigs | PORTED | WalkingSkeletonTests.ARecordingWithNoPcmChannelSaysSo | Behaviour changed: a recording with zero channels never reaches Configure Streams; the status line says so. |
+| tst_streamconfigdialog::constructionWithEmptyConfigs | PORTED | OpenToChartTests.ARecordingWithNoPcmChannelSaysSo | Behaviour changed: a recording with zero channels never reaches Configure Streams; the status line says so. |
 | tst_streamconfigdialog::constructionWithOneStream | PORTED | ConfigureStreamsTests.EveryPcmChannelIsARowAndNothingIsCheckedYet; StreamWindowsTests.ConfigureStreamsShowsARowPerChannelAndTheRecordingsSettings |  |
 | tst_streamconfigdialog::configsRoundtripDefaultValues | PORTED | StreamSetupViewModelTests.TheDialogOpensWithTheRowAndIsNamedForItsMode (`ToSetup()==row`); ConfigureStreamsTests.EveryPcmChannelIsARow… | Label and mode survive. |
 | tst_streamconfigdialog::configsRoundtripFrameSyncFields | PORTED | StreamSetupViewModelTests.TheDialogOpensWithTheRow…, WhatTheDialogHoldsIsTheSetupItGivesBack |  |

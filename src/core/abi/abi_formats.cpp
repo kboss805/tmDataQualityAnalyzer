@@ -128,7 +128,7 @@ ReceiverParams toCore(const tmdq_receiver_params& p)
     ReceiverParams r;
     r.polarityIndex    = p.polarity_index;
     r.slopeIndex       = p.slope_index;
-    r.scaleDdBPerV     = p.scale_db_per_v;
+    r.scaleDdBPerV     = p.scale_d_db_per_v;
     r.numReceivers     = p.num_receivers;
     r.receiverChannels = p.receiver_channels;
     return r;
@@ -139,7 +139,7 @@ tmdq_receiver_params toAbi(const ReceiverParams& r)
     tmdq_receiver_params p{};
     p.polarity_index    = r.polarityIndex;
     p.slope_index       = r.slopeIndex;
-    p.scale_db_per_v    = r.scaleDdBPerV;
+    p.scale_d_db_per_v    = r.scaleDdBPerV;
     p.num_receivers     = r.numReceivers;
     p.receiver_channels = r.receiverChannels;
     return p;

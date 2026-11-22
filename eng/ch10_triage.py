@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Triage a Chapter 10 recording that the app finds no frame syncs in.
 
-Standalone: no Qt, no irig106, no build. Walks the .ch10 packet stream directly
+Standalone: no irig106, no build. Walks the .ch10 packet stream directly
 and answers "why does this file not sync?" in three passes:
 
   1. Packet census + the gates `Ch10PacketReader::prepare()` applies — first

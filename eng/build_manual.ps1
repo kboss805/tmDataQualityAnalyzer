@@ -36,6 +36,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
 $ProjectDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+. (Join-Path $PSScriptRoot 'common.ps1')
 $SrcDir     = Join-Path $ProjectDir 'docs\manual_images'
 $OutDir     = Join-Path $SrcDir 'processed'
 $MaxWidth   = 1200
@@ -53,7 +54,7 @@ if (-not $NoCapture) {
     $env:TMDQ_CORE_DLL = Join-Path $ProjectDir 'out\Release\tmdq_core.dll'
     if (-not (Test-Path $env:TMDQ_CORE_DLL)) { throw "build the native core first: eng\build_core_dll.ps1 -Configuration Release" }
     $env:TMDQ_MANUAL_FIGURES = $SrcDir
-    & (Join-Path $tests 'bin\Release\net10.0\TmDq.App.Tests.exe') -class TmDq.App.Tests.ManualFiguresTests
+    & (Get-TestExePath $ProjectDir 'TmDq.App.Tests' 'Release') -class TmDq.App.Tests.ManualFiguresTests
     if ($LASTEXITCODE -ne 0) { throw "a figure's scene failed ($LASTEXITCODE): its caption no longer holds, or it could not be rendered" }
     Remove-Item Env:TMDQ_MANUAL_FIGURES
 }

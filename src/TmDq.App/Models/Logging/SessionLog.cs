@@ -1,7 +1,9 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace TmDq.App.Models.Logging;
 
@@ -61,4 +63,22 @@ public sealed class SessionLog
 
     /// <summary>The whole log as text, a line per entry (an entry's own line breaks kept).</summary>
     public string PlainText => string.Join("\n", Entries.Select(e => e.Line));
+
+    /// <summary>Writes the log to <paramref name="path"/> as v2.14.2's export did (US6.2): each line as the sidebar
+    /// shows it, CR LF line ends, UTF-8 without a byte-order mark, ending with a line end. False when the file cannot
+    /// be written.</summary>
+    public bool WriteTo(string path)
+    {
+        string text = PlainText.Replace("\n", "\r\n", StringComparison.Ordinal);
+        if (!text.EndsWith("\r\n", StringComparison.Ordinal)) text += "\r\n";
+        try
+        {
+            File.WriteAllText(path, text, new UTF8Encoding(false));
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
+    }
 }

@@ -18,7 +18,7 @@ using Xunit;
 namespace TmDq.App.Tests;
 
 /// <summary>
-/// Templates and batch (plan step 4.7, US1.1). The template's oracle is v2.14.2 (the Qt application): the three
+/// Templates and batch (plan step 4.7, US1.1). The template's oracle is v2.14.2: the three
 /// files under Templates/ were written by its own template writer (a throwaway case in its suite, since removed),
 /// so the app must read them as written and write their very bytes. The batch is v2.14.2's batch loop, its
 /// messages word for word, run over copies of the PRN sample.

@@ -41,8 +41,8 @@ public:
         m_file.clear();
         m_file.seekg(0, std::ios::beg);
 
-        const bool utf16 = got >= 2 && ((head[0] == 0xFF && head[1] == 0xFE) || (head[0] == 0xFE && head[1] == 0xFF));
-        if (utf16)
+        const textfile::ByteOrderMark mark = textfile::byteOrderMark(head, static_cast<std::size_t>(got));
+        if (mark == textfile::ByteOrderMark::Utf16LittleEndian || mark == textfile::ByteOrderMark::Utf16BigEndian)
         {
             std::ostringstream all;
             all << m_file.rdbuf();
@@ -50,7 +50,7 @@ public:
             m_in_memory = true;
             m_size = m_text.size();
         }
-        else if (got >= 3 && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF)
+        else if (mark == textfile::ByteOrderMark::Utf8)
         {
             m_file.seekg(3, std::ios::beg);
             m_consumed = 3;

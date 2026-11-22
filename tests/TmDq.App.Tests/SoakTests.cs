@@ -26,7 +26,7 @@ namespace TmDq.App.Tests;
 
 /// <summary>
 /// The side-by-side soak (plan step 5.2): every run in <c>Soak/soak.json</c> processed as the application processes
-/// it, its CSV export compared byte for byte with what v2.14.2 (the Qt application) exported for the same run (the
+/// it, its CSV export compared byte for byte with what v2.14.2 exported for the same run (the
 /// manifest's <c>qt</c> block, recorded by a throwaway harness that drove v2.14.2's own pieces).
 /// <para>
 /// Explicit: most runs read recordings that are not committed (the full recordings, gigabytes, and the local ones

@@ -77,7 +77,27 @@ public sealed class CalibrationDialogTests : IDisposable
             public bool IsRunning => true;
             public void Cancel() { }
             public void Wait() { }
+            public Exception? ObserverException => null;
             public CalibrationResult GetResult() => throw new TmdqException(Status.Internal, "out of memory in the core");
+            public void Dispose() => owner.Disposed++;
+        }
+    }
+
+    /// <summary>A run whose observer threw (audit B4): the core kept the exception, and asking for the result would
+    /// fail the test, because the view model must not get that far.</summary>
+    private sealed class ObserverFailedRunner : ICalibrationRunner
+    {
+        public int Disposed;
+
+        public ICalibrationRunning Start(CalibrationRequest request, IRunObserver observer) => new Running(this);
+
+        private sealed class Running(ObserverFailedRunner owner) : ICalibrationRunning
+        {
+            public bool IsRunning => true;
+            public void Cancel() { }
+            public void Wait() { }
+            public Exception? ObserverException => new InvalidOperationException("the observer broke");
+            public CalibrationResult GetResult() => throw new InvalidOperationException("the result was asked for");
             public void Dispose() => owner.Disposed++;
         }
     }
@@ -132,6 +152,20 @@ public sealed class CalibrationDialogTests : IDisposable
         await vm.LoadCalibrationAsync(StepCal);
         Assert.Equal((CalibrationStatusKind.Fail, "✗ out of memory in the core"), (vm.CalKind, vm.CalStatus));
         Assert.Equal((1, 1), (progress.Shown.Count, progress.Closed));   // the dialog went, and the status says why
+        Assert.Equal(1, runner.Disposed);
+        Assert.False(vm.CanAccept);
+        Assert.Empty(vm.Profiles);
+    }
+
+    [Fact]
+    public async Task ARunWhoseObserverThrewIsACrossThatSaysSoAndShowsNoResult()
+    {
+        var progress = new FakeProgress();
+        var runner = new ObserverFailedRunner();
+        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = progress, Runner = runner };
+        await vm.LoadCalibrationAsync(StepCal);
+        Assert.Equal((CalibrationStatusKind.Fail, "✗ A report from the core could not be handled: the observer broke"), (vm.CalKind, vm.CalStatus));
+        Assert.Equal((1, 1), (progress.Shown.Count, progress.Closed));
         Assert.Equal(1, runner.Disposed);
         Assert.False(vm.CanAccept);
         Assert.Empty(vm.Profiles);

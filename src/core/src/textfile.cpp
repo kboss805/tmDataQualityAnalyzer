@@ -76,26 +76,35 @@ std::string utf16ToUtf8(const std::string& bytes, std::size_t offset, bool big_e
 
 namespace textfile {
 
+ByteOrderMark byteOrderMark(const unsigned char* head, std::size_t size)
+{
+    if (size >= 3 && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF)
+    {
+        return ByteOrderMark::Utf8;
+    }
+    if (size >= 2 && head[0] == 0xFF && head[1] == 0xFE)
+    {
+        return ByteOrderMark::Utf16LittleEndian;
+    }
+    if (size >= 2 && head[0] == 0xFE && head[1] == 0xFF)
+    {
+        return ByteOrderMark::Utf16BigEndian;
+    }
+    return ByteOrderMark::None;
+}
+
 std::string decodeText(const std::string& bytes)
 {
-    if (bytes.size() >= 3 && static_cast<unsigned char>(bytes[0]) == 0xEF
-        && static_cast<unsigned char>(bytes[1]) == 0xBB
-        && static_cast<unsigned char>(bytes[2]) == 0xBF)
+    switch (byteOrderMark(reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size()))
     {
+    case ByteOrderMark::Utf8:
         return bytes.substr(3);
-    }
-    if (bytes.size() >= 2)
-    {
-        const auto b0 = static_cast<unsigned char>(bytes[0]);
-        const auto b1 = static_cast<unsigned char>(bytes[1]);
-        if (b0 == 0xFF && b1 == 0xFE)
-        {
-            return utf16ToUtf8(bytes, 2, false);
-        }
-        if (b0 == 0xFE && b1 == 0xFF)
-        {
-            return utf16ToUtf8(bytes, 2, true);
-        }
+    case ByteOrderMark::Utf16LittleEndian:
+        return utf16ToUtf8(bytes, 2, false);
+    case ByteOrderMark::Utf16BigEndian:
+        return utf16ToUtf8(bytes, 2, true);
+    case ByteOrderMark::None:
+        break;
     }
     return bytes;
 }

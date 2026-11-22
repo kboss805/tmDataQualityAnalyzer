@@ -27,8 +27,8 @@
     {
       "id": "T3",
       "file": "src/core/src/ch10packetreader.cpp",
-      "old": "    freeChanInfoTable(m_channel_info);\n    // After the table, whose entries point into the tree. irig106 allocates the tree and only gives it back when\n    // asked; it touches only this reader's tree, so it needs no lock.\n    enI106_Free_TmatsInfo(&m_tmats_info);",
-      "new": "    freeChanInfoTable(m_channel_info);",
+      "old": "    m_channel_info.clear();\n    // After the table, whose entries point into the tree. irig106 allocates the tree and only gives it back when\n    // asked; it touches only this reader's tree, so it needs no lock.\n    enI106_Free_TmatsInfo(&m_tmats_info);",
+      "new": "    m_channel_info.clear();",
       "args": [
         "-tc=*decoded TMATS*"
       ],
@@ -38,8 +38,8 @@
     {
       "id": "T4",
       "file": "src/core/src/ch10packetreader.cpp",
-      "old": "    freeChanInfoTable(m_channel_info);\n    m_time_channel_id = time_channel_id;",
-      "new": "    freeChanInfoTable(m_channel_info);\n    m_tmats_info = Irig106::SuTmatsInfo{};\n    m_time_channel_id = time_channel_id;",
+      "old": "    m_channel_info.clear();\n    m_time_channel_id = time_channel_id;",
+      "new": "    m_channel_info.clear();\n    m_tmats_info = Irig106::SuTmatsInfo{};\n    m_time_channel_id = time_channel_id;",
       "args": [
         "-tc=*decoded TMATS*"
       ],
@@ -71,8 +71,8 @@
     {
       "id": "K2",
       "file": "src/core/src/ch10packetreader.cpp",
-      "old": "    closeFile();\n    freeChanInfoTable(m_channel_info);\n    // After the table",
-      "new": "    if (m_file_open) { enI106Ch10Close(m_file_handle); m_file_open = false; }\n    freeChanInfoTable(m_channel_info);\n    // After the table",
+      "old": "    closeFile();\n    m_channel_info.clear();\n    // After the table",
+      "new": "    if (m_file_open) { enI106Ch10Close(m_file_handle); m_file_open = false; }\n    m_channel_info.clear();\n    // After the table",
       "args": [
         "-tc=*closing waits*,*setup waits*,*still releases*"
       ],

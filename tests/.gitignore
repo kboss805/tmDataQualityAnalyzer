@@ -20,6 +20,6 @@ data/test files/*
 # a polarization, 30 streams. Small enough to commit, and CI reads it.
 !data/test files/av_snr_log.csv
 
-# Output of the Qt-era test runner (QtTest's results*.txt): nothing writes here any more, so a leftover folder is
+# Output of the test runner v2.x used (results*.txt): nothing writes here any more, so a leftover folder is
 # not a change to commit.
 output/

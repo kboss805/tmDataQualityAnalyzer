@@ -75,6 +75,35 @@ TEST_CASE("textfile: UTF-16 is recognised by its mark in either byte order")
     CHECK(textfile::decodeText(std::string("\xFE\xFE" "\0a", 4)) == std::string("\xFE\xFE" "\0a", 4));
 }
 
+TEST_CASE("textfile: byteOrderMark names each mark from the first bytes alone, and only when all of them are there")
+{
+    using textfile::ByteOrderMark;
+    const auto markOf = [](const std::string& head) {
+        return textfile::byteOrderMark(reinterpret_cast<const unsigned char*>(head.data()), head.size());
+    };
+
+    CHECK(markOf("\xEF\xBB\xBF") == ByteOrderMark::Utf8);
+    CHECK(markOf("\xFF\xFE") == ByteOrderMark::Utf16LittleEndian);
+    CHECK(markOf("\xFE\xFF") == ByteOrderMark::Utf16BigEndian);
+
+    // What follows the mark does not matter, and a mark is not recognised from part of its bytes.
+    CHECK(markOf("\xEF\xBB\xBF" "abc") == ByteOrderMark::Utf8);
+    CHECK(markOf("\xFF\xFE" "a\0") == ByteOrderMark::Utf16LittleEndian);
+    CHECK(markOf("\xEF\xBB") == ByteOrderMark::None);
+    CHECK(markOf("\xEF") == ByteOrderMark::None);
+    CHECK(markOf("\xFF") == ByteOrderMark::None);
+    CHECK(markOf("") == ByteOrderMark::None);
+    CHECK(markOf("abc") == ByteOrderMark::None);
+    CHECK(markOf("\xEF\xBB\xBE") == ByteOrderMark::None);
+    CHECK(markOf("\xFF\xFD") == ByteOrderMark::None);
+    CHECK(markOf("\xFE\xFE") == ByteOrderMark::None);
+
+    // Asked for fewer bytes than the mark needs, the same head is no mark: the length is part of the question.
+    const unsigned char head[3] = {0xEF, 0xBB, 0xBF};
+    CHECK(textfile::byteOrderMark(head, 3) == ByteOrderMark::Utf8);
+    CHECK(textfile::byteOrderMark(head, 2) == ByteOrderMark::None);
+}
+
 TEST_CASE("textfile: each length of UTF-8 starts and ends where it should")
 {
     checkDecodes({0x007F}, "\x7F");

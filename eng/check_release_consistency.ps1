@@ -61,12 +61,9 @@ function Read-Tracked {
 $constants = Read-Tracked 'src\core\include\constants.h'
 if (-not $constants) { Write-Host 'FATAL: src/core/include/constants.h unreadable'; exit 1 }
 
-$nums = foreach ($k in 'Major', 'Minor', 'Patch') {
-    $m = [regex]::Match($constants, "k$k\s*=\s*(\d+)")
-    if (-not $m.Success) { Write-Host "FATAL: AppVersion::k$k not found in constants.h"; exit 1 }
-    $m.Groups[1].Value
-}
-$Version = $nums -join '.'
+. (Join-Path $PSScriptRoot 'common.ps1')
+try { $Version = Get-AppVersionFromHeader $constants }
+catch { Write-Host "FATAL: $($_.Exception.Message)"; exit 1 }
 Write-Host "Source of truth: AppVersion = $Version`n"
 
 # --- each user-facing version literal --------------------------------------

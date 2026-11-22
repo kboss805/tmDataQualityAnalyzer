@@ -9,7 +9,7 @@
   Its source list is held to the files on disk by NativeProjectTests (tests/TmDq.Core.Tests): every source in
   src/core/src, and every ABI source in src/core/abi, must be listed, and the native tests must compile exactly the same list.
 
-  Compiler switches, kept from v2.x's build when plan step 6.1 removed it: C++20, /utf-8, /permissive-, warning
+  Compiler switches: C++20, /utf-8, /permissive-, warning
   level 4 with warnings as errors (the irig106 headers external, audit A1 and T7), and UNICODE. The vendored irig106
   C library is compiled with warnings off.
 
@@ -81,11 +81,11 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <ProgramDataBaseFileName>$(IntDir)tmdq_core.pdb</ProgramDataBaseFileName>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)abi;$(MSBuildThisFileDirectory)include;$(MSBuildThisFileDirectory)..\..\third_party\irig106\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>TMDQ_ABI_BUILD;UNICODE;_UNICODE;WIN32;WIN64;_ENABLE_EXTENDED_ALIGNED_STORAGE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>TMDQ_ABI_BUILD;UNICODE;_UNICODE;WIN32;WIN64;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <!-- Strict conformance, level 4 with every warning an error (audit A1, T7: a build from an IDE is gated as the
-           scripted one is), and two kept off (C4577, C4467) as v2.x's build had them. The vendored irig106 headers are
+           scripted one is). The vendored irig106 headers are
            external (ExternalIncludePath, above) and the .c files below compile with warnings off. -->
-      <AdditionalOptions>/FS /utf-8 /Zc:__cplusplus /Zc:throwingNew /Zc:externConstexpr /wd4577 /wd4467 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/FS /utf-8 /Zc:__cplusplus /Zc:throwingNew %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -131,6 +131,7 @@
     <ClInclude Include="include\processingparams.h" />
     <ClInclude Include="include\streammode.h" />
     <ClInclude Include="include\calibrationextractor.h" />
+    <ClInclude Include="include\calibrationreport.h" />
     <ClInclude Include="include\calibrationrequest.h" />
     <ClInclude Include="include\ch10packetreader.h" />
     <ClInclude Include="include\channeldata.h" />
@@ -184,6 +185,7 @@
   <!-- The core: every source in src\core\src (NativeProjectTests holds this list to the folder). -->
   <ItemGroup>
     <ClCompile Include="src\calibrationextractor.cpp" />
+    <ClCompile Include="src\calibrationreport.cpp" />
     <ClCompile Include="src\calibrationrequest.cpp" />
     <ClCompile Include="src\chartgeometry.cpp" />
     <ClCompile Include="src\ch10packetreader.cpp" />

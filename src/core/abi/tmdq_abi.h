@@ -483,7 +483,7 @@ typedef struct tmdq_receiver_params
     int32_t  num_receivers;
     int32_t  receiver_channels;         ///< Channels per receiver.
     int32_t  reserved;
-    double   scale_db_per_v;
+    double   scale_d_db_per_v;
 } tmdq_receiver_params;
 
 /// The outcome of matching a template's channel ids against a file's.

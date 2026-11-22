@@ -36,7 +36,7 @@
     },
     {
       "id": "M3",
-      "file": "src/TmDq.App/Models/Processing/StreamsRun.cs",
+      "file": "src/TmDq.App/Models/Processing/RunLogOrder.cs",
       "old": "            foreach (string line in between) Emit(false, line);\n            foreach ((bool error, string text) in _held ?? new()) Emit(error, text);",
       "new": "            foreach ((bool error, string text) in _held ?? new()) Emit(error, text);\n            foreach (string line in between) Emit(false, line);",
       "expect": "caught",

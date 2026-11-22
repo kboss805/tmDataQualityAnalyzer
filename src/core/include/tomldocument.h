@@ -2,8 +2,8 @@
  * @file tomldocument.h
  * @brief Reads and writes the TOML subset this application's settings files use.
  *
- * A file-format parser and writer, not a settings store such as Qt's QSettings, through which v2.x
- * read and wrote these files, and which sorted keys, merged on save and needed registering. So:
+ * A file-format parser and writer, not a settings store: v2.x read and wrote these files through one that
+ * sorted keys, merged on save and needed registering. So:
  *
  *   - **It keeps file order.** A receiver word map is meaningful in file order, so
  *     sections and keys come back in the order the file declares them, from one parse.

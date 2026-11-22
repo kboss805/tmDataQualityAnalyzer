@@ -75,11 +75,11 @@ public static unsafe class ReceiverParamsFile
         StructSize = (uint)sizeof(ReceiverParamsNative),
         PolarityIndex = p.PolarityIndex,
         SlopeIndex = p.SlopeIndex,
-        ScaleDbPerV = p.ScaleDdBPerV,
+        ScaleDdBPerV = p.ScaleDdBPerV,
         NumReceivers = p.NumReceivers,
         ReceiverChannels = p.ReceiverChannels,
     };
 
     private static ReceiverParams FromNative(ReceiverParamsNative n) =>
-        new(n.PolarityIndex, n.SlopeIndex, n.ScaleDbPerV, n.NumReceivers, n.ReceiverChannels);
+        new(n.PolarityIndex, n.SlopeIndex, n.ScaleDdBPerV, n.NumReceivers, n.ReceiverChannels);
 }

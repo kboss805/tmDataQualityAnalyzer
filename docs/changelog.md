@@ -10,7 +10,132 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
-### Unreleased
+### v3.2.0 — The VS Code look, a much faster scan, and a calmer window
+
+The first release since v3.1.0 (2026-11-08). What a user sees: the application is drawn in VS Code's Dark Modern and Light Modern (flush panes, hairlines, a grey title bar, 13 px text), its menu is four submenus, a status bar is back, every number is a validated text box, Export no longer freezes the window, a heavy plot pans and zooms smoothly, and the frame-sync scan takes about a seventh of the time with byte-identical output. One fix changes numbers: Receiver SNR words were read one bit late in the rare frame where data looked like the sync while locked. The rest is the whole-tree cleanup audit, finished by #348 to #350, which changes no behaviour. The entries below are in the order they landed, newest first.
+
+#### Docs and tooling leftovers of the cleanup audit (F4, M4, T11, A5), and the Qt wording out of the rest
+
+The last of three PRs finishing the items the audit's follow-up listed as done in part. No behaviour of the application changes.
+
+- **A5: what the scripts share is in `eng/common.ps1`.** The msbuild-and-check block (built, product produced, zero warnings) and
+  the import allow-list were copied into `build_core_dll.ps1` and `test_native.ps1`; the `AppVersion` read into
+  `check_release_consistency.ps1` and `build_package.ps1`; the `net10.0` literal into six scripts. Each is now one function or
+  variable (`Invoke-MsbuildChecked`, `Assert-ImportsAllowed`, `Get-AppVersionFromHeader`, `Get-TestExePath`), and a managed test fails
+  when a script types the framework or the allow-list again. `test_native.ps1` therefore checks the native test exe against the
+  real allow-list, not a "no Qt" pattern (its imports, all C runtime, were already on it). `eng/check_scripts.ps1` runs PSScriptAnalyzer
+  over `eng/` and `deploy/` with `eng/PSScriptAnalyzerSettings.psd1` (errors and warnings; `Write-Host` is set aside, with its reason, as
+  these are console scripts) and is a CI step before the toolchain is set up. It found four unapproved verbs, one plural noun and
+  two empty `catch` blocks: `Run-Suite`, `To-Array`, `To-Map`, `Process-Recording` and `Test-SigningWorks` were renamed
+  (`Invoke-Suite`, `ConvertTo-StringArray`, `ConvertTo-StringMap`, `Invoke-RecordingRun`, `Test-CodeSigning`) and the catches now do
+  something (`mutate.ps1`'s restore retry says why it retried; the sandbox's version compare sets its result).
+- **T11: markdown guarded without a second toolchain.** `RepoFilesTests` checks the README, `docs/` (the changelog and `docs/records`
+  kept as written, so excluded) and `.claude/`: every relative link goes to a file that is there, no code fence is left open, no tab,
+  no heading skips a level, one top-level heading. All were already true. A Node-based linter was not added: it would be a second
+  toolchain in CI for rules a test states in forty lines.
+- **F4: three wireframes removed.** `docs/design/Wireframe, *.png` (150 KB) were referenced from nowhere in the tree; they are in
+  the history.
+- **M4: the stories say what ships.** The history that sat inside them is out: "decided for simplicity; revisit if a looser subset
+  match is needed" (US1.1: matching is by exact channel-ID set), the two "criterion removed (plan step 5.1)" paragraphs (US4.1, US5.2:
+  `docs/records/parity.md` holds each), "Status (v2.2.5): COMPLETE" and the two "(v2.12.0)" notes (US5.3: now present-tense bullets
+  on saturated receivers, the summary and how steps are found), and "replaces two criteria that described a merge this project never
+  built" (US8.0: it now says there is no merge). Nothing the code does is changed.
+- **Qt wording.** The mentions that only retold the move are reworded (v2.x, or removed) in `.claude/`, the CI workflow, the README,
+  `docs/guide.md`, `docs/design`, `deploy/` and the installer script's comments. Kept on purpose: the sandbox's and installer's
+  handling of a v2.x install (its `bin\`, its INI file: the files exist and the upgrade removes or leaves them), the soak's `qt` key and
+  messages, and `docs/future_plans/README.md` and `docs/records`, which are records.
+
+How it was checked. Native 528 of 528 (Release, built with the new `common.ps1` path); app 812 total, 0 failed, 34 not run;
+`check_release_consistency.ps1` and `check_scripts.ps1` pass; the managed suite gained two cases (the markdown rules and the
+common.ps1 guard). Mutation list `eng/mutants/docs-and-scripts-guards.json`: a broken link, a skipped heading level, a tab, an open
+fence and a script typing the framework again are each caught (six mutants were tried; a sixth, the build script's import check
+skipped, was caught only by another test, so it was dropped: CI's build step holds that check). `mutate.ps1` itself was changed (renames, the shared
+`Get-TestExePath`), and its runs for this PR are the proof it still works.
+
+#### App and binding leftovers of the cleanup audit (B4, S17, F2, F5, C6, D6), and the Qt wording out of the app and its tests
+
+The second of three PRs finishing the items the audit's follow-up listed as done in part. One behaviour changes, a failure that was
+dropped is now said; the rest are moves, renames and one binding made to ask the core.
+
+- **B4: a calibration run whose observer threw is a failure, said.** `ICalibrationRunning` gains `ObserverException` (the core's
+  `CalibrationRun` already kept the first exception an observer threw, as the processing run does, and `StreamsRun` already logged
+  it); `ExtractCalibrationViewModel` reads it after the wait, before the result, and shows "A report from the core could not be
+  handled: ..." as the calibration's failure, with no profiles. The other half of B4 (`GetResult` outside the `try`) was fixed
+  earlier.
+- **S17: the root the application was handed is the root it falls back to.** `MainWindowViewModel` keeps `_appRoot` (the
+  `AppRoot` of its services, else the process's folder) and the Export and Batch dialogs start there when no folder was used
+  yet, where each fell back to `AppContext.BaseDirectory` on its own. The product passes the same folder both ways, so nothing
+  changes there; a host that hands another root now gets it. `SessionExport.WriteLog`, a file-format rule (CR LF, UTF-8 without a
+  byte-order mark, ending in a line end), is `SessionLog.WriteTo`, beside `PlainText`.
+- **F2: widely used types have a file named for them.** `PreferencesStore`, `PlotSeries` and `RunLogOrder` left `Preferences.cs`,
+  `PlotViewModel.cs` and `StreamsRun.cs` verbatim; `Services/IExportServices.cs`, named for none of its three interfaces, is
+  `IDataFilePicker.cs`, `IExportDialog.cs` and `IPlotImageExporter.cs`. `docs/guide.md` says the rule.
+- **F5: two test classes named for what they hold.** `WalkingSkeletonTests` is `OpenToChartTests` (Open to run to chart) and
+  `MainWindowTests` is `MainWindowStartupTests` (the window as it opens; `ShellTests` holds what it does once open). The kept
+  mutation lists, `test_app.ps1`, the guide and the parity record's test pointers follow.
+- **C6: two names made alike.** The receiver-parameters ABI field `scale_db_per_v` is `scale_d_db_per_v`, as the stream config's
+  is and as the C# `ScaleDdBPerV` already was (`tmdq_abi.h`, `abi_formats.cpp`, the managed `ReceiverParamsNative` and the
+  layout tests); a name only, the struct's size and offsets are unchanged and the ABI revision stays. `ConfigureStreamsViewModel.Title`
+  is a `const` like the other four dialogs' (its window binds it with `x:Static`); `StreamSetupViewModel.Title` stays an
+  instance property because it names the stream.
+- **D6: `SeriesIndex.Count` is the core's answer** (`tmdq_series_index_count`), not a managed copy, so it throws
+  `ObjectDisposedException` once the index is disposed, as `Handle` does. The silent fallback in `ChartGeometry.Build` (an index over
+  another number of values is left out and the series walked) stays, now with its reason beside it: a stale index must never stop a
+  frame being drawn, so the core's `TMDQ_ERR_BADARG` for that case is not reached from C# on purpose. `tmdq_chart_geometry` is
+  already the indexed export with no index inside the ABI, so the four-argument `Build` reaches it that way.
+- **Qt wording.** "The Qt application" and "QSettings" are reworded in the app project, its tests and its test summaries. Kept on
+  purpose: the soak manifest's `qt` key and the soak test's messages that name it (they name v2.14.2's recorded output, as
+  `run_soak.ps1` says).
+
+How it was checked. Native 528 of 528; managed 415 total, 0 failed (2 skipped here: the probe, and the Debug-core guard, which skips
+in a worktree without a Debug DLL); app **812** total (one more than before: the observer case), 0 failed, 34 not run. New cases: a
+run whose observer threw (a fake runner that fails the test if its result is asked for), Export opening in the handed root, and a
+disposed index's `Count`. Mutation lists: `eng/mutants/calibration-observer.json` (B1, S1 to S3 caught, B2 caught after rewriting it
+to compile; B3, the product runner hiding the core's exception, survives on purpose: the test's runner stands in for the core, and
+the core's own `ObserverException` is held by the managed library's tests) and `eng/mutants/series-index-count.json` (D1 to D3
+caught). `plot-index-binding.json` (4 of 4), `apply-template-busy.json` (7 of 7) and `run-log-order.json` (5 caught, 2 survive,
+as marked) were re-anchored to the moved text and re-run.
+
+#### Core and build leftovers of the cleanup audit (S4, S6, C3, A4), and the Qt wording out of core and tooling
+
+The audit's follow-up listed the items done in part; this finishes the core and build ones. No behaviour of the application changes.
+
+- **S4: the calibration report is its own unit.** `CalibrationExtractor::summarize`, 250 lines of pure text-building, is now
+  `calibrationReport` in `calibrationreport.h` / `.cpp`; `calibrationextractor.cpp` is 420 lines, down from 709, and keeps the
+  driver. `topResolvedDb` (the extractor and the report both read it) is an inline function of `calibrationprofile.h`. The report's
+  text and its tests are unchanged: the call sites moved, and one case name that spoke of `summarize` says `calibrationReport`.
+- **S6: one place knows the byte-order marks.** `textfile::byteOrderMark` names the mark a file starts with (UTF-8, UTF-16 either
+  way, or none); `decodeText` and the CSV reader, which streams a file instead of reading it whole, both ask it, where each had
+  its own bytes. The default settings paths, the audit's other half, were already built once each (`defaultReceiverParamsFile`,
+  `initialStepConfigPath`), so nothing was left there.
+- **C3: the packet reader's channel table owns what it holds.** `typedef struct SuChanInfo`, a `void*` of attributes, `new` then `memset`,
+  `calloc` and `free` and a 65,536-slot vector of raw pointers are `ChannelInfo` (a `unique_ptr` of the PCM
+  attributes whose deleter gives the decoder's buffers back first; the data-source pointer it also kept was read only to free
+  the old table, so it is gone) in a `std::map` by track number. It is emptied where the table was freed, so the tree outlives it
+  as before. An allocation that is refused is still a status, not an exception (`std::nothrow`).
+  `Chapter10Reader`'s `getXxx` and `ID` names are left: the audit proposed fixing the first two parts of C3 only.
+- **A4: four switches that did nothing are gone.** `/Zc:externConstexpr`, `/wd4577`, `/wd4467` and `_ENABLE_EXTENDED_ALIGNED_STORAGE`
+  were kept from v2.x's build in the core's and the tests' projects and in `gen_compile_flags.py`. Both configurations rebuild (`-Rebuild`) with
+  no warning without them, and the Release DLL's disassembly (`dumpbin /disasm`) is identical to the one built with them, apart
+  from the line that prints the file's path.
+- **Qt wording.** Narration that only retold the move off Qt is reworded (v2.x, v2.14.2) or removed in `src/core`, `tests/core`, the
+  `eng` scripts, `.editorconfig`, `.gitattributes` and `tests/.gitignore`. Kept on purpose: the checks that no Qt import creeps back
+  (`build_core_dll.ps1`, `test_native.ps1`, `TestCoreQtFree`) and the manifest's `qt` key, which names v2.14.2's recorded output.
+
+How it was checked. Native baseline 527 to **528** test cases (one for `byteOrderMark`) and a row in the packet reader's TMATS
+test (an earlier source claiming the PCM source's track number is the channel and a later one is ignored; it pins a rule the
+refactor kept, and its mutant, below, survived until it existed). Mutation lists: `eng/mutants/byte-order-mark.json` (6, all caught)
+and `eng/mutants/channel-info.json` (4: C1 and C2 caught; C3 and C4, the decoder's buffers and the attributes struct not given back,
+survive on purpose, since `prepare()` allocates no buffers and the struct is a few hundred bytes a reader under the memory guard's
+8 MiB). The kept `reader-lifetime.json` and `reader-setup.json` were re-anchored (`freeChanInfoTable(m_channel_info);` is `m_channel_info.clear();`) and
+re-run: 15 of 15 and 15 caught, 2 survived, as marked. In `packet-reader-optional-fields.json` R4 (the data source not kept) is removed with the field
+it mutated, and R1 to R3 re-run caught.
+
+#### The v3.0.0 release notes give the window size the application opens at
+
+`deploy/RELEASENOTES.txt` said v3.0.0's window "now opens at 1280 x 800". The window opens at 1920 x 1080 (`MainWindow.DefaultSize`,
+the user story in `docs/guide.md`), so the line now says that. Found by the cleanup audit (M6); the user confirmed the size. Text
+only, in the notes shipped with the installer; no code changed and no baseline moved. The release consistency check passes.
 
 #### US10.0: a user story for importing a third-party application's CSV (planned)
 

@@ -199,7 +199,7 @@ TEST_CASE("Abi: the struct layouts are pinned")
     CHECK(int(offsetof(tmdq_receiver_params, slope_index)) == 8);
     CHECK(int(offsetof(tmdq_receiver_params, num_receivers)) == 12);
     CHECK(int(offsetof(tmdq_receiver_params, receiver_channels)) == 16);
-    CHECK(int(offsetof(tmdq_receiver_params, scale_db_per_v)) == 24);
+    CHECK(int(offsetof(tmdq_receiver_params, scale_d_db_per_v)) == 24);
     CHECK(tmdq_sizeof(TMDQ_STRUCT_RECEIVER_PARAMS) == 32);
     CHECK(int(TMDQ_STRUCT_RECEIVER_PARAMS) == 22);
 

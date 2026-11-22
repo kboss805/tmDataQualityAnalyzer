@@ -1,4 +1,4 @@
-// textformat: formatFixed() reproduces the fixed-notation text v2.14.2 printed (its Qt implementation): ties rounded
+// textformat: formatFixed() reproduces the fixed-notation text v2.14.2 printed: ties rounded
 // away from zero, where std::format rounds them to even. The expected text comes from two independent sources:
 //   * what v2.14.2 printed, recorded once with a throwaway diagnostic (the tables and the sweep's digest below), and
 //   * exact integer arithmetic, for every value that is a binary fraction (n/64): the scaled value is an integer

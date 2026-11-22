@@ -3,18 +3,18 @@
 Windows desktop app for analyzing data quality of IRIG 106 Chapter 10 PCM telemetry: per-stream **Frame Sync
 Lock** stats and **Receiver AGC/SNR**, plotted vs. time. **Avalonia 12 on .NET 10** (`src/TmDq.App`, MVVM) over a
 C++20 single-reader / parallel-worker processing core built as `tmdq_core.dll` (`src/core/`: `include/`, `src/` and the C ABI in `abi/`).
-Up to v2.14.2 it was a Qt application; `docs/changelog.md` records the move. **Current version: 3.1.0.**
+v3.0.0 replaced the v2.x application; `docs/changelog.md` records the move. **Current version: 3.2.0.**
 
 > **Full reference:** `docs/guide.md` is the canonical, detailed guide (user stories, architecture,
 > conventions, test catalog); `docs/changelog.md` is the history (every release, every step of the move
-> off Qt). Read them when you need depth. This file is the quick orientation that
+> to Avalonia). Read them when you need depth. This file is the quick orientation that
 > loads every session — keep it lean. It lives in `.claude/` beside the settings and skills, which
 > Claude Code loads exactly as it would a root `CLAUDE.md`; the root `.gitignore` re-includes it
 > (`!.claude/CLAUDE.md`), since everything else under `.claude/` is ignored.
 
 ## Build & test
 
-Everything is in `tmdq.sln`. The native scripts find MSVC themselves: they dot-source `eng\env.ps1` (which imports
+Everything is in `tmdq.sln`. What the scripts share (the msbuild-and-check block, the import allow-list, the target framework, the version read) is in `eng\common.ps1`, and `eng\check_scripts.ps1` (PSScriptAnalyzer, a CI step) holds `eng\` and `deploy\` to the rules in `eng\PSScriptAnalyzerSettings.psd1`. The native scripts find MSVC themselves: they dot-source `eng\env.ps1` (which imports
 `vcvars64.bat`) when `msbuild` is not on PATH; the .NET scripts need only `dotnet` (the projects find `mt.exe`
 themselves). Use the **PowerShell** tool.
 
@@ -28,8 +28,8 @@ themselves). Use the **PowerShell** tool.
   ABI source and test file is listed. **A change that deletes or renames a header is verified only by a `-Rebuild`.**
 - **Native core tests (doctest):** `powershell -ExecutionPolicy Bypass -File eng\test_native.ps1
   [-Configuration Debug|Release] [-Rebuild] [-NoBuild] [<doctest args>]` builds `tests/core`
-  (MSBuild; the framework is the single header in `third_party/doctest`) with **zero warnings and no Qt import**, then runs it.
-  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **527 test cases** (1 skipped: the
+  (MSBuild; the framework is the single header in `third_party/doctest`) with **zero warnings and imports only the allow-list**, then runs it.
+  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **528 test cases** (1 skipped: the
   benchmark below). The suites read `tests/data/test files` (committed recordings) and `tests/fixtures`; in a
   worktree, junction `tests/data` to the main checkout's or the full-recording tests have nothing to read.
   **The throughput guard:** the heavy PRN benchmark ("PipelineRunner throughput", `test_pipelinerunner.cpp`) is
@@ -46,7 +46,7 @@ themselves). Use the **PowerShell** tool.
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
   irig106 opens files with a narrow `open()` that reads the active code page. The .NET projects find `mt.exe` in the
   Windows SDK themselves (`eng\WindowsSdkTools.targets`), so a plain `dotnet build` (VS Code's) needs no developer
-  prompt. Green baseline **414 passed / 0
+  prompt. Green baseline **416 passed / 0
   failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it.
 - **The app:** `src/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and `tests/TmDq.App.Tests` (xunit v3 on
   `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default (`dotnet.defaultSolution`).
@@ -116,7 +116,7 @@ MSVC 14.51 and left two compilers' objects in one tree. Override with `TMDQ_VS_R
   why, how it was checked (the mutation check's verdicts), and any baseline that moved. `cut-release` folds it into the
   release's section, and `check_release_consistency.ps1 -ReleaseMode` refuses a release with it left.
 - **`docs/guide.md`** describes the code as it is; update it in the same PR as a change it describes.
-- **"plan step X.Y"** in a comment or an entry names a step of the move off Qt (the plan was deleted when it finished,
+- **"plan step X.Y"** in a comment or an entry names a step of the move to Avalonia (the plan was deleted when it finished,
   in 6.5): search `docs/changelog.md` for the step's section.
 - **`docs/records/`** keeps finished work as written: the parity review (each acceptance criterion and the test that
   holds it), the soak's record, the old improvement plan and the self-hosted runner's removal. Design notes for

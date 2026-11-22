@@ -26,7 +26,7 @@ purpose."
 ## Before flagging anything: check for a documented reason
 
 **The single biggest risk here is a false positive**, because "no caller found by grep" and "dead"
-are not the same thing in this codebase. The case that taught it (in the Qt application, deleted in plan
+are not the same thing in this codebase. The case that taught it (in the v2.x application, deleted in plan
 step 6.1): `PlotViewModel::loadCsvFile()` had no production call site and looked deletable, but it was the
 symmetric partner of the live `exportCsv()`, its signals drove the loading overlay, and ~20 test cases used
 it as a fixture. Deleting it would have looked like a harmless cleanup and removed real, deliberate
@@ -74,7 +74,7 @@ look for types nothing uses.
 non-declaration hits. One hit (the declaration) or hits only inside its own `.cpp` means nothing
 outside calls it — check for a documented reason (above) before flagging. The constants namespaces
 in `constants.h` (`PCMConstants`, `TimeConstants`, `ReceiverConstants`, `SettingsConstants`, `ChartConstants`, ...) are worth a pass on their own: the
-v2.8.0 cleanup found ~20 unreferenced constants and 37 unused Qt includes that had accumulated over
+v2.8.0 cleanup found ~20 unreferenced constants and 37 unused includes that had accumulated over
 time, so this class of drift is real and recurring here, not hypothetical.
 
 **Unused includes**: a header pulled in but nothing from it referenced in that translation unit.

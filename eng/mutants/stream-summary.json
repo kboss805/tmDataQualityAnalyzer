@@ -10,7 +10,7 @@
     "-class",
     "TmDq.App.Tests.ConfigureStreamsTests",
     "-class",
-    "TmDq.App.Tests.WalkingSkeletonTests"
+    "TmDq.App.Tests.OpenToChartTests"
   ],
   "mutants": [
     {

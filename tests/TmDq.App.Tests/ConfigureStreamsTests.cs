@@ -53,7 +53,7 @@ public sealed class ConfigureStreamsTests
         Assert.False(vm.CanProcess);
         Assert.False(vm.ProcessCommand.CanExecute(null));
         Assert.Equal("Check at least one stream to process.", vm.WhyNotProcess);
-        Assert.Equal("Configure Streams", vm.Title);
+        Assert.Equal("Configure Streams", ConfigureStreamsViewModel.Title);
     }
 
     [Fact]

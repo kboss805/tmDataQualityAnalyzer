@@ -22,6 +22,10 @@ public interface ICalibrationRunning : IDisposable
 
     void Wait();
 
+    /// <summary>The exception the run's observer threw, caught at the boundary and kept, else null: read after
+    /// <see cref="Wait"/>, because a report the observer could not handle leaves what it recorded untrustworthy.</summary>
+    Exception? ObserverException { get; }
+
     /// <exception cref="TmdqException">The core could not give the result (out of memory, an internal error).</exception>
     CalibrationResult GetResult();
 }

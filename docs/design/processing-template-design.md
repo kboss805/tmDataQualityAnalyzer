@@ -4,7 +4,7 @@ Status: **implemented.** Lets a user capture one configured source's per-stream
 processing settings as a reusable, file-path-independent *template* and apply it
 to many `.ch10` files in one action.
 
-**Written for v2.x (the Qt application): the design stands, the code has moved.** In v3 the template's types
+**Written for v2.x: the design stands, the code has moved.** In v3 the template's types
 (`ProcessingTemplate`, `SeriesAppearance`) and its JSON are `src/TmDq.App/Models/Templates/TemplateFile.cs`;
 matching is the core's `TemplateMatcher` (`src/core/src/templatematcher.cpp`) behind `TemplateBatch.Validate`; the
 batch is `BatchRunner`; the appearance reapply is `PlotTemplates.ApplyAppearance`; Plot File is in the plot's

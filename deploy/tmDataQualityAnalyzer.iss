@@ -4,8 +4,8 @@
 ; AppVersion (src\core\include\constants.h) as /DMyAppVersion, and /DSIGN with /Ssigntool=... to sign the setup and the
 ; uninstaller. Requires Inno Setup 6.
 ;
-; It REPLACES the Qt application (v2.x) rather than installing beside it: the Qt installer's AppId, its folder and
-; Start menu name, and the .ch10 association. Installing it over v2.x upgrades that install in place: the Qt
+; It REPLACES the v2.x application rather than installing beside it: the v2.x installer's AppId, its folder and
+; Start menu name, and the .ch10 association. Installing it over v2.x upgrades that install in place: the v2.x
 ; application's bin\ folder and its text guide go, and the user's settings files stay (US8.0). The window
 ; preferences (theme, recent files and the like) start from the defaults: v3.0.x imported v2.x's INI file, 3.1.0 does not.
 
@@ -19,7 +19,7 @@
 #define ManualFile "staging\manual\UserManual.html"
 
 [Setup]
-; The Qt application's AppId (v2.x's deploy\tmDataQualityAnalyzer.iss, since deleted): v3.0.0 is its upgrade, not a second application.
+; v2.x's AppId (its deploy\tmDataQualityAnalyzer.iss, since deleted): v3.0.0 is its upgrade, not a second application.
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
@@ -58,13 +58,13 @@ Name: "fileassoc"; Description: "Associate .ch10 files with {#MyAppName}"; Group
 Name: "fullmanual"; Description: "Install the full illustrated user manual"; GroupDescription: "Documentation:"
 
 [InstallDelete]
-; An upgrade from v2.x: the Qt application lived in bin\ (the exe, the Qt runtime and its plugins), and Inno leaves
+; An upgrade from v2.x: v2.x lived in bin\ (the exe, its runtime and its plugins), and Inno leaves
 ; files behind when they stop being in the package.
 Type: filesandordirs; Name: "{app}\bin"
-; The Qt application's text guide, which describes it and not this application.
+; v2.x's text guide, which describes it and not this application.
 Type: files; Name: "{app}\UserGuide.txt"
 ; The full manual: Help opens a UserManual.html beside the exe when there is one, and v2.x's sat exactly there. Taken
-; away first, so that declining the task leaves the compiled-in manual rather than the Qt application's.
+; away first, so that declining the task leaves the compiled-in manual rather than v2.x's.
 Type: files; Name: "{app}\UserManual.html"
 
 [Files]
