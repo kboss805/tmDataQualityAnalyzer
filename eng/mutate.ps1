@@ -104,6 +104,7 @@ function Fail([int]$code, [string]$message) { Write-Host $message -ForegroundCol
 
 # ---- where we are -------------------------------------------------------------------------------------------
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $PSScriptRoot 'common.ps1')
 $gitDir = (& git -C $root rev-parse --absolute-git-dir 2>$null)
 $commonDir = (& git -C $root rev-parse --git-common-dir 2>$null)
 if (-not $gitDir -or -not $commonDir) { Fail 2 "$root is not inside a git repository" }
@@ -126,14 +127,14 @@ if (@('native', 'managed', 'app') -notcontains $suite) { Fail 2 "suite must be n
 $timeout = 420
 if ($spec.timeoutSeconds) { $timeout = [int]$spec.timeoutSeconds }
 
-function To-Array($value) { if ($null -eq $value) { return @() } return @($value | ForEach-Object { [string]$_ }) }
-function To-Map($value) {
+function ConvertTo-StringArray($value) { if ($null -eq $value) { return @() } return @($value | ForEach-Object { [string]$_ }) }
+function ConvertTo-StringMap($value) {
     $map = [ordered]@{}
     if ($null -ne $value) { foreach ($p in $value.PSObject.Properties) { $map[$p.Name] = [string]$p.Value } }
     return $map
 }
-$listArgs = To-Array $spec.args
-$listEnv = To-Map $spec.env
+$listArgs = ConvertTo-StringArray $spec.args
+$listEnv = ConvertTo-StringMap $spec.env
 
 $mutants = @($spec.mutants)
 if ($mutants.Count -eq 0) { Fail 2 "$listPath has no mutants" }
@@ -173,8 +174,8 @@ $outDir = Join-Path $root 'out\Release'
 $coreDll = Join-Path $outDir 'tmdq_core.dll'
 switch ($suite) {
     'native'  { $testProject = Join-Path $root 'tests\core\tmdq_core_tests.vcxproj'; $testExe = Join-Path $outDir 'tmdq_core_tests.exe' }
-    'managed' { $testProject = Join-Path $root 'tests\TmDq.Core.Tests'; $testExe = Join-Path $testProject 'bin\Release\net10.0\TmDq.Core.Tests.exe' }
-    'app'     { $testProject = Join-Path $root 'tests\TmDq.App.Tests'; $testExe = Join-Path $testProject 'bin\Release\net10.0\TmDq.App.Tests.exe' }
+    'managed' { $testProject = Join-Path $root 'tests\TmDq.Core.Tests'; $testExe = Get-TestExePath $root 'TmDq.Core.Tests' 'Release' }
+    'app'     { $testProject = Join-Path $root 'tests\TmDq.App.Tests'; $testExe = Get-TestExePath $root 'TmDq.App.Tests' 'Release' }
 }
 # MSB3073 is a build step's tool failing (mt.exe, merging the manifest: c101008d), which is not the compiler's verdict.
 $lockPattern = 'LNK1104|LNK1168|LNK1201|C1041|C1090|MSB3021|MSB3026|MSB3027|MSB3073|c101008d|CS2012|being used by another process'
@@ -197,7 +198,7 @@ function Invoke-Build([string]$what, [scriptblock]$command) {
     return @{ Ok = $false; Locked = ($log -match $lockPattern); Detail = "$what`: $first"; Log = $log }
 }
 
-function Build-Suite {
+function Invoke-SuiteBuild {
     if (Test-Path $testExe) { [IO.File]::Delete($testExe) }   # a stale exe must never pass for a fresh build
     $warnings = 0
     if ($suite -eq 'native') {
@@ -246,7 +247,7 @@ function Quote([string]$arg) {
     return '"' + ($arg -replace '(\\*)"', '$1$1\"' -replace '(\\+)$', '$1$1') + '"'
 }
 
-function Run-Suite([string[]]$arguments, $variables) {
+function Invoke-Suite([string[]]$arguments, $variables) {
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $testExe
     $all = @($arguments)
@@ -290,7 +291,7 @@ function Restore([string]$file) {
     $path = Join-Path $root $file
     $want = [Convert]::ToBase64String($pristine[$file])
     foreach ($try in 1..8) {
-        try { [IO.File]::WriteAllBytes($path, $pristine[$file]) } catch { }
+        try { [IO.File]::WriteAllBytes($path, $pristine[$file]) } catch { Write-Verbose "restore attempt $try of $file failed: $($_.Exception.Message)" }
         if ([Convert]::ToBase64String([IO.File]::ReadAllBytes($path)) -eq $want) { return $true }
         Start-Sleep -Seconds 2
     }
@@ -300,10 +301,10 @@ function Restore([string]$file) {
 # ---- the baseline -------------------------------------------------------------------------------------------
 Say ("mutate: {0} mutant(s), suite {1}, worktree {2}, list {3}" -f $mutants.Count, $suite, $root, $listPath)
 if (-not $NoBaseline) {
-    $b = Build-Suite
+    $b = Invoke-SuiteBuild
     if (-not $b.Ok) { Say "BASELINE NOT GREEN: $($b.Detail)"; exit 3 }
     if ($b.Warnings -gt 0) { Say "BASELINE NOT GREEN: $($b.Warnings) compiler warning(s)"; exit 3 }
-    $r = Run-Suite $listArgs $listEnv
+    $r = Invoke-Suite $listArgs $listEnv
     if ($r.Hung -or $r.Exit -ne 0) {
         Say ("BASELINE NOT GREEN: exit {0}, {1} {2}" -f $r.Exit, $r.Summary, (($r.Failed | Select-Object -First 3) -join ', '))
         exit 3
@@ -333,7 +334,7 @@ foreach ($m in $mutants) {
             $applied++
             [IO.File]::WriteAllBytes($path, $utf8.GetBytes($mutated))
             $stamp = (Get-Item $path).LastWriteTimeUtc
-            $b = Build-Suite
+            $b = Invoke-SuiteBuild
             if (-not $b.Ok) {
                 if ($b.Locked) { $verdict = 'LOCKED'; $detail = $b.Detail } else { $verdict = 'COMPILE'; $detail = $b.Detail }
             } else {
@@ -342,12 +343,12 @@ foreach ($m in $mutants) {
                     $verdict = 'STALE'; $detail = "$product is not newer than the mutated file"
                 } else {
                     $arguments = $listArgs
-                    if ($null -ne $m.args) { $arguments = To-Array $m.args }
+                    if ($null -ne $m.args) { $arguments = ConvertTo-StringArray $m.args }
                     $variables = [ordered]@{}
                     foreach ($k in $listEnv.Keys) { $variables[$k] = $listEnv[$k] }
-                    $own = To-Map $m.env
+                    $own = ConvertTo-StringMap $m.env
                     foreach ($k in $own.Keys) { $variables[$k] = $own[$k] }
-                    $r = Run-Suite $arguments $variables
+                    $r = Invoke-Suite $arguments $variables
                     if ($r.Hung) { $verdict = 'CAUGHT'; $detail = "by a hang ($($r.Summary))" }
                     elseif ($r.Exit -ne 0) {
                         $verdict = 'CAUGHT'
@@ -383,7 +384,7 @@ foreach ($f in $pristine.Keys) {
 # The sources are back, but the binaries in the tree are still the last mutant's: build them again from the restored
 # sources, so the next suite run in this worktree is not a run against a mutant.
 $closing = $null
-if ($applied -gt 0) { $closing = Build-Suite }
+if ($applied -gt 0) { $closing = Invoke-SuiteBuild }
 Say ''
 Say ((($counts.Keys | ForEach-Object { "$_ $($counts[$_])" }) -join ', ') + ", of $($mutants.Count)")
 if ($closing -and -not $closing.Ok) {

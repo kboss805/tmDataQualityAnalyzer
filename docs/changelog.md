@@ -12,6 +12,44 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Docs and tooling leftovers of the cleanup audit (F4, M4, T11, A5), and the Qt wording out of the rest
+
+The last of three PRs finishing the items the audit's follow-up listed as done in part. No behaviour of the application changes.
+
+- **A5: what the scripts share is in `eng/common.ps1`.** The msbuild-and-check block (built, product produced, zero warnings) and
+  the import allow-list were copied into `build_core_dll.ps1` and `test_native.ps1`; the `AppVersion` read into
+  `check_release_consistency.ps1` and `build_package.ps1`; the `net10.0` literal into six scripts. Each is now one function or
+  variable (`Invoke-MsbuildChecked`, `Assert-ImportsAllowed`, `Get-AppVersionFromHeader`, `Get-TestExePath`), and a managed test fails
+  when a script types the framework or the allow-list again. `test_native.ps1` therefore checks the native test exe against the
+  real allow-list, not a "no Qt" pattern (its imports, all C runtime, were already on it). `eng/check_scripts.ps1` runs PSScriptAnalyzer
+  over `eng/` and `deploy/` with `eng/PSScriptAnalyzerSettings.psd1` (errors and warnings; `Write-Host` is set aside, with its reason, as
+  these are console scripts) and is a CI step before the toolchain is set up. It found four unapproved verbs, one plural noun and
+  two empty `catch` blocks: `Run-Suite`, `To-Array`, `To-Map`, `Process-Recording` and `Test-SigningWorks` were renamed
+  (`Invoke-Suite`, `ConvertTo-StringArray`, `ConvertTo-StringMap`, `Invoke-RecordingRun`, `Test-CodeSigning`) and the catches now do
+  something (`mutate.ps1`'s restore retry says why it retried; the sandbox's version compare sets its result).
+- **T11: markdown guarded without a second toolchain.** `RepoFilesTests` checks the README, `docs/` (the changelog and `docs/records`
+  kept as written, so excluded) and `.claude/`: every relative link goes to a file that is there, no code fence is left open, no tab,
+  no heading skips a level, one top-level heading. All were already true. A Node-based linter was not added: it would be a second
+  toolchain in CI for rules a test states in forty lines.
+- **F4: three wireframes removed.** `docs/design/Wireframe, *.png` (150 KB) were referenced from nowhere in the tree; they are in
+  the history.
+- **M4: the stories say what ships.** The history that sat inside them is out: "decided for simplicity; revisit if a looser subset
+  match is needed" (US1.1: matching is by exact channel-ID set), the two "criterion removed (plan step 5.1)" paragraphs (US4.1, US5.2:
+  `docs/records/parity.md` holds each), "Status (v2.2.5): COMPLETE" and the two "(v2.12.0)" notes (US5.3: now present-tense bullets
+  on saturated receivers, the summary and how steps are found), and "replaces two criteria that described a merge this project never
+  built" (US8.0: it now says there is no merge). Nothing the code does is changed.
+- **Qt wording.** The mentions that only retold the move are reworded (v2.x, or removed) in `.claude/`, the CI workflow, the README,
+  `docs/guide.md`, `docs/design`, `deploy/` and the installer script's comments. Kept on purpose: the sandbox's and installer's
+  handling of a v2.x install (its `bin\`, its INI file: the files exist and the upgrade removes or leaves them), the soak's `qt` key and
+  messages, and `docs/future_plans/README.md` and `docs/records`, which are records.
+
+How it was checked. Native 528 of 528 (Release, built with the new `common.ps1` path); app 812 total, 0 failed, 34 not run;
+`check_release_consistency.ps1` and `check_scripts.ps1` pass; the managed suite gained two cases (the markdown rules and the
+common.ps1 guard). Mutation list `eng/mutants/docs-and-scripts-guards.json`: a broken link, a skipped heading level, a tab, an open
+fence and a script typing the framework again are each caught (six mutants were tried; a sixth, the build script's import check
+skipped, was caught only by another test, so it was dropped: CI's build step holds that check). `mutate.ps1` itself was changed (renames, the shared
+`Get-TestExePath`), and its runs for this PR are the proof it still works.
+
 #### App and binding leftovers of the cleanup audit (B4, S17, F2, F5, C6, D6), and the Qt wording out of the app and its tests
 
 The second of three PRs finishing the items the audit's follow-up listed as done in part. One behaviour changes, a failure that was

@@ -91,5 +91,5 @@ implement it, say what the alternative would cost, and let them decide.
   looking at a render, not by any test. *Only looking caught them.*
 - **Avalonia drew its own caption buttons over the custom title bar** — found by capturing the
   running window; `WindowDecorations="BorderOnly"` removed them.
-- **(Qt era) colliding tick labels and 30x13 title-bar buttons** — the same two lessons, from the
+- **(v2.x) colliding tick labels and 30x13 title-bar buttons** — the same two lessons, from the
   application this one replaced: render to see overlap, measure to see size.

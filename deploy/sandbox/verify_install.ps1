@@ -1,7 +1,7 @@
 # =============================================================================
 # verify_install.ps1 - clean-machine test of the Avalonia application's packages
 # (plan step 3.3 built it for the preview; step 5.3 made it the release's) under Smart App
-# Control, including the UPGRADE from the Qt application.
+# Control, including the UPGRADE from v2.x.
 #
 # Runs INSIDE Windows Sandbox, launched by
 #   run_sandbox_test.ps1 [-Setup <setup.exe>]
@@ -11,8 +11,8 @@
 # Do not run it on a developer machine: it installs to Program Files and uninstalls again.
 #
 # What it proves: on a machine that has never seen the application, with Smart App
-# Control ON, the last Qt release installs as a user has it, and the signed installer
-# upgrades it in place - the Qt files gone, the user's settings file kept, the v2.x
+# Control ON, the last v2.x release installs as a user has it, and the signed installer
+# upgrades it in place - the v2.x files gone, the user's settings file kept, the v2.x
 # preferences left alone (3.1.0 starts from the defaults), the .ch10 association moved to the new exe. The installed app and the
 # portable ZIP both open their window, every PE file carries a valid signature, the
 # native core DLL loads, Code Integrity blocked nothing of ours - and an UNSIGNED build
@@ -45,7 +45,7 @@ function Wait-Window($process, [int]$seconds) {
     }
     return ''
 }
-function Process-Recording($exePath, $label) {
+function Invoke-RecordingRun($exePath, $label) {
     # The walking skeleton end to end (plan step 3.4): the app opens the recording on its command line, processes its
     # first PCM channel with the defaults through the native core, writes one line to TMDQ_SMOKE_REPORT and exits.
     $rec = Join-Path $IN 'prn_testfile, sample.ch10'
@@ -116,10 +116,10 @@ function Install($path, $label) {
     Check "$label exit code 0" ($ip.ExitCode -eq 0) ('exit=' + $ip.ExitCode)
 }
 
-# --- 2. The Qt application, installed as a user has it: v2.14.2 with its default tasks (the .ch10 association and the
+# --- 2. v2.x, installed as a user has it: v2.14.2 with its default tasks (the .ch10 association and the
 # full manual), a settings file the user edited, and the preferences it keeps in its INI file. ---
 Say ''
-Say '[2] Install v2.x (the Qt application) as a user has it'
+Say '[2] Install v2.x as a user has it'
 $old = (Get-ChildItem (Join-Path $IN 'tmDataQualityAnalyzer-v2.*_setup.exe') | Select-Object -First 1).FullName
 if (-not $old) { Check 'the v2.x setup is in the payload' $false 'pass deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe' }
 else {
@@ -130,7 +130,7 @@ else {
     Check 'v2.x installed its full manual' (Test-Path (Join-Path $app 'UserManual.html')) ''
     if (Test-Path $userFile) { Add-Content -Path $userFile -Value $marker }
     Check 'the user''s edit is in a v2.x settings file' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
-    # What the Qt application keeps, as its QSettings writes it (an INI file, main.cpp sets IniFormat). v3.1.0 does not
+    # What v2.x keeps, in an INI file. v3.1.0 does not
     # read it, so it must be left as it is.
     New-Item -ItemType Directory -Force -Path $prefsDir | Out-Null
     "[General]`r`nTheme=light`r`nLegendVisible=false`r`n" | Out-File -FilePath (Join-Path $prefsDir 'tmDataQualityAnalyzer.ini') -Encoding ASCII
@@ -146,8 +146,8 @@ Install $setup 'installer'
 foreach ($f in 'tmDataQualityAnalyzer.exe', 'tmdq_core.dll', 'libSkiaSharp.dll', 'libHarfBuzzSharp.dll', 'av_libglesv2.dll', 'LICENSE.txt', 'THIRD-PARTY-NOTICES.txt') {
     Check "installed $f" (Test-Path (Join-Path $app $f)) ''
 }
-Check 'the Qt application''s bin\ folder is gone' (-not (Test-Path (Join-Path $app 'bin'))) ''
-Check 'the Qt application''s text guide is gone' (-not (Test-Path (Join-Path $app 'UserGuide.txt'))) ''
+Check 'v2.x''s bin\ folder is gone' (-not (Test-Path (Join-Path $app 'bin'))) ''
+Check 'v2.x''s text guide is gone' (-not (Test-Path (Join-Path $app 'UserGuide.txt'))) ''
 $manualFile = Join-Path $app 'UserManual.html'
 Check 'the full manual (a task v2.x had chosen) is this version''s' ((Test-Path $manualFile) -and ((Get-Content $manualFile -Raw) -match 'Help .{1,3} User Manual') -and ((Get-Content $manualFile -Raw) -notmatch 'Version 2\.')) ''
 Check 'the user''s edited settings file survived the upgrade' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
@@ -164,7 +164,7 @@ $want = ((Get-Item $setup).VersionInfo.ProductVersion -replace '[^0-9.]', '').Tr
 if (Test-Path $exe) {
     $have = ((Get-Item $exe).VersionInfo.FileVersion -replace '[^0-9.]', '').Trim('.')
     $same = $false
-    try { $a = [version]$want; $b = [version]$have; $same = ($a.Major -eq $b.Major -and $a.Minor -eq $b.Minor -and $a.Build -eq $b.Build) } catch { }
+    try { $a = [version]$want; $b = [version]$have; $same = ($a.Major -eq $b.Major -and $a.Minor -eq $b.Minor -and $a.Build -eq $b.Build) } catch { $same = $false }
     Check 'exe version matches the setup' $same ($have + ' vs ' + $want)
 }
 foreach ($f in 'MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll') {
@@ -187,7 +187,7 @@ foreach ($s in $sigs) { Say ('    {0,-10} {1,-28} {2}' -f $s.Status, $s.Signer, 
 Check 'every PE file validly signed' ((@($sigs | Where-Object { $_.Status -ne 'Valid' })).Count -eq 0) ("$($sigs.Count) files")
 
 # --- 4. The installed app runs under Smart App Control; its first run starts from the default preferences and leaves the
-# Qt application's INI file alone. ---
+# v2.x's INI file alone. ---
 Say ''
 Say '[4] Launch the installed app'
 $ap = Start-Process $exe -PassThru
@@ -205,8 +205,8 @@ $prefs = Join-Path $prefsDir 'preferences.json'
 $json = if (Test-Path $prefs) { Get-Content $prefs -Raw } else { '' }
 Check 'the first run wrote the default preferences' (($json -match '"[Tt]heme"\s*:\s*"dark"') -and ($json -match '"[Ll]egendVisible"\s*:\s*true')) $(if ($json) { ($json -replace '\s+', ' ') } else { 'no preferences.json' })
 $ini = Join-Path $prefsDir 'tmDataQualityAnalyzer.ini'
-Check 'the Qt application''s INI file was left as it was' ((Test-Path $ini) -and ((Get-Content $ini -Raw) -match 'Theme=light')) ''
-Process-Recording $exe 'the installed app'
+Check 'v2.x''s INI file was left as it was' ((Test-Path $ini) -and ((Get-Content $ini -Raw) -match 'Theme=light')) ''
+Invoke-RecordingRun $exe 'the installed app'
 
 # --- 5. The native core DLL loads and answers, on its own. ---
 Say ''
@@ -248,7 +248,7 @@ if ($pexe) {
     $ptitle = Wait-Window $pp 30
     Check 'portable app opened its window' ($ptitle -eq 'TM Data Quality Analyzer') ("title '" + $ptitle + "'")
     if (Get-Process -Id $pp.Id -ErrorAction SilentlyContinue) { Stop-Process -Id $pp.Id -Force }
-    Process-Recording $pexe 'the portable app'
+    Invoke-RecordingRun $pexe 'the portable app'
 }
 
 # --- 7. What Code Integrity blocked while this ran. ---

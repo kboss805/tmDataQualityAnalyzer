@@ -24,7 +24,7 @@ there, not from memory.
 # 1. The native core. Everything else loads this DLL.
 powershell -ExecutionPolicy Bypass -File eng\build_core_dll.ps1 -Configuration Release
 
-# 2. Its doctest suite (builds tests\core, zero warnings, no Qt import, then runs it).
+# 2. Its doctest suite (builds tests\core, zero warnings, allowed imports only, then runs it).
 powershell -ExecutionPolicy Bypass -File eng\test_native.ps1 -Configuration Release
 
 # 3. The C# library's tests, against out\Release\tmdq_core.dll.

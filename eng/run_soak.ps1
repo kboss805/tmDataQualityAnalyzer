@@ -29,7 +29,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $manifest = Join-Path $root 'tests\TmDq.App.Tests\Soak\soak.json'
-$exe = Join-Path $root "tests\TmDq.App.Tests\bin\$Configuration\net10.0\TmDq.App.Tests.exe"
+. (Join-Path $PSScriptRoot 'common.ps1')
+$exe = Get-TestExePath $root 'TmDq.App.Tests' $Configuration
 
 if (-not $NoBuild) {
     # test_app.ps1 builds the app and its tests (and sets up mt.exe); its run of the ordinary suite comes with it.

@@ -4,7 +4,7 @@ name: CI
 # Avalonia application's tests on every push to main and every PR, in one job on a
 # GitHub-hosted Windows runner (plan step 6.4).
 #
-# One job, on a GitHub-hosted machine (plan step 6.4; the Qt application it once also covered is gone, and a new
+# One job, on a GitHub-hosted machine (plan step 6.4; a new
 # dependency on anything outside the Windows SDK is caught by the import allow-list in eng\build_core_dll.ps1). The
 # small .ch10 fixtures are committed, so every suite runs here. The heavy PRN throughput
 # benchmark is opt-in (TMDQA_RUN_HEAVY_BENCH) and needs the full recording, which is not
@@ -56,6 +56,14 @@ jobs:
           powershell -ExecutionPolicy Bypass -File eng\check_release_consistency.ps1
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
+      - name: PowerShell scripts (PSScriptAnalyzer)
+        shell: powershell
+        run: |
+          # The build, test and release scripts, analysed with the rules in eng\PSScriptAnalyzerSettings.psd1. Needs no
+          # toolchain, so it fails fast; the script installs PSScriptAnalyzer for the user when the runner image has none.
+          powershell -ExecutionPolicy Bypass -File eng\check_scripts.ps1
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       - name: Set up MSVC (cl / msbuild / dumpbin / mt)
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -102,7 +110,7 @@ jobs:
         shell: powershell
         run: |
           # The core's own tests: doctest, built by MSBuild. The script requires zero compiler
-          # warnings and no Qt import, then runs them.
+          # warnings and only allowed imports, then runs them.
           $ErrorActionPreference = 'Continue'
           powershell -ExecutionPolicy Bypass -File eng\test_native.ps1 -Configuration Release
           if ($LASTEXITCODE -ne 0) { throw "the native tests failed" }

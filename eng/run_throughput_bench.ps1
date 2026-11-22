@@ -130,7 +130,7 @@ if ($FixtureMB -lt 600) {
 Write-Host ("  cores     {0}" -f [Environment]::ProcessorCount)
 
 # --- build, and run everything else ------------------------------------------
-# test_native.ps1 builds the native tests (zero warnings, no Qt import) and runs the whole
+# test_native.ps1 builds the native tests (zero warnings, allowed imports only) and runs the whole
 # suite, unpinned and with the benchmark off: a release needs those green as well.
 if ($SkipBuild) {
     Write-Host "  build     skipped (-SkipBuild)"

@@ -163,7 +163,7 @@ tmDataQualityAnalyzer/
 ├── eng/                        # Build, test, manual and release-check scripts, and the MSBuild props and targets
 ├── settings/                   # The shipped TOML settings: frame sync patterns, receiver parameters, step files
 ├── src/                        # The product code
-│   ├── core/                   # The native core, tmdq_core.dll (C++20, MSBuild; no Qt)
+│   ├── core/                   # The native core, tmdq_core.dll (C++20, MSBuild)
 │   │   ├── include/            # Its headers, one folder: constants.h and a header to each class
 │   │   ├── src/                # Chapter 10 reading, decommutation, calibration, file formats
 │   │   └── abi/                # The C ABI the .NET side calls (tmdq_abi.h)

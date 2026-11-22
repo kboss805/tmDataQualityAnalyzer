@@ -1,6 +1,6 @@
 # =============================================================================
 # build_package.ps1 - the release packages from v3.0.0 on: the Avalonia
-# application (plan step 3.3 built it as a preview beside the Qt application; step 5.3
+# application (plan step 3.3 built it as a preview beside v2.x; step 5.3
 # made it the release; docs/changelog.md records both).
 #
 # Produces, beside this script:
@@ -38,6 +38,7 @@ $ErrorActionPreference = 'Stop'
 $Here = $PSScriptRoot
 $Root = (Resolve-Path (Join-Path $Here '..')).Path
 . (Join-Path $Root 'eng\env.ps1')
+. (Join-Path $Root 'eng\common.ps1')
 . (Join-Path $Here 'signing.ps1')
 
 $RunStart = Get-Date
@@ -45,11 +46,7 @@ $Failures = New-Object System.Collections.Generic.List[string]
 
 # --- Version: AppVersion, the one source (eng/AppVersion.props reads the same three numbers). ---
 $constants = Get-Content (Join-Path $Root 'src\core\include\constants.h') -Raw
-$version = ('kMajor', 'kMinor', 'kPatch' | ForEach-Object {
-    $m = [regex]::Match($constants, "$_\s*=\s*(\d+)")
-    if (-not $m.Success) { throw "AppVersion::$_ not found in src\core\include\constants.h" }
-    $m.Groups[1].Value
-}) -join '.'
+$version = Get-AppVersionFromHeader $constants
 
 $Stage    = Join-Path $Here 'staging'
 $Publish  = Join-Path $Stage 'publish'
@@ -73,7 +70,7 @@ $Signtool = $null
 if ($SignCertSha1) {
     Write-Host '[0/8] Signing pre-flight...'
     $Signtool = Find-Signtool
-    Test-SigningWorks -Signtool $Signtool -Thumbprint $SignCertSha1 -Timestamp $SignTimestamp
+    Test-CodeSigning -Signtool $Signtool -Thumbprint $SignCertSha1 -Timestamp $SignTimestamp
     Write-Host "  OK: certificate $SignCertSha1 can sign ($Signtool)"
 } else {
     Write-Host '[0/8] Signing disabled (-SignCertSha1 ''''): the package will NOT run under Smart App Control.'
@@ -192,7 +189,7 @@ foreach ($name in $crtImports) {
 }
 Write-Host "  VC++ runtime for tmdq_core.dll ($($crtDir.Name)): $($crtImports -join ', ')"
 Copy-Item (Join-Path $Root 'LICENSE') (Join-Path $AppDir 'LICENSE.txt')
-$deps = Join-Path $Root 'src\TmDq.App\obj\Release\net10.0\win-x64\tmDataQualityAnalyzer.deps.json'
+$deps = Join-Path $Root "src\TmDq.App\obj\Release\$TargetFramework\win-x64\tmDataQualityAnalyzer.deps.json"
 & powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'eng\gen_third_party_notices.ps1') -DepsFile $deps -Out (Join-Path $AppDir 'THIRD-PARTY-NOTICES.txt')
 if ($LASTEXITCODE -ne 0) { throw 'gen_third_party_notices.ps1 failed' }
 Get-ChildItem $AppDir | ForEach-Object { Write-Host ('  {0,10:N0} KB  {1}' -f ($_.Length / 1KB), $_.Name) }
@@ -259,7 +256,7 @@ if (-not (Test-Path $manual)) { throw 'UserManual.html is missing: run eng\build
 New-Item -ItemType Directory -Force -Path (Join-Path $Stage 'manual') | Out-Null
 Copy-Item $manual (Join-Path $Stage 'manual\UserManual.html') -Force
 Copy-Item $manual (Join-Path $portable 'UserManual.html') -Force
-# A portable copy keeps its preferences in a folder beside itself, as the Qt portable ZIP does (plan step 4.8).
+# A portable copy keeps its preferences in a folder beside itself, as the v2.x portable ZIP did (plan step 4.8).
 New-Item -ItemType File -Path (Join-Path $portable 'portable') -Force | Out-Null
 Copy-Item (Join-Path $Root 'deploy\README_portable.txt') (Join-Path $portable 'README.txt')
 if (Test-Path $ZipPath) { Remove-Item $ZipPath -Force }

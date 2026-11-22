@@ -11,7 +11,7 @@
 # WHY THIS EXISTS
 #
 # Every other installer check runs on the developer's machine, which already
-# holds this application's Qt runtime, its settings and its registry state - so
+# holds this application's runtime, its settings and its registry state - so
 # it can prove an artifact is correctly signed and versioned, and nothing about
 # whether it WORKS somewhere new. v2.13.1 said so outright: the first-run path
 # "needs a genuinely clean Windows target; Windows 11 Home offers neither Sandbox

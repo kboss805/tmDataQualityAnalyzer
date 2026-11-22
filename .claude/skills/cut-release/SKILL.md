@@ -16,7 +16,7 @@ The version number has **one** source of truth and several derived consumers. Ed
 build derive the rest, update the human-facing notes, then package. Do the steps in order.
 
 **From v3.0.0 the release is the Avalonia application** (`src/TmDq.App` over `tmdq_core.dll`), packaged by
-`deploy\build_package.ps1`. The Qt application and its packaging (v2.x's) were deleted in plan step
+`deploy\build_package.ps1`. The v2.x application and its packaging were deleted in plan step
 6.1.
 
 ## Step 1 — Decide the version
@@ -112,7 +112,7 @@ cores** and prints a ratio block. It fails unless doctest reports that exactly t
 passed.
 
 **The benchmark is a native doctest case now**, "PipelineRunner throughput: ..." in
-`tests/core/test_pipelinerunner.cpp`; it measures `PipelineRunner`. It used to be the Qt
+`tests/core/test_pipelinerunner.cpp`; it measures `PipelineRunner`. It used to be the v2.x
 suite's one standing skip — opt-in behind `TMDQA_RUN_HEAVY_BENCH`, nothing set that variable, and
 *it asserted nothing even when it ran*, so the decommutation pipeline had no performance guard at
 all and the suite's "413/0/1" baseline was that hole. The script sets the variable, the benchmark
@@ -169,9 +169,9 @@ also signed). It reads the version from `constants.h`, so there is no version ar
 - **Signing:** uses the cert SHA-1 in `$env:SIGN_CERT_SHA1` (falls back to the bundled Certum OSS
   thumbprint). To build unsigned, pass `-SignCertSha1 ''`. Any signing failure is a listed problem and
   a non-zero exit.
-- **The installer replaces a v2.x install** (the Qt installer's AppId and folder): it deletes the Qt
+- **The installer replaces a v2.x install** (the v2.x installer's AppId and folder): it deletes v2.x's
   `bin\`, `UserGuide.txt` and the old `UserManual.html`, keeps `settings\`, and moves the `.ch10`
-  association. The window preferences start from the defaults: v3.0.x imported the Qt INI file on its first run, and
+  association. The window preferences start from the defaults: v3.0.x imported v2.x's INI file on its first run, and
   3.1.0 dropped that import, so the INI file is left unread.
 - **Inno Setup:** if `iscc` isn't found no installer is produced, and the run says so and fails.
 - Antivirus can briefly lock freshly-built exes; the ZIP step already retries — don't panic on a
@@ -227,7 +227,7 @@ powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 -Se
 
 It generates the `.wsb` (absolute host paths, which is why it is generated rather than committed),
 launches a disposable VM that has never seen this application, and prints the results back here.
-Exits non-zero on failure. `deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe` is the last Qt release
+Exits non-zero on failure. `deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe` is the last v2.x release
 (the GitHub release's asset, if it is not on disk).
 
 What it establishes that nothing else can:
@@ -235,9 +235,9 @@ What it establishes that nothing else can:
 - **Smart App Control** is on, and **an unsigned build of the same exe is blocked**: without that
   negative control a pass proves nothing about the signatures.
 - **The upgrade from v2.x:** v2.14.2 installed with its default tasks, a settings file edited and the
-  Qt INI written, then this setup over it: the Qt `bin\` and text guide gone, the full manual this
+  v2.x INI written, then this setup over it: v2.x's `bin\` and text guide gone, the full manual this
   version's, the edited settings file kept, `.ch10` opening the new exe, one entry in Installed apps,
-  and the first run starting from the default preferences with the Qt INI left as it was.
+  and the first run starting from the default preferences with the v2.x INI left as it was.
 - **The DLL closure:** the installed app and the portable ZIP open their windows and process the PRN
   sample end to end; `tmdq_core.dll` loads with the VC++ runtime beside it; every PE file verifies.
 - **Uninstall**: program files and the ProgID go, `settings\` stays (`uninsneveruninstall`,
