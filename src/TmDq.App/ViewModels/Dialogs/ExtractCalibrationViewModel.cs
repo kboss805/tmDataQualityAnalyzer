@@ -308,6 +308,13 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
             {
                 ProgressDialog?.Close();
             }
+            // A report the core made that the observer could not handle was caught at the boundary and kept: the
+            // success flag it records cannot be trusted, so say so rather than show a result (audit B4).
+            if (run.ObserverException is { } failure)
+            {
+                SetCal(CalibrationStatusKind.Fail, "A report from the core could not be handled: " + failure.Message);
+                return;
+            }
             try
             {
                 result = run.GetResult();

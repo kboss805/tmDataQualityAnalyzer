@@ -245,6 +245,7 @@ public sealed class ChartGeometryTests
         index.Dispose();
         index.Dispose();
         Assert.Throws<ObjectDisposedException>(() => ChartGeometry.Build(xs, ys, true, FourColumns, index));
+        Assert.Throws<ObjectDisposedException>(() => index.Count);   // asked of the core, which no longer has it
         using var empty = new SeriesIndex(ReadOnlySpan<double>.Empty);
         Assert.Equal(0, empty.Count);
     }

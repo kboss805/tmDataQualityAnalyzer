@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    The Avalonia application, which replaced v2.x (the Qt application) and ships from v3.0.0. MVVM with CommunityToolkit.Mvvm; the processing core is tmdq_core.dll, reached through TmDq.Core.
+    The Avalonia application, which replaced v2.x and ships from v3.0.0. MVVM with CommunityToolkit.Mvvm; the processing core is tmdq_core.dll, reached through TmDq.Core.
 
     - The version comes from AppVersion in src/core/include/constants.h (eng\AppVersion.props, which Directory.Build.props at the root imports into every project); never type one here.
     - Every package must be on the open-source licence allow-list (eng\PackageLicences.targets, imported by Directory.Build.targets):

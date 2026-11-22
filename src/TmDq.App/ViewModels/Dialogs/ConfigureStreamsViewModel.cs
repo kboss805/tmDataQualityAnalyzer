@@ -50,7 +50,7 @@ public sealed class ConfigureStreamsViewModel : DialogViewModel
     public string Recording { get; }
 
     [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Bound from the window's XAML, which binds to an instance.")]
-    public string Title => "Configure Streams";
+    public const string Title = "Configure Streams";
 
     public ObservableCollection<StreamRowViewModel> Rows { get; }
 

@@ -1,0 +1,30 @@
+{
+  "suite": "managed",
+  "args": [],
+  "mutants": [
+    {
+      "id": "D1",
+      "file": "src/TmDq.Core/Chart.cs",
+      "old": "public int Count => Native.tmdq_series_index_count(Handle);",
+      "new": "public int Count => Native.tmdq_series_index_count(Handle) * 0;",
+      "expect": "caught",
+      "note": "an index reports no values: Count is the core's answer, not a managed copy"
+    },
+    {
+      "id": "D2",
+      "file": "src/TmDq.Core/Chart.cs",
+      "old": "index is not null && index.Count == count ? index.Handle",
+      "new": "index is not null ? index.Handle",
+      "expect": "caught",
+      "note": "an index over another number of values is handed to the core, which refuses the call"
+    },
+    {
+      "id": "D3",
+      "file": "src/TmDq.Core/Chart.cs",
+      "old": "index is not null && index.Count == count ? index.Handle",
+      "new": "index is not null && index.Count != count ? index.Handle",
+      "expect": "caught",
+      "note": "the index is used when it does not fit and left out when it does"
+    }
+  ]
+}

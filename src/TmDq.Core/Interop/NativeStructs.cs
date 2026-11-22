@@ -223,7 +223,7 @@ internal struct ReceiverParamsNative
     public int NumReceivers;
     public int ReceiverChannels;
     public int Reserved;
-    public double ScaleDbPerV;
+    public double ScaleDdBPerV;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 8)]
