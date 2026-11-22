@@ -19,6 +19,7 @@
 
 #include "calibrationextractor.h"
 #include "calibrationprofile.h"
+#include "calibrationreport.h"
 #include "chapter10reader.h"
 #include "containerutil.h"
 #include "doctest.h"
@@ -789,7 +790,7 @@ std::vector<CalibrationChannelResult> reportScenario(const std::string& scenario
 
 } // namespace
 
-TEST_CASE("CalibrationExtractor: summarize produces exactly this report")
+TEST_CASE("CalibrationExtractor: calibrationReport produces exactly this report")
 {
     // The whole text, not fragments: the report is what the operator reads, and the other summary tests only look for
     // phrases inside it. Includes the exact halves (37.5, 42.5, 2.5, 0.5, 1234.5) that the report rounds away from
@@ -953,7 +954,7 @@ TEST_CASE("CalibrationExtractor: summarize produces exactly this report")
         INFO("scenario " << row.scenario);
         int expected_steps = 0;
         const std::vector<CalibrationChannelResult> results = reportScenario(row.scenario, expected_steps);
-        CHECK(CalibrationExtractor::summarize(results, expected_steps) == joinLines(row.lines));
+        CHECK(calibrationReport(results, expected_steps) == joinLines(row.lines));
     }
 }
 
@@ -979,7 +980,7 @@ TEST_CASE("CalibrationExtractor: the summary names receivers and why they fell b
         results.push_back(channelResult(p + "_RCVR4", O::NoData, 0, false));
     }
 
-    const std::string summary = CalibrationExtractor::summarize(results, 6);
+    const std::string summary = calibrationReport(results, 6);
 
     // The headline count still reports channels, since that is the unit profiles are keyed by.
     // 3 (rcvr 1) + 2 (rcvr 2's L and R) + 3 (rcvr 3) = 8 of 12.
@@ -1003,7 +1004,7 @@ TEST_CASE("CalibrationExtractor: the summary names receivers and why they fell b
     // Channels from a hand-written receiver-params TOML carry no "_RCVR<N>", so they must be reported by name rather
     // than assigned a receiver number.
     const std::vector<CalibrationChannelResult> unnamed = {channelResult("AGC_LEFT", O::NoMonotonicSweep, 7)};
-    const std::string unnamed_summary = CalibrationExtractor::summarize(unnamed, 6);
+    const std::string unnamed_summary = calibrationReport(unnamed, 6);
     CHECK_MESSAGE(contains(unnamed_summary, "AGC_LEFT"), unnamed_summary);
     CHECK_MESSAGE(contains(unnamed_summary, "no monotonic sweep"), unnamed_summary);
 }
@@ -1025,7 +1026,7 @@ TEST_CASE("CalibrationExtractor: the summary flags a short step file and a misma
     {
         short_file.push_back(calibrated(p + "_RCVR3", 11));
     }
-    const std::string short_report = CalibrationExtractor::summarize(short_file, 8);
+    const std::string short_report = calibrationReport(short_file, 8);
     CHECK_MESSAGE(contains(short_report, "Check the step file"), short_report);
     CHECK_MESSAGE(contains(short_report, "Receiver 3 — 11 levels in the recording, 8 in the step file"), short_report);
 
@@ -1036,12 +1037,12 @@ TEST_CASE("CalibrationExtractor: the summary flags a short step file and a misma
     {
         transient.push_back(calibrated(p + "_RCVR3", 9));
     }
-    CHECK_FALSE(contains(CalibrationExtractor::summarize(transient, 8), "Check the step file"));
+    CHECK_FALSE(contains(calibrationReport(transient, 8), "Check the step file"));
 
     // One channel swept and two never moved: what a word map that does not match the recording leaves behind, since it
     // files one receiver's words under another's.
     const std::vector<CalibrationChannelResult> mixed = {flat("L_RCVR2"), flat("R_RCVR2"), calibrated("C_RCVR2", 11)};
-    const std::string mixed_report = CalibrationExtractor::summarize(mixed, 11);
+    const std::string mixed_report = calibrationReport(mixed, 11);
     CHECK_MESSAGE(contains(mixed_report, "Check the word map"), mixed_report);
     CHECK_MESSAGE(contains(mixed_report, "Receiver 2 — C calibrated; L, R never moved"), mixed_report);
 
@@ -1052,7 +1053,7 @@ TEST_CASE("CalibrationExtractor: the summary flags a short step file and a misma
     {
         absent.push_back(flat(p + "_RCVR4"));
     }
-    CHECK_FALSE(contains(CalibrationExtractor::summarize(absent, 11), "Check the word map"));
+    CHECK_FALSE(contains(calibrationReport(absent, 11), "Check the word map"));
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1152,7 +1153,7 @@ TEST_CASE("CalibrationExtractor: the real step_cal recording pairs every step co
 
     // And the operator-facing report names the receivers, in the unit operators actually talk in, and says where a
     // saturated one stops being trustworthy.
-    const std::string report = CalibrationExtractor::summarize(results, intSize(steps));
+    const std::string report = calibrationReport(results, intSize(steps));
     CHECK_MESSAGE(contains(report, "Calibrated: receivers 1, 3, 5, 6."), report);
     CHECK_MESSAGE((contains(report, "Receiver 1") && contains(report, "hold at 48 dB")), report);
 
@@ -1270,7 +1271,7 @@ TEST_CASE("CalibrationExtractor: a non-ASCII channel name survives the extractio
     }
 
     // None carries "_RCVR<N>", so the report names them rather than numbering a receiver.
-    const std::string report = CalibrationExtractor::summarize(results, intSize(req.steps));
+    const std::string report = calibrationReport(results, intSize(req.steps));
     for (const std::string& name : names)
     {
         CHECK_MESSAGE(contains(report, name), report);
@@ -1601,7 +1602,7 @@ TEST_CASE("CalibrationExtractor: the real step_cal with a short step file is fla
     std::string summary;
     REQUIRE_MESSAGE(runExtraction(extractor, req, summary), summary);
 
-    const std::string report = CalibrationExtractor::summarize(extractor.results(), intSize(req.steps));
+    const std::string report = calibrationReport(extractor.results(), intSize(req.steps));
     CHECK_MESSAGE(contains(report, "Check the step file"), report);
     CHECK_MESSAGE(contains(report, "Receiver 3 — 11 levels in the recording, 8 in the step file"), report);
 }
@@ -1619,7 +1620,7 @@ TEST_CASE("CalibrationExtractor: the real step_cal with the wrong word map is fl
     std::string summary;
     REQUIRE_MESSAGE(runExtraction(extractor, req, summary), summary);
 
-    const std::string report = CalibrationExtractor::summarize(extractor.results(), intSize(req.steps));
+    const std::string report = calibrationReport(extractor.results(), intSize(req.steps));
     CHECK_MESSAGE(contains(report, "Check the word map"), report);
 }
 

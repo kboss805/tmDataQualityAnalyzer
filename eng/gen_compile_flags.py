@@ -38,7 +38,7 @@ PROJECT_INCLUDES = [
 # src/core/abi as a redeclaration without it (clang-diagnostic-inconsistent-dllimport, in the editor and in clang-tidy).
 # The DLL's is used for every file: it parses the tests' sources the same.
 DEFINES = [
-    "UNICODE", "_UNICODE", "WIN32", "WIN64", "_ENABLE_EXTENDED_ALIGNED_STORAGE",
+    "UNICODE", "_UNICODE", "WIN32", "WIN64",
     "DOCTEST_CONFIG_USE_STD_HEADERS", "TMDQ_ABI_BUILD",
 ]
 

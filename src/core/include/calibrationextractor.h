@@ -130,26 +130,7 @@ public:
     /// @return Length of the extracted recording in seconds (valid after the run finishes).
     double recordingSeconds() const { return m_recording_sec; }
 
-    /**
-     * @brief Builds the operator-facing calibration report from @p results.
-     *
-     * Names which receivers were calibrated and, for the rest, why — grouped by
-     * receiver (the unit operators actually think and speak in) rather than by
-     * the individual L/R/C words. A bare "calibrated N of M channel(s)" count
-     * cannot distinguish a receiver that was absent from the recording from one
-     * whose steps were too compressed to resolve, which are entirely different
-     * problems with entirely different remedies.
-     *
-     * Pure and static so the wording is unit-testable without running an
-     * extraction over a real .ch10 file.
-     *
-     * @param[in] results       Per-channel outcomes, in word order.
-     * @param[in] expectedSteps Step count from the step-config TOML, so a
-     *                          plateau shortfall can be reported against it.
-     * @return Multi-line UTF-8 report suitable for a message box.
-     */
-    static std::string summarize(const std::vector<CalibrationChannelResult>& results,
-                                 int expectedSteps);
+    // The operator-facing report of the results is `calibrationReport` (calibrationreport.h).
 
 private:
     class Relay;

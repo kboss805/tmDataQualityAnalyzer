@@ -16,11 +16,9 @@
 #
 # WHERE IT LIVES NOW
 #
-# It was the Qt TestProcessingCoordinator's benchmarkHeavyWorkloadSingleVsMultiStream.
-# It measures PipelineRunner - the single reader and the parallel workers - and that is
-# Qt-free, so it moved to the native doctest suite (plan step 2.4) as
-# "PipelineRunner throughput: ...". It needs no Qt to build or to run, and the rest of
-# the release's suites are run separately (the cut-release skill's step 5).
+# It is a case of the native doctest suite, "PipelineRunner throughput: ...", which measures
+# PipelineRunner - the single reader and the parallel workers. The rest of the release's
+# suites are run separately (the cut-release skill's step 5).
 #
 # ONCE ASKED FOR, IT CANNOT SKIP QUIETLY
 #
@@ -224,7 +222,7 @@ try {
     # Invoked directly rather than through Start-Process: under Windows PowerShell
     # 5.1 a -PassThru process has not cached its handle, so $p.ExitCode reads back
     # EMPTY once it exits. That reported a successful signing as a failure in the
-    # Qt release script and is not worth re-learning here.
+    # v2.x release script and is not worth re-learning here.
     $prev = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'   # 5.1 turns native stderr into a terminating error
     & $TestExe "-tc=$CaseFilter" 2>&1 | Tee-Object -FilePath $Log | Out-Host

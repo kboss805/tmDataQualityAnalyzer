@@ -106,8 +106,8 @@ spacing, styles, the themes or the plot's drawing, the test suite asserts little
   `ulDataLen > data_offset` before pointer arithmetic, and cap allocations via
   `ensureBufferCapacity` (rejects > `kMaxPacketBufferSize`, catches `bad_alloc`). New parsing code
   must keep these guards.
-- Every `calloc`/`malloc` from the C layer needs a matching free path (`freeChanInfoTable`), and
-  `FreeOutputBuffers_PcmF1` before `free` for PCM attributes. Flag any leak or double-free.
+- Anything the C layer allocates needs an owner that gives it back: `Ch10PacketReader`'s PCM attributes are a
+  `ChannelInfo::pcm` (its deleter calls `FreeOutputBuffers_PcmF1` before the delete). Flag any leak or double-free.
 - No C++ exceptions may propagate across the C boundary.
 
 ## General pass (still do this)

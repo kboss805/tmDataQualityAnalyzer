@@ -12,6 +12,7 @@
 #ifndef CALIBRATIONPROFILE_H
 #define CALIBRATIONPROFILE_H
 
+#include <algorithm>
 #include <vector>
 
 #include "containerutil.h"
@@ -154,6 +155,19 @@ inline double interpolateCalibration(double raw, const CalibrationProfile& profi
         }
     }
     return pts[n - 1].trueDb; // unreachable
+}
+
+/// Highest dB a profile actually measured. Points are sorted by raw count and an
+/// inverted-polarity receiver's count falls as dB climbs, so the top dB can sit
+/// at either end - take the maximum rather than the last point.
+inline double topResolvedDb(const CalibrationProfile& profile)
+{
+    double top = 0.0;
+    for (const CalibrationPoint& point : profile.points)
+    {
+        top = std::max(top, point.trueDb);
+    }
+    return top;
 }
 
 #endif // CALIBRATIONPROFILE_H

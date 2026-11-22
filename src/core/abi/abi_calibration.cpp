@@ -20,6 +20,7 @@
 #include "abi_internal.h"
 #include "calibrationextractor.h"
 #include "calibrationprofile.h"
+#include "calibrationreport.h"
 #include "calibrationrequest.h"
 #include "stepdetector.h"
 #include "stepconfigfile.h"
@@ -247,7 +248,7 @@ void buildText(tmdq_calibration& c)
     std::call_once(c.textBuilt, [&] {
         c.summary = c.extractor.summary();
         c.error   = c.extractor.error();
-        c.report  = CalibrationExtractor::summarize(c.extractor.results(), c.expectedSteps);
+        c.report  = calibrationReport(c.extractor.results(), c.expectedSteps);
     });
 }
 

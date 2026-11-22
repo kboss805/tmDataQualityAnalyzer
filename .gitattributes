@@ -7,6 +7,6 @@
 *.exe binary
 *.dll binary
 
-# Qt-written templates, compared byte for byte (CR LF included): stored exactly as written
+# Templates v2.x wrote, compared byte for byte (CR LF included): stored exactly as written
 tests/TmDq.App.Tests/Templates/*.json -text
 

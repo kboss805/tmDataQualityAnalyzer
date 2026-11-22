@@ -1,5 +1,5 @@
 // The plot's geometry (plan step 4.3a): the transforms between data and pixels, a series' line and its per-pixel-column
-// envelope, and the X ticks. The code came out of v2.x's chart, TmChart (its Qt implementation); that code is
+// envelope, and the X ticks. The code came out of v2.x's chart, TmChart; that code is
 // restated here over std types as it was (`Old`) and compared with the core over generated series, views and ranges,
 // so the geometry is held to exactly what that chart drew. The cases after the comparison work their answers out by
 // hand: the behaviours the chart's own tests pinned through a rendered widget (a dense series' dropout and spread, a
