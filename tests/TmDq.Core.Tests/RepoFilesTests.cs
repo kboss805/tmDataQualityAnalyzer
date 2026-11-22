@@ -149,6 +149,97 @@ public class RepoFilesTests
     }
 
     [Fact]
+    public void TheDocumentationLinksToFilesThatAreThereAndKeepsItsFencesAndHeadingsInOrder()
+    {
+        // A markdown lint of the rules that are objectively right (a link that goes nowhere, a fence left open so the rest
+        // of the page is code, a tab, a heading that skips a level), held here so CI needs no second toolchain (audit T11).
+        // The changelog and docs\records are kept as they were written, and their links and layout are of their day.
+        var problems = new List<string>();
+        string[] files = DocumentationFiles().ToArray();
+        Assert.Contains(files, f => f.EndsWith("guide.md", StringComparison.Ordinal));
+        Assert.Contains(files, f => f.EndsWith("README.md", StringComparison.Ordinal));
+        foreach (string file in files)
+        {
+            string name = Path.GetRelativePath(RepoPaths.Root, file);
+            string[] lines = File.ReadAllLines(file);
+            bool inFence = false;
+            int fences = 0, h1 = 0, previous = 0;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i];
+                if (Regex.IsMatch(line, @"^\s*(```|~~~)"))
+                {
+                    inFence = !inFence;
+                    fences++;
+                    continue;
+                }
+                if (inFence) continue;
+                if (line.Contains('\t')) problems.Add($"{name}:{i + 1}: a tab");
+                Match heading = Regex.Match(line, @"^(#{1,6})\s");
+                if (heading.Success)
+                {
+                    int level = heading.Groups[1].Length;
+                    if (level == 1) h1++;
+                    if (previous > 0 && level > previous + 1) problems.Add($"{name}:{i + 1}: a heading jumps from level {previous} to {level}");
+                    previous = level;
+                }
+                foreach (Match link in Regex.Matches(line, @"\]\(([^)\s]+)\)"))
+                {
+                    string target = link.Groups[1].Value;
+                    if (Regex.IsMatch(target, @"^(https?:|mailto:|#)")) continue;
+                    string path = Uri.UnescapeDataString(target.Split('#')[0]);
+                    if (path.Length == 0) continue;
+                    string full = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(file)!, path));
+                    if (!File.Exists(full) && !Directory.Exists(full)) problems.Add($"{name}:{i + 1}: the link {target} goes to nothing");
+                }
+            }
+            if (fences % 2 != 0) problems.Add($"{name}: a code fence is never closed");
+            if (h1 > 1) problems.Add($"{name}: {h1} top-level headings");
+        }
+        Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
+    }
+
+    private static IEnumerable<string> DocumentationFiles()
+    {
+        yield return RepoPaths.File("README.md");
+        foreach (string root in new[] { "docs", ".claude" })
+        {
+            foreach (string file in Directory.EnumerateFiles(Path.Combine(RepoPaths.Root, root), "*.md", SearchOption.AllDirectories))
+            {
+                string relative = Path.GetRelativePath(RepoPaths.Root, file).Replace('\\', '/');
+                if (relative == "docs/changelog.md" || relative.StartsWith("docs/records/", StringComparison.Ordinal)) continue;
+                if (relative.StartsWith(".claude/worktrees/", StringComparison.Ordinal)) continue;
+                yield return file;
+            }
+        }
+    }
+
+    [Fact]
+    public void NoScriptButCommonPs1TypesTheTargetFrameworkOrTheImportAllowList()
+    {
+        // The target framework names the folder a test exe is in, and the import allow-list is what makes a new dependency of
+        // the DLL a decision: each lives in eng\common.ps1 (audit A5), where a change reaches every script that reads it.
+        string[] literals = { "net10.0", "KERNEL32|WS2_32" };
+        var offenders = new List<string>();
+        foreach (string folder in new[] { "eng", "deploy" })
+        {
+            foreach (string file in Files(folder, "*.ps1"))
+            {
+                if (Path.GetFileName(file) == "common.ps1") continue;
+                string text = File.ReadAllText(file);
+                foreach (string literal in literals)
+                {
+                    if (text.Contains(literal, StringComparison.Ordinal)) offenders.Add($"{Path.GetRelativePath(RepoPaths.Root, file)} has {literal}");
+                }
+            }
+        }
+        Assert.True(offenders.Count == 0, string.Join(Environment.NewLine, offenders));
+        string common = File.ReadAllText(RepoPaths.File(Path.Combine("eng", "common.ps1")));
+        Assert.Contains("net10.0", common);
+        Assert.Contains("KERNEL32|WS2_32", common);
+    }
+
+    [Fact]
     public void EveryKeptMutantStillNamesTextThatIsInItsFileExactlyOnce()
     {
         // A kept list (eng\mutants) is a regression check only while each mutant's "old" text is still in its file: after

@@ -9,8 +9,8 @@ This file provides context and guidelines for AI assistants working on the tmDat
   the native core. This is the only supported toolchain; CI builds with it too (`windows-2022`, checked by the job).
 - **C++ Standard**: C++20 (`std::format`, `std::span`, `inline constexpr` throughout `constants.h`).
 - **Shipping application** (from v3.0.0): the Avalonia 12 application on .NET 10 (`src/TmDq.App`) over the native
-  core (`tmdq_core.dll`), packaged by `deploy/build_package.ps1`. Up to v2.14.2 the application was
-  Qt 6; `docs/changelog.md` records the move.
+  core (`tmdq_core.dll`), packaged by `deploy/build_package.ps1`. v3.0.0 replaced the v2.x application;
+  `docs/changelog.md` records the move.
 - **Project Version**: 3.1.0 — defined once in the `AppVersion` struct in `src/core/include/constants.h`; `eng/AppVersion.props` reads it for every assembly, and the package script and the manual build read it too, so no other file carries a duplicate version literal
 
 ## User Stories
@@ -58,7 +58,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] All processed files are retained in memory; the user can optionally also export a CSV + Frame Sync Lock and Missed Frames images per file to a chosen folder, auto-named from each source file.
 - [x] Progress is shown while the batch runs, and a summary reports how many files were processed vs. skipped.
 - [x] A saved template round-trips the same per-stream settings the Configure Streams dialog captures (frame-sync, SNR, calibration references), and — optionally — per-series names/colors.
-  - **Scope:** Matching is **exact channel-ID set** (a file must have the same PCM channel IDs as the template, no more/fewer) — decided for simplicity; revisit if a looser "subset" match is ever needed. This story is orthogonal to US2.2 (apply-to-all *within* one file). Templates carry **no file paths** — settings only, applied to whatever files the user picks. The only batch entry point is **File > Process Multiple Files…** (the template batch; there is no direct multi-file open, and no Add/Remove Source); templates are the sole way to configure a batch.
+  - **Scope:** Matching is **exact channel-ID set** (a file must have the same PCM channel IDs as the template, no more/fewer). This story is orthogonal to US2.2 (apply-to-all *within* one file). Templates carry **no file paths** — settings only, applied to whatever files the user picks. The only batch entry point is **File > Process Multiple Files…** (the template batch; there is no direct multi-file open, and no Add/Remove Source); templates are the sole way to configure a batch.
   - **Config application:** each file's run feeds the template's `StreamConfig`s through unchanged (`TemplateBatch.ToRunRequest`); the reader dispatches each stream by `pcmChannelId`, which is safe precisely because of the exact-set match. **Non-linear calibration:** a template stores only the calibration *input references* (not the extracted profile), so **all batch files process with the linear slope/offset fallback**. Non-linear step calibration is available for single-file processing only; re-extraction on template apply is a possible future add.
   - **Custom names/colors:** captured only when **saving a template** from an already-processed, customized plot (`PlotTemplates.Build`), and reapplied per file after each run (`PlotTemplates.ApplyAppearance`, matched by channel id + metric/receiver/channel). Every file's copy of a channel intentionally shares the same name/color (they are the same channel across recordings); use the **Plot File** selector to view one file at a time when per-file distinction matters.
   - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot's right-click **Plot File** submenu chooses which file to view; a batch leaves the plot on the first file (`BatchRunner`), and "All files (overlaid)" is there for comparison. The filter is a `PlotViewModel` source gate (`SetVisibleSource`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`BatchRunner` shows each source alone, then writes its CSV, and a `_framesync_lock.png` and `_missed_frames.png`, through `SessionExport`).
@@ -192,7 +192,6 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Frame Sync Lock curves are assigned purple, blue, and green primary colors automatically, one per stream.
 - [x] Receiver SNR curves are assigned red, orange, and yellow primary colors automatically, one per receiver.
 - [x] Additional streams, receivers, and channels beyond the primaries use progressively lighter shades of their primary color so related series stay visually grouped.
-  - **A criterion removed (plan step 5.1):** "Frame Sync Lock curves are drawn with a visually highlighted style, while Receiver SNR curves are not." Neither application has ever done it: every curve has had the same 1.5 px pen since the QCustomPlot days, and the colours above are what tell the two kinds apart. The parity review found it ticked but untrue, and the story now says what ships (`docs/records/parity.md`).
 
 ### US4.1: Distraction-free plot window — controls on the plot, not around it — Complete
 
@@ -271,7 +270,6 @@ The stories below follow the workflow a first-time user takes through the applic
   - polarity
 - [x] The dialog window includes a "Save" button to save the key parameters to the configuration file.
 - [x] The dialog window includes a "Cancel" button to cancel the operation.
-  - **A criterion removed (plan step 5.1):** "The dialog window includes a "Reset" button to reset the key parameters to their default values." Neither application's Receiver SNR dialog has one. Loading the shipped `settings/receiver_params/default.toml` puts the shipped defaults back, which is what the button would have done. The parity review found it ticked but untrue, and the story now says what ships (`docs/records/parity.md`).
 
 ### US5.3: Non-Linear Receiver SNR Step Calibration — Complete
 
@@ -295,11 +293,9 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The step-config TOML is preloaded when the dialog opens — the file this stream last used, else the shipped default — and the status says it was loaded automatically.
 - [x] During main data processing, the application applies the non-linear calibration profile using piece-wise linear interpolation between steps.
 - [x] Raw values outside the calibrated range clamp to the nearest end-step dB instead of extrapolating, so a receiver driven past the calibrated range reads the ceiling or floor value.
-  - **Saturated receivers (v2.12.0):** a receiver driven past its converter's range
-    mid-sweep is now calibrated over the steps that stayed in scale, with readings clamped at
-    the top measured step, instead of losing the whole channel to the linear fallback.
-  - **Summary report (v2.12.0):** the summary criterion above is now met literally — the message box names the calibrated receivers ("Calibrated: receivers 1, 3, 5, 6.") and lists each receiver that fell back with its channels and the reason, where it previously reported only a channel count.
-  - **Status (v2.2.5): COMPLETE.** Step selection is polarity-agnostic and robust to real recordings: it takes the first maximal monotonic plateau run and keeps its last `expected` plateaus, which excludes a signal-generator turn-on transient (leading) and the optional operator down-ramp (trailing) for both normal and inverted-polarity receivers — fixing the calibrated-staircase time skew. The extraction sample period is frame-rate-adaptive (100 ms floor) for fast frames, and the Extract Calibration dialog adds optional **Clip Start / Clip End** controls so operators can trim leading/trailing seconds before detection. Out-of-range raw values clamp (not extrapolate) to the nearest end-step dB.
+  - **A saturated receiver keeps its calibration:** a receiver driven past its converter's range mid-sweep is calibrated over the steps that stayed in scale, with readings clamped at the top measured step, rather than losing the whole channel to the linear fallback.
+  - **The summary names what happened:** the message box names the calibrated receivers ("Calibrated: receivers 1, 3, 5, 6.") and lists each receiver that fell back with its channels and the reason.
+  - **How the steps are found:** step selection is polarity-agnostic and robust to real recordings: it takes the first maximal monotonic plateau run and keeps its last `expected` plateaus, which excludes a signal-generator turn-on transient (leading) and the optional operator down-ramp (trailing) for both normal and inverted-polarity receivers. The extraction sample period is frame-rate-adaptive (100 ms floor) for fast frames, and the Extract Calibration dialog has optional **Clip Start / Clip End** controls so operators can trim leading/trailing seconds before detection. Out-of-range raw values clamp (not extrapolate) to the nearest end-step dB.
 
 ### US6.0: Export the plot as an image file — Complete
 
@@ -389,7 +385,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The installer never overwrites an existing user TOML settings file, on upgrade or reinstall. A settings file is written only when it is absent (`onlyifdoesntexist`), and is left behind by uninstall (`uninsneveruninstall`).
 - [x] A settings file written by any earlier version stays usable: every reader supplies its own default for a key the file does not carry, so an older file degrades to "missing keys fall back to defaults" rather than to a wrong result.
 - [x] New fields added to a shipped default therefore reach a **fresh install**, not an existing one. An upgraded install keeps the operator's file exactly as it stands.
-  - **Replaces two criteria that described a merge this project never built.** They claimed the installer saved a conflicting default as `new_x.toml` and carried the user's old values into it. Nothing implements that: the installer script (`deploy/tmDataQualityAnalyzer.iss`) is declarative, with no `[Code]` section, and there is no `new_x`, migration, schema-version or merge logic in the core, `deploy/` or `eng/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
+  - **There is no merge of a shipped default into an existing settings file.** The installer script (`deploy/tmDataQualityAnalyzer.iss`) is declarative, with no `[Code]` section, and there is no `new_x`, migration, schema-version or merge logic in the core, `deploy/` or `eng/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
   - **The guarantee above is weaker but true, and the defensive readers are what make it safe** - `FrameSetup::readReceiverParams()` accepts both the current `[Receivers]` keys and the older `[Parameters]` spelling, an absent `Randomized` leaves the operator's choice alone rather than clearing it, and the template reader (`TemplateFile`) keeps each key's default for anything omitted (a new row's value, read from a default `StreamSetup`, which `StreamFilesTests` holds to the core's `ReceiverParamsFile.Defaults()`). A change that removed that tolerance would look harmless and would not be: it is load-bearing for this criterion, not incidental.
   - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. Building the merge in the installer's `[Code]` section was scoped and deliberately not taken: it would move the installer from no custom code to scripted code, which is what keeps it cheap to maintain, and no one has asked for it (the v2.14.2 entry "US8.0 now describes the installer that exists" in `docs/changelog.md`). Rebuild the sketch from this criterion if that day comes.
 
@@ -426,7 +422,7 @@ The stories below follow the workflow a first-time user takes through the applic
   single header, `third_party/doctest`). Charting is first-party: the core builds the geometry (`chartgeometry`), the app draws
   it (`PlotChart`) with Skia. Every .NET package the app ships is open source and on the licence allow-list
   (`eng/check_package_licences.ps1`); no licensed tooling is used, and the project stays GPL-3.0.
-- **History**: up to v2.14.2 the application was Qt 6 (Qt Widgets, qmake) over the same core; v3.0.0 is the first
+- **History**: v2.x (up to v2.14.2) was a different user interface over the same core; v3.0.0 is the first
   release of this one. `docs/changelog.md` records every release and every step of the move.
 
 ## ⚠️ CRITICAL: Protected Files — DO NOT MODIFY
@@ -745,7 +741,7 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
 
 ### Working Method
 
-The rules the move off Qt ran on, and how every change is made now. The plan's rules 2 to 5, which code comments still
+The rules the move to Avalonia ran on, and how every change is made now. The plan's rules 2 to 5, which code comments still
 cite, are items 1 to 4 below: a comment citing "plan rule 5" means item 4, one implementation of every format.
 
 1. **Tests first, on the code as it is.** Before changing or reimplementing anything, pin what it does today, run the

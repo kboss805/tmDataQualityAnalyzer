@@ -28,7 +28,7 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw 'dotnet not found (install the .NET 10 SDK)' }
 
-# The walking-skeleton tests process a recording through the native core, which the app finds beside itself: the
+# The tests that open a recording process a recording through the native core, which the app finds beside itself: the
 # build copies out\<Configuration>\tmdq_core.dll there when it exists. Say so here rather than let a dozen
 # tests fail with "the processing core could not be loaded".
 if (-not $env:TMDQ_CORE_DLL -and -not (Test-Path (Join-Path $root "out\$Configuration\tmdq_core.dll"))) {
@@ -36,7 +36,8 @@ if (-not $env:TMDQ_CORE_DLL -and -not (Test-Path (Join-Path $root "out\$Configur
 }
 
 $project = Join-Path $root 'tests\TmDq.App.Tests'
-$exe = Join-Path $project "bin\$Configuration\net10.0\TmDq.App.Tests.exe"
+. (Join-Path $PSScriptRoot 'common.ps1')
+$exe = Get-TestExePath $root 'TmDq.App.Tests' $Configuration
 
 $ErrorActionPreference = 'Continue'   # 5.1 turns native stderr into a terminating error
 if (-not $NoBuild) {

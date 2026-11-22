@@ -1,7 +1,7 @@
 # =============================================================================
 # signing.ps1 - code-signing helpers for the Avalonia package (dot-source it).
 #
-# The rules the Qt release script (deleted in plan step 6.1) learned, in one place:
+# The rules the v2.x release script (deleted in plan step 6.1) learned, in one place:
 # find the newest SDK signtool, prove the certificate can sign
 # BEFORE a long build (a locked SimplySign token still shows the certificate as
 # valid), and verify every signature instead of trusting signtool's exit code.
@@ -32,7 +32,7 @@ function Invoke-Signtool {
                                                      '/fd', 'sha256', "`"$File`"") -NoNewWindow -PassThru `
                  -RedirectStandardOutput (Join-Path $logDir 'out.txt') -RedirectStandardError (Join-Path $logDir 'err.txt')
         # Touch .Handle BEFORE waiting: under Windows PowerShell 5.1 a Start-Process -PassThru object that has not
-        # cached its handle reads ExitCode back EMPTY once the process has exited (measured, in the Qt release script).
+        # cached its handle reads ExitCode back EMPTY once the process has exited (measured, in v2.x's release script).
         $null = $p.Handle
         if (-not $p.WaitForExit($TimeoutSeconds * 1000)) {
             $p.Kill()
@@ -48,7 +48,7 @@ function Invoke-Signtool {
     }
 }
 
-function Test-SigningWorks {
+function Test-CodeSigning {
     # Signs a throwaway copy of signtool itself: any PE file does, and nothing built yet is touched.
     param([string]$Signtool, [string]$Thumbprint, [string]$Timestamp)
     $dir = Join-Path $env:TEMP ('tmdq-signprobe-' + [guid]::NewGuid().ToString('N'))
