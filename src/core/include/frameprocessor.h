@@ -145,6 +145,9 @@ private:
     /// off-phase ones while locked), collects data words, and tallies lock-percentage
     /// bits. The caller has already closed every window that ended before these bits and
     /// chosen a run that ends before the next one does: this never looks at time.
+    /// In lock, the bits of a frame between its boundaries are taken in one step from the
+    /// bits themselves (nothing the machine does in them depends on more than counting),
+    /// with the state, the frame's words and every count what the one-at-a-time loop gives.
     void scanBits(ScanState& s, const uint8_t* data, uint64_t from, uint64_t to,
                   const std::vector<const ParameterInfo*>& enabled_params);
 

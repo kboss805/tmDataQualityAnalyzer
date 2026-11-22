@@ -69,6 +69,77 @@ uint64_t firstBitPastWindow(double window_end, uint64_t from, uint64_t limit, co
     return first;
 }
 
+/// Bit @p pos of @p data, counting from the most significant bit of byte 0.
+uint64_t bitAt(const uint8_t* data, uint64_t pos)
+{
+    constexpr unsigned kLastBitOfByte = 7;
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    return (data[pos >> 3] >> (kLastBitOfByte - (pos & kLastBitOfByte))) & 1u;
+}
+
+/// The 64 bits of @p data that end just before bit @p end (MSB first): what the scan's sync register holds after bit
+/// @p end - 1. Needs @p end >= 64, and reads the byte holding bit @p end - 1 at most.
+uint64_t bitsBefore(const uint8_t* data, uint64_t end)
+{
+    const uint64_t first = end - 64;
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    const uint8_t* p = data + (first >> 3);
+    uint64_t v = 0;
+    for (int i = 0; i < 8; i++)
+    {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        v = (v << 8) | p[i];
+    }
+    const unsigned shift = static_cast<unsigned>(first & 7);
+    if (shift != 0)
+    {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        v = (v << shift) | (static_cast<uint64_t>(p[8]) >> (8 - shift));
+    }
+    return v;
+}
+
+/// How many of the @p count bits from @p from on complete a sync match: a bit does when the register as it stands after
+/// that bit, masked, equals @p pat. That is the test the scan makes on every bit, made here a byte at a time on the
+/// register's eight positions across it. Needs @p from >= 64 and @p mask below 2^57 (so that a window is entirely in the
+/// 64 bits kept: seven for the byte, fifty-seven for the match).
+uint64_t countSyncMatches(const uint8_t* data, uint64_t from, uint64_t count, uint64_t pat, uint64_t mask)
+{
+    const uint64_t end = from + count;
+    uint64_t pos = from;
+    uint64_t w = bitsBefore(data, from);
+    uint64_t found = 0;
+
+    constexpr unsigned kLastBitOfByte = 7;
+    const auto one_bit = [&] {
+        w = (w << 1) | bitAt(data, pos);
+        found += (w & mask) == pat ? 1 : 0;
+    };
+
+    for (; pos < end && (pos & kLastBitOfByte) != 0; pos++)
+    {
+        one_bit();
+    }
+    for (; pos + 8 <= end; pos += 8)
+    {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        w = (w << 8) | data[pos >> 3];
+        found += ((w & mask) == pat ? 1u : 0u)
+               + (((w >> 1) & mask) == pat ? 1u : 0u)
+               + (((w >> 2) & mask) == pat ? 1u : 0u)
+               + (((w >> 3) & mask) == pat ? 1u : 0u)
+               + (((w >> 4) & mask) == pat ? 1u : 0u)
+               + (((w >> 5) & mask) == pat ? 1u : 0u)
+               + (((w >> 6) & mask) == pat ? 1u : 0u)
+               + (((w >> 7) & mask) == pat ? 1u : 0u);
+    }
+    for (; pos < end; pos++)
+    {
+        one_bit();
+    }
+    return found;
+}
+
 } // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -451,11 +522,62 @@ void FrameProcessor::scanBits(ScanState& s, const uint8_t* data, uint64_t from, 
     uint64_t accumulated_missed       = s.accumulated_missed_frames;
     uint64_t valid_bits               = s.valid_bits_in_window;
 
-    for (uint64_t pos = from; pos < to; pos++)
+    // Skipping through a frame is done for sync registers the byte-wise match count handles (see countSyncMatches).
+    const bool can_skip = (sync_mask >> 57) == 0 && word_len >= 1 && word_len <= 64;
+    constexpr uint64_t kSmallestSkip = 16;
+
+    uint64_t pos = from;
+    while (pos < to)
     {
-        constexpr unsigned kLastBitOfByte = 7;
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-        const uint64_t bit_val = (data[pos >> 3] >> (kLastBitOfByte - (pos & kLastBitOfByte))) & 1u;
+        // In lock, a frame's bits between one boundary and the next change nothing a bit at a time would: the match
+        // test is not acted on (an off-phase match in lock is ignored) and no lock decision falls there, so each such
+        // bit only counts (as in lock, as a bit, as a sync found when it matches), moves the frame position, and
+        // shifts into the register, from which the frame's words are taken as they complete. Everything but the last
+        // bit before the boundary is done here at once, from the bits themselves. The boundary bit and what follows
+        // it go through the loop below as ever. At a run's start the frame is wherever it was.
+        if (can_skip && (minor_frame_bit_count == 0 || pos == from) && pos >= 64 && sync_count != UINT64_MAX
+            && sync_count >= min_syncs && bits_loaded >= sync_pat_len && minor_frame_bit_count + 1 < bits_in_frame
+            && data_word_bit_count < word_len && (save_data != 1 || minor_frame_word_count < words_in_frame))
+        {
+            const uint64_t n = std::min<uint64_t>(bits_in_frame - 1 - minor_frame_bit_count, to - pos);
+            if (n >= kSmallestSkip)
+            {
+                s.total_syncs_found += countSyncMatches(data, pos, n, sync_pat, sync_mask);
+                valid_bits += n;
+                bits_loaded += n;
+
+                if (save_data == 1)
+                {
+                    // Words complete every word_len bits until the frame has them all (then collecting stops).
+                    const uint64_t words_left = words_in_frame - minor_frame_word_count;
+                    const uint64_t bits_seen  = data_word_bit_count + n;
+                    const uint64_t completed  = std::min<uint64_t>(words_left, bits_seen / word_len);
+                    for (uint64_t t = 0; t < completed; t++)
+                    {
+                        frame_words[minor_frame_word_count - 1 + t] =
+                            bitsBefore(data, pos + (word_len - data_word_bit_count) + t * word_len);
+                    }
+                    if (completed == words_left)
+                    {
+                        minor_frame_word_count = words_in_frame;
+                        data_word_bit_count    = 0;
+                        save_data              = 2;
+                    }
+                    else
+                    {
+                        minor_frame_word_count += static_cast<uint32_t>(completed);
+                        data_word_bit_count = static_cast<uint32_t>(bits_seen - completed * word_len);
+                    }
+                }
+
+                minor_frame_bit_count += static_cast<uint32_t>(n);
+                test_word = bitsBefore(data, pos + n);
+                pos += n;
+                continue;
+            }
+        }
+
+        const uint64_t bit_val = bitAt(data, pos);
 
         test_word = (test_word << 1) | bit_val;
         bits_loaded++;
@@ -557,9 +679,10 @@ void FrameProcessor::scanBits(ScanState& s, const uint8_t* data, uint64_t from, 
         if (in_lock) {
             valid_bits++;
         }
+        pos++;
     }
 
-    s.test_word                 = test_word;
+    s.test_word                = test_word;
     s.bits_loaded               = bits_loaded;
     s.minor_frame_bit_count     = minor_frame_bit_count;
     s.minor_frame_word_count    = minor_frame_word_count;

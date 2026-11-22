@@ -601,7 +601,8 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
    slope and offset or a non-linear `CalibrationProfile` per channel. It reads its word map through a `const FrameSetup*`
    and never changes it: the window's running sums of raw counts are the scan's own (`ScanState::channel_sums`).
    A packet is scanned in runs of bits that cannot close a window (`firstBitPastWindow` finds each run's end once per window);
-   `scanBits` keeps the state machine's registers in locals for a run and writes them back at its end.
+   `scanBits` keeps the state machine's registers in locals for a run and writes them back at its end, and in lock takes a
+   frame's bits between boundaries in one step (`countSyncMatches` still counts every sync match in them).
 5. **PipelineRunner** (`pipelinerunner`) - owns a run's lifecycle: the queues, the reader and one worker thread per
    stream, joined before it reports the end. Its input is a `StreamJob` per stream: the validated `ProcessingParams` and
    the shared `FrameSetup`.

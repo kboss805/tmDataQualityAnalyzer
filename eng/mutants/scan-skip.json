@@ -1,0 +1,126 @@
+{
+  "suite": "native",
+  "args": ["-tc=FrameProcessor*"],
+  "mutants": [
+    {
+      "id": "K1",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "test_word = bitsBefore(data, pos + n);",
+      "new": "test_word = bitsBefore(data, pos + n - 1);",
+      "expect": "caught",
+      "note": "the register after a skip is the bits before the last skipped bit, not the last"
+    },
+    {
+      "id": "K2",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "valid_bits += n;",
+      "new": "valid_bits += n - 1;",
+      "expect": "caught",
+      "note": "a skipped stretch is one bit short of in lock"
+    },
+    {
+      "id": "K3",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "s.total_syncs_found += countSyncMatches(data, pos, n, sync_pat, sync_mask);",
+      "new": "s.total_syncs_found += countSyncMatches(data, pos, n - 1, sync_pat, sync_mask);",
+      "expect": "caught",
+      "note": "the syncs found in a skipped stretch leave out its last bit"
+    },
+    {
+      "id": "K4",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "(((w >> 3) & mask) == pat ? 1u : 0u)",
+      "new": "(((w >> 2) & mask) == pat ? 1u : 0u)",
+      "expect": "caught",
+      "note": "one of a byte's eight register positions is tested twice and another never"
+    },
+    {
+      "id": "K5",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "(((w >> 7) & mask) == pat ? 1u : 0u);",
+      "new": "(((w >> 8) & mask) == pat ? 1u : 0u);",
+      "expect": "caught",
+      "note": "a byte's first bit is tested with the register one bit too far back"
+    },
+    {
+      "id": "K6",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "for (; pos < end && (pos & kLastBitOfByte) != 0; pos++)",
+      "new": "for (; (pos & kLastBitOfByte) != 0 && pos < from; pos++)",
+      "expect": "caught",
+      "note": "the bits up to the first byte boundary are not stepped through, so the byte loop reads from the wrong bit"
+    },
+    {
+      "id": "K7",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "(sync_mask >> 57) == 0 &&",
+      "new": "(sync_mask >> 58) == 0 &&",
+      "expect": "caught",
+      "note": "a 58-bit sync is matched in a 64-bit register that holds only 57 bits of each window"
+    },
+    {
+      "id": "K8",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "frame_words[minor_frame_word_count - 1 + t] =",
+      "new": "frame_words[minor_frame_word_count + t] =",
+      "expect": "caught",
+      "note": "a skipped frame's words land one slot late"
+    },
+    {
+      "id": "K9",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "data_word_bit_count = static_cast<uint32_t>(bits_seen - completed * word_len);",
+      "new": "data_word_bit_count = static_cast<uint32_t>(bits_seen - completed * word_len + 1);",
+      "expect": "caught",
+      "note": "the bits of a word begun at the end of a skipped stretch are one too many"
+    },
+    {
+      "id": "K10",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "bitsBefore(data, pos + (word_len - data_word_bit_count) + t * word_len);",
+      "new": "bitsBefore(data, pos + word_len + t * word_len);",
+      "expect": "caught",
+      "note": "a skip that starts in the middle of a word takes its first word from the wrong bits"
+    },
+    {
+      "id": "K11",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "std::min<uint64_t>(bits_in_frame - 1 - minor_frame_bit_count, to - pos);",
+      "new": "std::min<uint64_t>(bits_in_frame - minor_frame_bit_count, to - pos);",
+      "expect": "caught",
+      "note": "the skip takes the boundary bit too, which the loop has to see"
+    },
+    {
+      "id": "K12",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "&& sync_count >= min_syncs && bits_loaded >= sync_pat_len",
+      "new": "&& bits_loaded >= sync_pat_len",
+      "expect": "caught",
+      "note": "a stretch is skipped, counted as in lock, before lock is confirmed"
+    },
+    {
+      "id": "K13",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "pos >= 64 && sync_count != UINT64_MAX",
+      "new": "pos >= 64",
+      "expect": "caught",
+      "note": "a stretch is skipped after lock is lost, where UINT64_MAX passes the lock test"
+    },
+    {
+      "id": "K14",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "bits_seen / word_len);",
+      "new": "(bits_seen + 1) / word_len);",
+      "expect": "caught",
+      "note": "a word is taken as complete a bit early"
+    },
+    {
+      "id": "K15",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "(static_cast<uint64_t>(p[8]) >> (8 - shift))",
+      "new": "(static_cast<uint64_t>(p[8]) >> (7 - shift))",
+      "expect": "caught",
+      "note": "the register read from an unaligned bit takes its last bits from the wrong place"
+    }
+  ]
+}
