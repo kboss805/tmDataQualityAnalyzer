@@ -35,6 +35,7 @@ recording or a finer period freezes it for longer. The write now runs on a pool 
 How it was checked: two new tests in `ExportImportTests` (the task is not complete when the call returns and the file holds what the
 plot held when asked; the window is busy during the write and takes no second export) and the mutation list
 `eng/mutants/csv-export-async.json` (7 mutants, all caught: the write on the calling thread, the columns taken late, the window not busy, a second export taken, busy left on, no status line, a batch not waiting for the CSV). App baseline 692 -> 694 passed (726 -> 728 total, 34 not run).
+
 #### No incrementers anywhere: every number is a text box that refuses what is not a number
 
 The user's decision of 2026-11-21, looking at Configure Frame Sync Lock: the up/down arrows on Bits Per Frame and Data
