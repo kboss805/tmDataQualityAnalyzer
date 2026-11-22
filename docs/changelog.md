@@ -12,6 +12,12 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The v3.0.0 release notes give the window size the application opens at
+
+`deploy/RELEASENOTES.txt` said v3.0.0's window "now opens at 1280 x 800". The window opens at 1920 x 1080 (`MainWindow.DefaultSize`,
+the user story in `docs/guide.md`), so the line now says that. Found by the cleanup audit (M6); the user confirmed the size. Text
+only, in the notes shipped with the installer; no code changed and no baseline moved. The release consistency check passes.
+
 #### A test that read a freshly written 20 MB CSV no longer fails when the file is held for a moment
 
 `TheDataIsWrittenOffTheCallingThreadFromWhatThePlotHeldWhenAsked` (added with the off-thread export) failed four runs out of four,
