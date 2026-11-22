@@ -1005,6 +1005,25 @@ public sealed class ExportImportTests
         return plot;
     }
 
+    /// <summary>The bytes of a file just written. A 20 MB file opened the moment its writer closed it has been refused
+    /// with "being used by another process" (a scanner holds a new file for a moment, and held it longer on a loaded
+    /// machine), which says nothing about what the export wrote: so try again for a few seconds, and let anything
+    /// but a sharing refusal, or a refusal that lasts, fail.</summary>
+    private static byte[] ReadWhenReleased(string path)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return File.ReadAllBytes(path);
+            }
+            catch (IOException) when (attempt < 50)
+            {
+                System.Threading.Thread.Sleep(100);
+            }
+        }
+    }
+
     [Fact]
     public async Task TheDataIsWrittenOffTheCallingThreadFromWhatThePlotHeldWhenAsked()
     {
@@ -1020,7 +1039,7 @@ public sealed class ExportImportTests
             Assert.False(writing.IsCompleted);
             plot.SetSeries(new[] { PlotFixtures.Lock(0, "other", 1, 0, new[] { 0.0 }, new[] { 1.0 }) });
             Assert.True(await writing);
-            Assert.Equal(File.ReadAllBytes(sync), File.ReadAllBytes(viaTask));
+            Assert.Equal(ReadWhenReleased(sync), ReadWhenReleased(viaTask));
 
             // A refusal is the same one: no columns, no file, false.
             string none = TempPath(".csv");

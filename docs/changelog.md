@@ -12,6 +12,20 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### A test that read a freshly written 20 MB CSV no longer fails when the file is held for a moment
+
+`TheDataIsWrittenOffTheCallingThreadFromWhatThePlotHeldWhenAsked` (added with the off-thread export) failed four runs out of four,
+with "The process cannot access the file ... because it is being used by another process" at `File.ReadAllBytes`, in the full app
+suite of a branch that had more tests than main (811 total), while it passed alone and in main's own 728-test run. The export had
+finished and closed the file (the task had completed), so the refusal is from outside the code under test - a scanner holding a
+new file, for longer on a loaded machine - and says nothing about the bytes written. The test now reads through
+`ReadWhenReleased`, which tries again for up to five seconds on an `IOException` and then lets it fail. Test code only; no
+product code changed.
+
+How it was checked: the combined tree (the incrementers change on top of main) failed without it in four runs and passed with it in
+three (811 total, 34 not run, so 777 passed); main alone passed (728) without it. No mutation check: nothing it
+guards is behaviour. Baselines unchanged.
+
 #### Export writes the data off the UI thread: no freeze
 
 Export Data and a batch's per-file CSVs ran `PlotViewModel.ExportCsv` on the UI thread. For the 4.6 GB PRN-AGC recording
