@@ -6,6 +6,9 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <initializer_list>
 #include <map>
 #include <memory>
@@ -1619,4 +1622,263 @@ TEST_CASE("FrameProcessor: a failure report names the channel and the sync patte
     // An all-ones mask is every ordinary configuration, so printing it is noise. It appears only when it is actually
     // constraining the match.
     CHECK_MESSAGE(!contains(reported, "mask"), "a default mask must not be printed; got:\n" << reported);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The scan's output, pinned
+// ---------------------------------------------------------------------------------------------------------------------
+
+namespace {
+
+/// A small deterministic generator (xorshift64*): the standard engines are specified, but their distributions are not,
+/// and these scenarios must come out the same on every toolchain.
+class Rng
+{
+public:
+    explicit Rng(uint64_t seed) : m_state(seed * 0x9E3779B97F4A7C15ull + 0x1234567ull) { next(); next(); }
+
+    uint64_t next()
+    {
+        m_state ^= m_state >> 12;
+        m_state ^= m_state << 25;
+        m_state ^= m_state >> 27;
+        return m_state * 0x2545F4914F6CDD1Dull;
+    }
+
+    /// An integer in [lo, hi].
+    uint64_t between(uint64_t lo, uint64_t hi) { return lo + next() % (hi - lo + 1); }
+    bool     chance(unsigned percent) { return next() % 100 < percent; }
+
+private:
+    uint64_t m_state;
+};
+
+struct Fnv
+{
+    uint64_t h = 0xCBF29CE484222325ull;
+    void byte(uint8_t b) { h = (h ^ b) * 0x100000001B3ull; }
+    void u64(uint64_t v) { for (int i = 0; i < 8; i++) byte(static_cast<uint8_t>(v >> (8 * i))); }
+    void real(double v) { uint64_t bits = 0; std::memcpy(&bits, &v, sizeof bits); u64(bits); }
+    void text(const std::string& s) { for (const char c : s) byte(static_cast<uint8_t>(c)); byte(0); }
+};
+
+/// One scenario of the pinned set: a random frame geometry, a random stream (frames, noise, flipped bits, sync-like
+/// data, lost stretches) cut into random packets (odd lengths, time gaps, times that step back), a random clock, window
+/// and mode. Everything the scan decides on is varied, so a change to how it reads bits or closes windows shows here.
+/// The result is folded to one number: every series value, to the last bit, and the run's reported counts.
+uint64_t scenarioHash(uint64_t seed, bool* produced_frames = nullptr, std::size_t* windows = nullptr)
+{
+    Rng rng(seed);
+
+    const uint32_t word_len  = rng.chance(60) ? 16u : static_cast<uint32_t>(rng.chance(50) ? 8u : 4u);
+    const uint32_t sync_mult = static_cast<uint32_t>(rng.between(1, 4));
+    const uint32_t sync_len  = sync_mult * word_len > 32 ? 32u : sync_mult * word_len;
+    const uint32_t words     = static_cast<uint32_t>(rng.between(2, 9));
+    const uint32_t extra     = static_cast<uint32_t>(rng.between(0, 3)); // bits between a frame's last word and the next sync
+    const uint32_t frame_len = sync_len + words * word_len + extra;
+    const uint64_t full_mask = (1ull << sync_len) - 1;
+    const uint64_t pattern   = rng.next() & full_mask;
+    // One scenario in six masks off one of the pattern's bits.
+    const uint64_t mask      = rng.chance(17) ? (full_mask & ~(1ull << rng.between(0, sync_len - 1))) : full_mask;
+
+    // Frames: the sync, then random words; between runs of them noise, flipped bits and decoy syncs.
+    std::string bits;
+    const auto put_value = [&bits](uint64_t v, uint32_t n) {
+        for (uint32_t b = n; b-- > 0;) bits += ((v >> b) & 1) != 0 ? '1' : '0';
+    };
+    const std::size_t target = static_cast<std::size_t>(rng.between(300, 4000));
+    while (bits.size() < target)
+    {
+        const uint64_t what = rng.between(0, 99);
+        if (what < 70)
+        {
+            put_value(pattern, sync_len);
+            for (uint32_t w = 0; w < words; w++) put_value(rng.next(), word_len);
+            for (uint64_t pad = rng.between(0, 3) == 0 ? 0 : extra; pad > 0; pad--) // a frame now and then is the wrong length
+                bits += rng.chance(50) ? '1' : '0';
+        }
+        else if (what < 80)
+        {
+            for (uint64_t n = rng.between(1, 3 * frame_len); n > 0; n--) bits += rng.chance(50) ? '1' : '0';
+        }
+        else if (what < 90)
+        {
+            put_value(pattern, sync_len); // a decoy: a sync where no frame starts
+        }
+        else if (!bits.empty())
+        {
+            const std::size_t at = static_cast<std::size_t>(rng.between(0, bits.size() - 1));
+            bits[at] = bits[at] == '1' ? '0' : '1';
+        }
+    }
+
+    // The clock: bit period, window, and where each packet says it starts.
+    const bool   rate_clock = rng.chance(50);
+    const double delta      = rng.chance(50) ? 1e7 : static_cast<double>(rng.between(1, 50)) * 1e5 + 0.5 * static_cast<double>(rng.between(0, 1)); // 100 ns units
+    const double bit_s      = delta * PCMConstants::k100NsToSeconds;
+    // A window is often a whole number of bit periods, so that a bit's time lands on the window's end to the last
+    // digit - or one off it, from rounding: the bit that closes the window is then a matter of the arithmetic.
+    const double whole      = bit_s * static_cast<double>(rng.between(5, 200));
+    const double period     = rng.chance(10) ? 1e9 : (rng.chance(50) ? whole : whole + 0.01 * static_cast<double>(rng.between(0, 99)));
+
+    std::vector<Packet> packets;
+    double origin = 1000.0 + static_cast<double>(rng.between(0, 86399));
+    for (std::size_t at = 0; at < bits.size();)
+    {
+        const std::size_t size = static_cast<std::size_t>(rng.chance(20) ? rng.between(1, 9) : rng.between(10, 700));
+        packets.push_back({bits.substr(at, size), origin + bit_s * static_cast<double>(at)});
+        const uint64_t odd = rng.between(0, 99);
+        if (odd < 6) origin += period * static_cast<double>(rng.between(1, 6)); // a gap in the recording
+        else if (odd < 10) origin -= bit_s * static_cast<double>(rng.between(1, 30)); // a time that steps back
+        at += size;
+    }
+
+    ProcessingParams p;
+    PacketQueue unused;
+    syntheticParams(p, unused);
+    p.packetQueue                  = nullptr;
+    p.mode                         = rng.chance(50) ? StreamMode::ReceiverChannelInfo : StreamMode::FrameSyncLockStats;
+    p.useDataRateClock             = rate_clock;
+    p.samplePeriodSec              = period;
+    p.dataRateBps                  = rng.chance(30) ? static_cast<double>(rng.between(1, 5000)) : 0.0;
+    p.resolvedAttrs.syncPat        = pattern & mask;
+    p.resolvedAttrs.syncMask       = mask;
+    p.resolvedAttrs.syncPatLen     = sync_len;
+    p.resolvedAttrs.bitsInFrame    = frame_len;
+    p.resolvedAttrs.wordsInFrame   = words;
+    p.resolvedAttrs.wordLen        = word_len;
+    p.resolvedAttrs.wordMask       = (1ull << word_len) - 1;
+    p.resolvedAttrs.minSyncs       = static_cast<uint32_t>(rng.between(1, 3));
+    p.resolvedAttrs.delta100ns     = delta;
+
+    FrameSetup setup;
+    for (uint32_t w = 0; w < std::min<uint32_t>(words, 3); w++)
+    {
+        setup.addParameter("W" + std::to_string(w), static_cast<int>(w));
+        ParameterInfo* param = setup.getParameter(static_cast<int>(w));
+        param->slope = 0.5 + 0.25 * static_cast<double>(w);
+        param->scale = static_cast<double>(w);
+    }
+
+    Capture events;
+    bool    ok = false;
+    const ProcessedStreamData r = runPackets(p, &setup, packets, &events, &ok);
+
+    Fnv f;
+    f.u64(ok ? 1 : 0);
+    for (const std::string& line : events.logs)
+    {
+        // The counts the run reports; its timing ("elapsed 0.3s") is not a result.
+        if (line.find("bytes processed") != std::string::npos) f.text(line);
+    }
+    for (const std::string& line : events.errors) f.text(line);
+    for (const double v : r.timesSec) f.real(v);
+    for (const double v : r.lockPercent) f.real(v);
+    for (const double v : r.accumulatedMissedFrames) f.real(v);
+    for (const ProcessedChannelSeries& c : r.channels)
+    {
+        f.u64(static_cast<uint64_t>(c.word));
+        for (const double v : c.values) f.real(v);
+    }
+    if (produced_frames != nullptr)
+    {
+        *produced_frames = ok;
+    }
+    if (windows != nullptr) *windows = r.timesSec.size();
+    return f.h;
+}
+
+} // namespace
+
+TEST_CASE("FrameProcessor: the scan's output on random synthetic streams is what it was")
+{
+    // Pinned from the scan before it was rewritten for speed (the per-bit loop, with a time check on every bit): the
+    // rewrite must give these exact numbers, so a stream's every window, lock percentage and averaged word is the same
+    // to the last bit. Regenerate (print the hashes) only for a change that is MEANT to move the scan's output.
+    constexpr uint64_t kPinned[] = {
+        0xAF3E2E5F53E3ACBBull,
+        0xCE19E4A19C34C217ull,
+        0x53A0C4D2ABF39263ull,
+        0x43DDDC7A1FF7E418ull,
+        0x0531A3DCB11782EFull,
+        0xF39A6FC9EF621349ull,
+        0x746882E97E6DB6EDull,
+        0x4226D46A92DF52E2ull,
+        0x12DB2155EAF6717Dull,
+        0x87916AEC63C1CB25ull,
+        0x66669E7129A1B895ull,
+        0xECC44E3A188D7728ull,
+        0x06FB27021C480EE5ull,
+        0x75B36ACCBB21D927ull,
+        0xA1AA17428FD0ED14ull,
+        0xAB24C3C5B5D47C7Bull,
+        0x8DB651C0B780EE70ull,
+        0x613AA30ECD4B0D24ull,
+        0xA41A4438D29717B3ull,
+        0xB98B346E34927A73ull,
+        0xD745BE175A75FFF6ull,
+        0xE85B744DF099EAF7ull,
+        0xCC4275D6248110AAull,
+        0xD234111B0FEF506Eull,
+        0xEB2BD4F93F2246E9ull,
+        0xCA366D6C59F8B021ull,
+        0x67BF19C21157E81Dull,
+        0xF73180AFF5E81AACull,
+        0x2AA2C3D15520ACB4ull,
+        0xC4919758963D3185ull,
+        0x8D3D3499871DA3D8ull,
+        0xEDF64C6771021A7Eull,
+        0x41E5F626BA1B9A85ull,
+        0x1F1E82B46B86AB73ull,
+        0x57B83DA707CA9E16ull,
+        0x93A1E01829DA0641ull,
+        0x70BADA74E73A29E9ull,
+        0x72202F9D0028E0C4ull,
+        0xD2164F0376C262C1ull,
+        0x5A161A65B0B38B91ull,
+        0x41DD76AC5BFF7B95ull,
+        0x415404155D811295ull,
+        0x69A233597911C2A4ull,
+        0x7CA9D885DE169B9Dull,
+        0x6178E6134A99A605ull,
+        0xA8482F70BF57A575ull,
+        0xF6EC27EE883C988Cull,
+        0xA6A41E5114EBC303ull,
+        0xD6B4C5DD388E7B9Full,
+        0xDADF24B88D04B5D1ull,
+        0x34610ADC814AB510ull,
+        0x6FAAFF7A60E5F91Cull,
+        0xF54291803246DB15ull,
+        0x6193CC391231BAEAull,
+        0x9EAD14F6CC1CFB26ull,
+        0x039A75659A3EE841ull,
+        0x45574DB87D7B8B81ull,
+        0xBFC4C75EE0CB5DA0ull,
+        0x651BC2F8377D92CDull,
+        0x9C664DE7251A39C4ull,
+    };
+    constexpr std::size_t kScenarios = sizeof kPinned / sizeof kPinned[0];
+
+    std::size_t with_frames = 0, with_many_windows = 0;
+    for (std::size_t i = 0; i < kScenarios; i++)
+    {
+        bool        frames  = false;
+        std::size_t windows = 0;
+        const uint64_t got  = scenarioHash(i + 1, &frames, &windows);
+        with_frames += frames ? 1 : 0;
+        with_many_windows += windows > 5 ? 1 : 0;
+        if (std::getenv("TMDQ_PRINT_SCAN_PINS") != nullptr)
+        {
+            std::printf("        0x%016llXull, // %zu: %s, %zu windows\n", static_cast<unsigned long long>(got), i + 1,
+                        frames ? "frames" : "no frames", windows);
+        }
+        else
+        {
+            INFO("scenario " << i + 1);
+            CHECK(got == kPinned[i]);
+        }
+    }
+    // The set must exercise the scan, not sit on failures or on a single window.
+    CHECK(with_frames > kScenarios / 2);
+    CHECK(with_many_windows > kScenarios / 3);
 }

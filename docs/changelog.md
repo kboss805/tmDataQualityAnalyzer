@@ -12,6 +12,43 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The frame-sync scan is 1.75x faster, with the same answers
+
+The scan is the limit on a big recording: one bit per pass, one core per stream, so a stream's time is its bit count
+(a performance review measured about 4 ns a bit; the 20 Mbps channel of the 640 MB PRN recording took 11.6 s). Two
+things made each pass dearer than the state machine needs. Every bit was timed and asked whether it closed a window,
+and the machine's registers lived in `ScanState`, a memory location the compiler must assume the frame-word store can
+change, so each bit loaded and stored them all.
+
+- **Runs, not bits.** `process()` scans a packet in runs of bits that cannot close a window. A window closes when a bit's
+  time passes its end, and time does not decrease along a packet, so `firstBitPastWindow` finds the first bit that does
+  once per window, by doubling a step and halving back, asking the very time function the per-bit check used. It
+  searches rather than computes: an estimate by division was tried first and was exact so often that the corrections
+  around it could not be tested (four mutants survived, below), and a search needs none. A bit exactly at a window's end
+  is still in it, as before. Abort is checked every 64 Ki bits as before.
+- **Registers in locals.** `scanBit` (one bit through the state machine) is now `scanBits` (a run of them): the machine
+  runs on copies of its registers and writes them back at the run's end. The rare events (a sync match, a frame) still
+  write `ScanState` directly.
+- **Measured** (Release core, pinned to the performance cores, `eng\run_throughput_bench.ps1`; before -> after):
+  the 1 Mbps channel 592 -> 335 ms, 5 Mbps 2959 -> 1712 and 2904 -> 1711, 20 Mbps 11643 -> 6654 ms (1.75x); the
+  four streams together 11460 -> 6549 ms. About 2.3 ns a bit now. Not a change of result: below.
+- **Same answers, checked four ways.** New `FrameProcessor: the scan's output on random synthetic streams is what it was`
+  pins 60 random scenarios (frame geometry, noise, flipped bits, decoy syncs, odd packet lengths, gaps and time steps back,
+  both clocks, windows that are a whole number of bit periods so that a bit lands on a window's end to the last digit),
+  each folded to one hash of every series value to the last bit and the run's counts. The hashes were taken from the
+  per-bit scan before it was changed, and the new scan reproduced all 60. The 34-run soak (`eng\run_soak.ps1`) exports
+  every CSV byte for byte what v2.14.2 exported. The managed (415 total, 0 failed) and app (726 passed) suites pass.
+- **Mutants** in `eng\mutants\scan-runs.json`: 10 caught, 2 equivalent. The two that survive (`>=` for `>` in the search)
+  can only end a run a bit early, which splits a stretch and changes nothing: the next run starts on that bit, closes
+  nothing, and carries on; a run that ends late is what changes a result, and the mutants that make it end late (a skipped
+  bit, a probe past the packet) are caught. The first version of the list had four survivors in the estimate's correction
+  loops, which is why the estimate was replaced. One kept list, `off-phase-sync-word.json`, was re-anchored: its
+  text moved right by one level and `s.` became a local; the other lists on this file still match.
+- **Not done.** The abort check inside a long packet has no test (it needs a thread to request it mid-scan, and a sleep
+  cannot place it); it is kept as it was. The next step, skipping ahead while locked (a word at a time between syncs),
+  is larger and needs the soak; it is not started.
+  Baseline: native 525 -> 526.
+
 #### The package refuses a Debug core
 
 The release script builds the core in Release and stages `out\Release\tmdq_core.dll`, so a Debug core cannot reach the

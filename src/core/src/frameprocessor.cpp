@@ -5,6 +5,7 @@
 
 #include "frameprocessor.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <format>
@@ -21,6 +22,54 @@
 #include "packetqueue.h"
 
 using namespace Irig106;
+
+namespace {
+
+/// Where a run of bits starting at @p from ends: the first bit after it whose time is past @p window_end (the bit that
+/// would close the window), or @p limit when no bit before that is. The result is in (@p from, @p limit]. @p time_at
+/// gives a bit's time. The caller has closed every window that ended before bit @p from, so that bit is no later than
+/// the end.
+///
+/// The answer must be exactly the bit a per-bit check ("has this bit's time passed the end?") would stop at, because a
+/// window's contents depend on which bit closes it. So it is searched for with that same check, never computed: time
+/// does not decrease along a packet (a bit count times a period, plus a base), so the bits past the end are a tail, and
+/// the first of them is found by doubling the step until one is past the end and then halving back. That costs a few
+/// checks per window however long the window is, and a run of a few bits costs a few. Where time does not grow (a
+/// period of zero or less, or a time that is not a number) no bit is past the end, and the run is the whole stretch, as
+/// the per-bit check would have left it.
+template <typename TimeAt>
+uint64_t firstBitPastWindow(double window_end, uint64_t from, uint64_t limit, const TimeAt& time_at)
+{
+    uint64_t not_past = from;  // every bit up to and including this one is known not to be past the end
+    uint64_t past     = limit; // the first bit known to be past the end, or the limit
+    for (uint64_t step = 1; not_past + step < limit; step *= 2)
+    {
+        if (time_at(not_past + step) > window_end)
+        {
+            past = not_past + step;
+            break;
+        }
+        not_past += step;
+    }
+
+    // The first bit past the end is in (not_past, past].
+    uint64_t first = not_past + 1;
+    while (first < past)
+    {
+        const uint64_t middle = first + (past - first) / 2;
+        if (time_at(middle) > window_end)
+        {
+            past = middle;
+        }
+        else
+        {
+            first = middle + 1;
+        }
+    }
+    return first;
+}
+
+} // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
 //                          PCM BIT-LEVEL HELPERS                             //
@@ -236,10 +285,20 @@ bool FrameProcessor::process(const ProcessingParams& params, const FrameSetup* f
             time_seeded = true;
         }
 
-        double time_per_bit = delta_100ns * PCMConstants::k100NsToSeconds;
+        const double time_per_bit = delta_100ns * PCMConstants::k100NsToSeconds;
+        // The time of bit k of this packet, on whichever clock the run uses.
+        const auto time_at = [&](uint64_t k) {
+            return use_rate_clock
+                ? static_cast<double>(global_bit_offset + k) * time_per_bit
+                : item.baseAbsSeconds + (static_cast<double>(k) * time_per_bit);
+        };
 
+        // The packet is scanned in runs of bits that cannot close a window, so the per-bit work is the state machine
+        // alone. A window closes when a bit's time passes its end, and time only grows along a packet, so the first
+        // bit that does is found once per window instead of asked of every bit.
         constexpr uint64_t kAbortCheckMask = 0xFFFF;
-        for (uint64_t bit_pos = 0; bit_pos < packet_bits; bit_pos++)
+        uint64_t bit_pos = 0;
+        while (bit_pos < packet_bits)
         {
             if ((bit_pos & kAbortCheckMask) == 0 && m_abort_requested.load(std::memory_order_relaxed))
             {
@@ -248,19 +307,14 @@ bool FrameProcessor::process(const ProcessingParams& params, const FrameSetup* f
                 return false;
             }
 
-            double current_time_eval = use_rate_clock
-                ? static_cast<double>(global_bit_offset + bit_pos) * time_per_bit
-                : item.baseAbsSeconds + (static_cast<double>(bit_pos) * time_per_bit);
-
             // Time only delimits the averaging windows: every bit of the recording is counted.
-            closeElapsedWindows(state, current_time_eval, params, enabled_params);
+            closeElapsedWindows(state, time_at(bit_pos), params, enabled_params);
 
-            uint32_t mbyte_idx = static_cast<uint32_t>(bit_pos / 8);
-            constexpr uint8_t kHighBit = 0x80;
-            // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-            uint8_t bit_val = ((raw_data[mbyte_idx] & (kHighBit >> (bit_pos % 8))) != 0) ? 1 : 0;
-
-            scanBit(state, bit_val, enabled_params);
+            // A run ends at the next abort check, the packet's end, or the first bit past this window's end.
+            const uint64_t limit = std::min(packet_bits, (bit_pos | kAbortCheckMask) + 1);
+            const uint64_t run_end = firstBitPastWindow(state.next_time_sample, bit_pos, limit, time_at);
+            scanBits(state, raw_data, bit_pos, run_end, enabled_params);
+            bit_pos = run_end;
         }
 
         global_bit_offset += packet_bits;
@@ -331,7 +385,7 @@ void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
             // Bits were processed for this window — real data, whether or not any
             // frame locked. If the window was entirely out of lock (n_samples == 0)
             // its missed frames were ALREADY counted bit-by-bit by the in-stream
-            // rollover in scanBit(), so we must NOT extrapolate here. Extrapolating
+            // rollover in scanBits(), so we must NOT extrapolate here. Extrapolating
             // data-present dropouts double-counts and biases long-frame streams,
             // whose windows more often contain zero locked frames than short-frame
             // streams with many more frames per window.
@@ -371,110 +425,150 @@ void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
     }
 }
 
-void FrameProcessor::scanBit(ScanState& s, uint8_t bit_val,
-                             const std::vector<const ParameterInfo*>& enabled_params)
+void FrameProcessor::scanBits(ScanState& s, const uint8_t* data, uint64_t from, uint64_t to,
+                              const std::vector<const ParameterInfo*>& enabled_params)
 {
-    s.test_word = (s.test_word << 1) | bit_val;
-    s.bits_loaded++;
-    s.minor_frame_bit_count++;
+    // The state machine runs on copies of its registers, written back once at the end. Through @p s every register is
+    // a memory location the compiler must assume the frame-word store below can change, so each bit would load and
+    // store them all; as locals they stay in CPU registers, which is most of what this costs.
+    const uint64_t sync_pat      = s.sync_pat;
+    const uint64_t sync_mask     = s.sync_mask;
+    const uint64_t word_mask     = s.word_mask;
+    const uint64_t sync_pat_len  = s.sync_pat_len;
+    const uint32_t bits_in_frame = s.bits_in_frame;
+    const uint32_t words_in_frame = s.words_in_frame;
+    const uint32_t word_len      = s.word_len;
+    const uint32_t min_syncs     = s.min_syncs;
+    uint64_t* const frame_words  = s.frame_words.data();
 
-    if (s.minor_frame_bit_count > s.bits_in_frame)
+    uint64_t test_word                = s.test_word;
+    uint64_t bits_loaded              = s.bits_loaded;
+    uint32_t minor_frame_bit_count    = s.minor_frame_bit_count;
+    uint32_t minor_frame_word_count   = s.minor_frame_word_count;
+    uint32_t data_word_bit_count      = s.data_word_bit_count;
+    int32_t  save_data                = s.save_data;
+    uint64_t sync_count               = s.sync_count;
+    uint64_t accumulated_missed       = s.accumulated_missed_frames;
+    uint64_t valid_bits               = s.valid_bits_in_window;
+
+    for (uint64_t pos = from; pos < to; pos++)
     {
-        s.accumulated_missed_frames++;
-        s.sync_count = UINT64_MAX; // Loss of lock
-        s.minor_frame_bit_count = 1; // Roll over to continuously track missed frames
-    }
+        constexpr unsigned kLastBitOfByte = 7;
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+        const uint64_t bit_val = (data[pos >> 3] >> (kLastBitOfByte - (pos & kLastBitOfByte))) & 1u;
 
-    const bool in_lock = (s.sync_count != UINT64_MAX) && (s.sync_count >= s.min_syncs);
+        test_word = (test_word << 1) | bit_val;
+        bits_loaded++;
+        minor_frame_bit_count++;
 
-    // Check for sync word
-    const bool sync_match = s.bits_loaded >= s.sync_pat_len && (s.test_word & s.sync_mask) == s.sync_pat;
-    if (sync_match)
-    {
-        s.total_syncs_found++;
-    }
-
-    // In LOCK state, ignore false positives (off-phase matches). Only process
-    // sync matches at the exact expected frame boundary so that PRN data patterns
-    // cannot disrupt word collection.
-    const bool at_boundary = (s.minor_frame_bit_count == s.bits_in_frame);
-    if (sync_match && (!in_lock || at_boundary))
-    {
-        if (at_boundary)
+        if (minor_frame_bit_count > bits_in_frame)
         {
-            s.sync_count++;
-            s.boundary_syncs++;
+            accumulated_missed++;
+            sync_count = UINT64_MAX; // Loss of lock
+            minor_frame_bit_count = 1; // Roll over to continuously track missed frames
+        }
+
+        const bool in_lock = (sync_count != UINT64_MAX) && (sync_count >= min_syncs);
+
+        // Check for sync word
+        const bool sync_match = bits_loaded >= sync_pat_len && (test_word & sync_mask) == sync_pat;
+        if (sync_match)
+        {
+            s.total_syncs_found++;
+        }
+
+        // In LOCK state, ignore false positives (off-phase matches). Only process
+        // sync matches at the exact expected frame boundary so that PRN data patterns
+        // cannot disrupt word collection.
+        const bool at_boundary = (minor_frame_bit_count == bits_in_frame);
+        if (sync_match && (!in_lock || at_boundary))
+        {
+            if (at_boundary)
+            {
+                sync_count++;
+                s.boundary_syncs++;
+            }
+            else
+            {
+                // Off-phase acquisition: a sync match that is NOT on a frame boundary.
+                // boundary_syncs is deliberately not incremented here - it used to be,
+                // which made the failure diagnostic report an off-phase match as
+                // "boundary-aligned" and told operators the opposite of the truth.
+                sync_count = 1;
+            }
+
+            // Only extract a sample once the sync match is boundary-aligned; an
+            // off-phase match (re-acquiring lock) must not be treated as a confirmed
+            // frame, or PRN data can be sampled as if it were locked.
+            if (at_boundary && sync_count >= min_syncs && save_data > 1)
+            {
+                for (std::size_t i = 0; i < enabled_params.size(); i++)
+                {
+                    const ParameterInfo* param = enabled_params[i];
+                    if (param->word >= 0 &&
+                        param->word < static_cast<int>(words_in_frame))
+                    {
+                        int64_t raw_value = static_cast<int64_t>(frame_words[param->word] & word_mask);
+                        // Accumulate RAW counts; calibration (linear or non-linear)
+                        // is applied once to the windowed average in
+                        // recordTimeSample(). Averaging raw first is required for
+                        // the non-linear profile: the profile maps averaged-raw ->
+                        // true dB, so mean(interpolate(raw)) would bias each plateau
+                        // off the true step value. For linear cal the two orders are
+                        // identical.
+                        s.channel_sums[i] += static_cast<double>(raw_value);
+                    }
+                }
+
+                s.n_samples++;
+                s.total_frames_extracted++;
+            }
+
+            minor_frame_bit_count = 0;
+            minor_frame_word_count = 1;
+            data_word_bit_count = 0;
+            save_data = 1;
         }
         else
         {
-            // Off-phase acquisition: a sync match that is NOT on a frame boundary.
-            // boundary_syncs is deliberately not incremented here - it used to be,
-            // which made the failure diagnostic report an off-phase match as
-            // "boundary-aligned" and told operators the opposite of the truth.
-            s.sync_count = 1;
-        }
-
-        // Only extract a sample once the sync match is boundary-aligned; an
-        // off-phase match (re-acquiring lock) must not be treated as a confirmed
-        // frame, or PRN data can be sampled as if it were locked.
-        if (at_boundary && s.sync_count >= s.min_syncs && s.save_data > 1)
-        {
-            for (std::size_t i = 0; i < enabled_params.size(); i++)
+            // Accumulate data word bits between sync patterns. A match ignored in lock is one of them: it is data that
+            // happens to look like the sync, and its bit belongs to the word being read. Leaving it out (as this did) read
+            // every later word of the frame one bit late.
+            if (save_data == 1)
             {
-                const ParameterInfo* param = enabled_params[i];
-                if (param->word >= 0 &&
-                    param->word < static_cast<int>(s.words_in_frame))
+                data_word_bit_count++;
+                if (data_word_bit_count >= word_len)
                 {
-                    int64_t raw_value = static_cast<int64_t>(s.frame_words[param->word] & s.word_mask);
-                    // Accumulate RAW counts; calibration (linear or non-linear)
-                    // is applied once to the windowed average in
-                    // recordTimeSample(). Averaging raw first is required for
-                    // the non-linear profile: the profile maps averaged-raw ->
-                    // true dB, so mean(interpolate(raw)) would bias each plateau
-                    // off the true step value. For linear cal the two orders are
-                    // identical.
-                    s.channel_sums[i] += static_cast<double>(raw_value);
+                    if (minor_frame_word_count - 1 < words_in_frame)
+                    {
+                        frame_words[minor_frame_word_count - 1] = test_word;
+                    }
+                    data_word_bit_count = 0;
+                    minor_frame_word_count++;
+                }
+
+                if (minor_frame_word_count >= words_in_frame)
+                {
+                    save_data = 2;
                 }
             }
-
-            s.n_samples++;
-            s.total_frames_extracted++;
         }
 
-        s.minor_frame_bit_count = 0;
-        s.minor_frame_word_count = 1;
-        s.data_word_bit_count = 0;
-        s.save_data = 1;
-    }
-    else
-    {
-        // Accumulate data word bits between sync patterns. A match ignored in lock is one of them: it is data that
-        // happens to look like the sync, and its bit belongs to the word being read. Leaving it out (as this did) read
-        // every later word of the frame one bit late.
-        if (s.save_data == 1)
-        {
-            s.data_word_bit_count++;
-            if (s.data_word_bit_count >= s.word_len)
-            {
-                if (s.minor_frame_word_count - 1 < s.words_in_frame)
-                {
-                    s.frame_words[s.minor_frame_word_count - 1] = s.test_word;
-                }
-                s.data_word_bit_count = 0;
-                s.minor_frame_word_count++;
-            }
-
-            if (s.minor_frame_word_count >= s.words_in_frame)
-            {
-                s.save_data = 2;
-            }
+        if (in_lock) {
+            valid_bits++;
         }
     }
 
-    s.total_bits_in_window++;
-    if (in_lock) {
-        s.valid_bits_in_window++;
-    }
+    s.test_word                 = test_word;
+    s.bits_loaded               = bits_loaded;
+    s.minor_frame_bit_count     = minor_frame_bit_count;
+    s.minor_frame_word_count    = minor_frame_word_count;
+    s.data_word_bit_count       = data_word_bit_count;
+    s.save_data                 = save_data;
+    s.sync_count                = sync_count;
+    s.accumulated_missed_frames = accumulated_missed;
+    s.valid_bits_in_window      = valid_bits;
+    s.total_bits_in_window     += to - from;
 }
 
 std::vector<const ParameterInfo*> FrameProcessor::buildEnabledParams(const FrameSetup* frame_setup, bool receiver_mode)

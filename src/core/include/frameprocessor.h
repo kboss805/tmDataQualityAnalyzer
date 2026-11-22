@@ -139,12 +139,14 @@ private:
                              const ProcessingParams& params,
                              const std::vector<const ParameterInfo*>& enabled_params);
 
-    /// Feeds one decoded PCM bit through the acquire/lock state machine: shifts the
-    /// sync register, tracks frame-boundary rollover/missed frames, honors in-phase
-    /// sync matches (rejecting off-phase ones while locked), collects data words, and
-    /// tallies lock-percentage bits.
-    void scanBit(ScanState& s, uint8_t bit_val,
-                 const std::vector<const ParameterInfo*>& enabled_params);
+    /// Feeds bits @p from up to (not including) @p to of @p data (MSB first) through the
+    /// acquire/lock state machine, one at a time: shifts the sync register, tracks
+    /// frame-boundary rollover/missed frames, honors in-phase sync matches (rejecting
+    /// off-phase ones while locked), collects data words, and tallies lock-percentage
+    /// bits. The caller has already closed every window that ended before these bits and
+    /// chosen a run that ends before the next one does: this never looks at time.
+    void scanBits(ScanState& s, const uint8_t* data, uint64_t from, uint64_t to,
+                  const std::vector<const ParameterInfo*>& enabled_params);
 
     /// Caches the enabled parameters for the hot loop and builds the index-aligned
     /// in-memory channel series in m_result. @return the enabled-parameter pointers.

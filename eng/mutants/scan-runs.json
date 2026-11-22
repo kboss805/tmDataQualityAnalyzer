@@ -1,0 +1,102 @@
+{
+  "suite": "native",
+  "args": ["-tc=FrameProcessor*"],
+  "mutants": [
+    {
+      "id": "S1",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "if (time_at(not_past + step) > window_end)",
+      "new": "if (time_at(not_past + step) >= window_end)",
+      "expect": "survived",
+      "note": "equivalent: a run that ends a bit early (on the bit exactly at the window's end) only splits the stretch; the next run starts on that bit, asks closeElapsedWindows about it, closes nothing, and scans on. Only a run that ends LATE changes a result (S3, S4)"
+    },
+    {
+      "id": "S2",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "if (time_at(middle) > window_end)",
+      "new": "if (time_at(middle) >= window_end)",
+      "expect": "survived",
+      "note": "equivalent, for the reason S1 gives: the halving can only end the run early"
+    },
+    {
+      "id": "S3",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "not_past += step;",
+      "new": "not_past += step + 1;",
+      "expect": "caught",
+      "note": "the doubling steps over a bit it has not asked about, which may be the one that closes the window"
+    },
+    {
+      "id": "S4",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "not_past + step < limit; step *= 2",
+      "new": "not_past + step <= limit; step *= 2",
+      "expect": "caught",
+      "note": "the doubling asks about the bit after the packet's last, whose time is not the packet's"
+    },
+    {
+      "id": "S5",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "static_cast<double>(global_bit_offset + k) * time_per_bit",
+      "new": "static_cast<double>(k) * time_per_bit",
+      "expect": "caught",
+      "note": "on the data-rate clock a packet's bits are timed from the start of the packet, not of the run"
+    },
+    {
+      "id": "S6",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "closeElapsedWindows(state, time_at(bit_pos), params, enabled_params);",
+      "new": "closeElapsedWindows(state, time_at(bit_pos) - 1e-3, params, enabled_params);",
+      "expect": "caught",
+      "note": "the first bit of a run is timed a little early, so a window it should close stays open"
+    },
+    {
+      "id": "S7",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "    s.valid_bits_in_window      = valid_bits;\n",
+      "new": "",
+      "expect": "caught",
+      "note": "the lock count of a run is dropped when the run ends"
+    },
+    {
+      "id": "S8",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "    s.sync_count                = sync_count;\n",
+      "new": "",
+      "expect": "caught",
+      "note": "lock is forgotten at the end of every run"
+    },
+    {
+      "id": "S9",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "    s.save_data                 = save_data;\n",
+      "new": "",
+      "expect": "caught",
+      "note": "the word being collected is forgotten at the end of every run"
+    },
+    {
+      "id": "S10",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "    s.total_bits_in_window     += to - from;\n",
+      "new": "",
+      "expect": "caught",
+      "note": "the bits of a run are not counted in its window"
+    },
+    {
+      "id": "S11",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "    s.accumulated_missed_frames = accumulated_missed;\n",
+      "new": "",
+      "expect": "caught",
+      "note": "the missed frames of a run are dropped when the run ends"
+    },
+    {
+      "id": "S12",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "(data[pos >> 3] >> (kLastBitOfByte - (pos & kLastBitOfByte))) & 1u",
+      "new": "(data[pos >> 3] >> (pos & kLastBitOfByte)) & 1u",
+      "expect": "caught",
+      "note": "the bits of a byte are read from the wrong end"
+    }
+  ]
+}
