@@ -74,7 +74,7 @@ public sealed class ConfigureStreamsTests
     [Fact]
     public async Task TheGearOpensTheRowsDialogAndOkMakesItReady()
     {
-        var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok(d => d.DataRateMbps = 4) };
+        var dialogs = new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok(d => d.DataRateText = "4") };
         ConfigureStreamsViewModel vm = Dialog(dialogs);
         StreamRowViewModel row = vm.Rows[0];
         row.Process = true;
@@ -94,7 +94,7 @@ public sealed class ConfigureStreamsTests
     [Fact]
     public async Task CancellingTheDialogChangesNothing()
     {
-        var dialogs = new FakeStreamDialogs { OnEdit = d => { d.DataRateMbps = 4; d.CancelCommand.Execute(null); return Task.CompletedTask; } };
+        var dialogs = new FakeStreamDialogs { OnEdit = d => { d.DataRateText = "4"; d.CancelCommand.Execute(null); return Task.CompletedTask; } };
         ConfigureStreamsViewModel vm = Dialog(dialogs);
         vm.Rows[0].Process = true;
         StreamSetup before = vm.Rows[0].Setup;
@@ -128,7 +128,7 @@ public sealed class ConfigureStreamsTests
         StreamSetupViewModel snr = dialogs.Edited[1];
         Assert.True(snr.IsReceiverSnr);
         // The shipped Receiver SNR defaults file, read from the application root.
-        Assert.Equal(("FE6B2840", "FFFFFFFF", 800m), (snr.SyncPattern, snr.SyncMask, snr.BitsInMinorFrame));
+        Assert.Equal(("FE6B2840", "FFFFFFFF", 800), (snr.SyncPattern, snr.SyncMask, snr.BitsInMinorFrame));
         Assert.True(row.IsReady);
         Assert.Equal(StreamMode.ReceiverChannelInfo, row.Setup.SettingsMode);
     }

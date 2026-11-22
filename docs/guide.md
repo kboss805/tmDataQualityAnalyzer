@@ -505,12 +505,27 @@ profile, so a batch processes with the linear calibration.
   one row per PCM channel, each problem shown as it arises, OK and Process held until every checked row is ready,
   Apply to all (US2.2), the pattern and receiver-parameter files' Load and Save. The limits of the setup dialog's
   fields (bits per frame, data rate, scale, receivers, channels, hex digits) are `StreamRules`' constants and nothing
-  else: its messages are built from them, and the window's spin boxes bind to them through `StreamSetupViewModel`'s
-  `Min*`/`Max*` decimals (`{x:Static}`), so a limit changed there moves the bound and the message together.
+  else: its messages are built from them. Neither setup dialog has an up/down incrementer: its five number fields
+  (Bits Per Frame, Data Rate, and for Receiver SNR Scale, Num Rcvrs, Num Channels) are plain text boxes bound to
+  `StreamSetupViewModel`'s `*Text` strings, which are what the dialog holds. Text that is not an integer (Bits Per Frame,
+  Num Rcvrs, Num Channels: digits with an optional sign) or not a finite number (Data Rate, Scale: a point for the decimal
+  separator, an exponent allowed, always the invariant culture) is a problem as it is typed, named in the problem list
+  and holding OK just as an out-of-range value is (`... must be a whole number.`, `... must be a number.`, `... is empty.`),
+  and the row keeps the value the dialog opened with until the text is valid; a range is `StreamRules`' alone. An integer
+  past `int` is clamped, so the range message names it. A number is shown to three decimals (`5.000`), or with the digits
+  it needs when three would change it.
   The settings folders' names (`StreamFiles.SettingsFolder` and the three folders in it) are written once, there; `StreamFilesTests`
   holds them to `constants.h`' (`kSettingsDirName`, `kReceiverParamsDirName`, `kRcvrCalsDirName`) and to the shipped tree.
-- **Extract Calibration** (`ExtractCalibrationViewModel`) behind Apply Cal (US5.3); its clip fields' maximum is
-  `ClipMaximum`, bound in the window the same way.
+- **No incrementers anywhere:** the application has no `NumericUpDown` or other up/down control (the user's decision of
+  2026-11-21; `NoSpinnersTests` fails on one in any source file or window). A number is a plain `TextBox` read with
+  `NumberText` (`ViewModels/NumberText.cs`: invariant culture, `ParseInteger`/`ParseNumber`/`ParseDecimal` give null for
+  text that is no number, and the `Format*` give it back without losing a digit). Extract Calibration (`ExtractCalibrationViewModel`)
+  behind Apply Cal (US5.3) holds its two clips as `ClipStartText`/`ClipEndText`: text that is a number from 0 to
+  `ClipMaximum` becomes the clip and extracts again; anything else shows `Clip Start must be a number.`, `... is empty.` or
+  `... must be from 0 to 100000 s.` under the fields, holds OK and leaves the clip as it was (`ClipStart`/`ClipEnd` are the
+  parsed values, and setting one types it). The plot's number prompt (`NumberPromptWindow`, Set Y-Axis Minimum and
+  Maximum) is a text box too: text that is not a number (a whole one when the prompt has no decimals) is said so and
+  holds OK, and a number is kept inside the prompt's range and rounded to its decimals (`PlotCommands.SpinValue`) as before.
 - **The run** (`Models/Processing`: `StreamsRun`, `NativeCore`; `ViewModels/Dialogs/ProcessingViewModel` and its window;
   `Models/Logging/SessionLog` and `Views/Controls/LogView`): the core's run on its own threads, the modal progress dialog whose
   Cancel stops every stream, and the log. A run's outcome (`RunOutcome`) holds the core's own result of each stream that
@@ -1076,7 +1091,8 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   the summary, then each thread's own lines in order, the reader's and the streams' interleaving as they come; a report the observer could not handle, said and not dropped), `SeveralStreamsTests`.
 - **Configure Streams:** `StreamRulesTests` and `StreamFilesTests` (the rules and files without a window),
   `StreamSetupViewModelTests`, `ConfigureStreamsTests`, `StreamWindowsTests`; `CalibrationDialogTests` (Extract
-  Calibration and Apply Cal).
+  Calibration, Apply Cal and the clips' text entry); `NoSpinnersTests` (no up/down control in any
+  source file or window, and `NumberText`).
 - **The plot:** `PlotTests` (series, axes, view mode, the time window and zoom, the readout, the chart's drawing and
   gestures), `PlotDraftTests` (the draft a gesture - the wheel, a drag, a held pan or zoom key - paints on a heavy plot
   and the full picture after it, a dropout in both, the draft's lines and band outlines one device pixel thick at 2x and 3x

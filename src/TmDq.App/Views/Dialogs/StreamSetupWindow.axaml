@@ -11,8 +11,8 @@
         WindowStartupLocation="CenterOwner">
   <Window.Styles>
     <!-- Only the form's own fields: an unscoped "TextBox" or "Grid > *" selector also reaches the parts inside each
-         control's template (a NumericUpDown holds a TextBox; a TextBox's template is a Grid) and pushes the text off. -->
-    <Style Selector="Grid.form > TextBox, Grid.form > NumericUpDown, Grid.form > ComboBox">
+         control's template (a TextBox's template is a Grid; a ComboBox's holds a TextBlock) and pushes the text off. -->
+    <Style Selector="Grid.form > TextBox, Grid.form > ComboBox">
       <Setter Property="Width" Value="150" />
       <Setter Property="HorizontalAlignment" Value="Left" />
     </Style>
@@ -45,9 +45,8 @@
       <TextBox x:Name="SyncMask" Grid.Row="1" Grid.Column="1" Text="{Binding SyncMask}" PlaceholderText="e.g. FFFFFFFF"
                ToolTip.Tip="Hex mask applied during frame sync comparison. Set bits are compared; cleared bits are ignored." />
       <TextBlock Grid.Row="0" Grid.Column="2" Text="Bits Per Frame" />
-      <NumericUpDown x:Name="BitsPerFrame" Grid.Row="1" Grid.Column="2" Value="{Binding BitsInMinorFrame}"
-                     Minimum="{x:Static vm:StreamSetupViewModel.MinBitsPerFrame}" Maximum="{x:Static vm:StreamSetupViewModel.MaxBitsPerFrame}" Increment="1" FormatString="0"
-                     ToolTip.Tip="Total number of bits in one minor frame, including the frame sync word." />
+      <TextBox x:Name="BitsPerFrame" Grid.Row="1" Grid.Column="2" Text="{Binding BitsPerFrameText}"
+               ToolTip.Tip="Total number of bits in one minor frame, including the frame sync word." />
       <StackPanel Grid.Row="1" Grid.Column="4" Orientation="Horizontal" Spacing="4">
         <Button x:Name="LoadFrameSync" Content="Load..." Command="{Binding LoadFrameSyncCommand}"
                 ToolTip.Tip="Load frame sync fields from a TOML file" />
@@ -56,9 +55,8 @@
       </StackPanel>
 
       <TextBlock Grid.Row="3" Grid.Column="0" Text="Data Rate (Mbps)" />
-      <NumericUpDown x:Name="DataRate" Grid.Row="4" Grid.Column="0" Value="{Binding DataRateMbps}"
-                     Minimum="{x:Static vm:StreamSetupViewModel.MinDataRate}" Maximum="{x:Static vm:StreamSetupViewModel.MaxDataRate}" Increment="0.1" FormatString="0.000"
-                     ToolTip.Tip="Telemetry data rate in Mbps. Set to 0 (TMATS) to derive the rate from the file metadata." />
+      <TextBox x:Name="DataRate" Grid.Row="4" Grid.Column="0" Text="{Binding DataRateText}"
+               ToolTip.Tip="Telemetry data rate in Mbps. Set to 0 (TMATS) to derive the rate from the file metadata." />
       <TextBlock x:Name="DataRateHint" Grid.Row="5" Grid.Column="0" Text="{Binding DataRateHint}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                  FontSize="{DynamicResource CaptionTextBlockFontSize}" />
       <TextBlock Grid.Row="3" Grid.Column="1" Text="Average Period" />
@@ -88,17 +86,14 @@
                   SelectedIndex="{Binding SlopeIndex}"
                   ToolTip.Tip="ADC voltage range. Select the range that matches your receiver's analog output voltage span." />
         <TextBlock Grid.Row="0" Grid.Column="2" Text="Scale (dB/V)" />
-        <NumericUpDown x:Name="Scale" Grid.Row="1" Grid.Column="2" Value="{Binding ScaleDdBPerV}"
-                       Minimum="{x:Static vm:StreamSetupViewModel.MinScale}" Maximum="{x:Static vm:StreamSetupViewModel.MaxScale}" Increment="0.1" FormatString="0.000"
-                       ToolTip.Tip="Calibration scale factor in dB/V. Maps the ADC voltage span to the receiver SNR range in dB." />
+        <TextBox x:Name="Scale" Grid.Row="1" Grid.Column="2" Text="{Binding ScaleText}"
+                 ToolTip.Tip="Calibration scale factor in dB/V. Maps the ADC voltage span to the receiver SNR range in dB." />
         <TextBlock Grid.Row="3" Grid.Column="0" Text="Num Rcvrs" />
-        <NumericUpDown x:Name="NumReceivers" Grid.Row="4" Grid.Column="0" Value="{Binding NumReceivers}"
-                       Minimum="{x:Static vm:StreamSetupViewModel.MinReceivers}" Maximum="{x:Static vm:StreamSetupViewModel.MaxReceivers}" Increment="1" FormatString="0"
-                       ToolTip.Tip="Number of individual receiver units contributing channels to this stream." />
+        <TextBox x:Name="NumReceivers" Grid.Row="4" Grid.Column="0" Text="{Binding NumReceiversText}"
+                 ToolTip.Tip="Number of individual receiver units contributing channels to this stream." />
         <TextBlock Grid.Row="3" Grid.Column="1" Text="Num Channels" />
-        <NumericUpDown x:Name="ReceiverChannels" Grid.Row="4" Grid.Column="1" Value="{Binding ReceiverChannels}"
-                       Minimum="{x:Static vm:StreamSetupViewModel.MinReceiverChannels}" Maximum="{x:Static vm:StreamSetupViewModel.MaxReceiverChannels}" Increment="1" FormatString="0"
-                       ToolTip.Tip="Number of channels per receiver (e.g. 3 for L/R/C configuration)." />
+        <TextBox x:Name="ReceiverChannels" Grid.Row="4" Grid.Column="1" Text="{Binding ReceiverChannelsText}"
+                 ToolTip.Tip="Number of channels per receiver (e.g. 3 for L/R/C configuration)." />
         <StackPanel Grid.Row="4" Grid.Column="4" Orientation="Horizontal" Spacing="4">
           <Button x:Name="LoadReceiverParams" Content="Load..." Command="{Binding LoadReceiverParamsCommand}"
                   ToolTip.Tip="Load receiver parameters from a TOML file" />

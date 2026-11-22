@@ -16,26 +16,13 @@ namespace TmDq.App.ViewModels.Dialogs;
 /// One stream's setup dialog (US1.0, US2.0, US2.1, US2.2): the Frame Sync Lock dialog, or the Receiver SNR one, which
 /// adds the receiver settings. It edits a copy of the row (<see cref="StreamRules.ForEditing"/>); OK is available only
 /// when <see cref="StreamRules.Problems"/> finds nothing, and the problems are shown as they arise, so a value
-/// v2.x's validators and spin boxes would have refused, or a file would have slipped past them, is named instead.
+/// v2.x's validators would have refused, or a file would have slipped past them, is named instead.
 /// </summary>
 public sealed class StreamSetupViewModel : DialogViewModel
 {
     public static readonly IReadOnlyList<string> Periods = new[] { "1 s", "100 ms", "10 ms" };
     public static readonly IReadOnlyList<string> Polarities = new[] { "Positive", "Negative" };
     public static readonly IReadOnlyList<string> Slopes = new[] { "±10 V", "±5 V", "0–10 V", "0–5 V" };
-
-    // The spin boxes' bounds: StreamRules' limits, as the decimals a NumericUpDown takes, so the window states none of
-    // them (a static readonly rather than a const: a decimal of a double or an int is not a constant expression).
-    public static readonly decimal MinBitsPerFrame = StreamRules.MinBitsInMinorFrame;
-    public static readonly decimal MaxBitsPerFrame = StreamRules.MaxBitsInMinorFrame;
-    public static readonly decimal MinDataRate = (decimal)StreamRules.MinDataRateMbps;
-    public static readonly decimal MaxDataRate = (decimal)StreamRules.MaxDataRateMbps;
-    public static readonly decimal MinScale = (decimal)StreamRules.MinScaleDdBPerV;
-    public static readonly decimal MaxScale = (decimal)StreamRules.MaxScaleDdBPerV;
-    public static readonly decimal MinReceivers = StreamRules.MinReceivers;
-    public static readonly decimal MaxReceivers = StreamRules.MaxReceivers;
-    public static readonly decimal MinReceiverChannels = StreamRules.MinReceiverChannels;
-    public static readonly decimal MaxReceiverChannels = StreamRules.MaxReceiverChannels;
 
     private readonly StreamSetup _start;
     private readonly ISettingsFilePicker? _files;
@@ -45,16 +32,16 @@ public sealed class StreamSetupViewModel : DialogViewModel
 
     private string _syncPattern;
     private string _syncMask;
-    private decimal? _bitsInMinorFrame;
-    private decimal? _dataRateMbps;
+    private string _bitsPerFrameText;
+    private string _dataRateText;
     private int _periodIndex;
     private bool _randomized;
     private bool _inverted;
     private int _polarityIndex;
     private int _slopeIndex;
-    private decimal? _scaleDdBPerV;
-    private decimal? _numReceivers;
-    private decimal? _receiverChannels;
+    private string _scaleText;
+    private string _numReceiversText;
+    private string _receiverChannelsText;
     private bool _applyToAll;
     private string _fileMessage = string.Empty;
     private IReadOnlyList<string> _problems = Array.Empty<string>();
@@ -96,16 +83,16 @@ public sealed class StreamSetupViewModel : DialogViewModel
         _receiverParamsToml = edited.ReceiverParamsToml;
         _syncPattern = edited.SyncPattern;
         _syncMask = edited.SyncMask;
-        _bitsInMinorFrame = edited.BitsInMinorFrame;
-        _dataRateMbps = (decimal)edited.DataRateMbps;
+        _bitsPerFrameText = NumberText.FormatInteger(edited.BitsInMinorFrame);
+        _dataRateText = NumberText.FormatNumber(edited.DataRateMbps);
         _periodIndex = (int)edited.SamplePeriod;
         _randomized = edited.Randomized;
         _inverted = edited.Inverted;
         _polarityIndex = edited.PolarityIndex;
         _slopeIndex = edited.SlopeIndex;
-        _scaleDdBPerV = (decimal)edited.ScaleDdBPerV;
-        _numReceivers = edited.NumReceivers;
-        _receiverChannels = edited.ReceiverChannels;
+        _scaleText = NumberText.FormatNumber(edited.ScaleDdBPerV);
+        _numReceiversText = NumberText.FormatInteger(edited.NumReceivers);
+        _receiverChannelsText = NumberText.FormatInteger(edited.ReceiverChannels);
 
         LoadFrameSyncCommand = new AsyncRelayCommand(LoadFrameSyncAsync, () => _files is not null);
         SaveFrameSyncCommand = new AsyncRelayCommand(SaveFrameSyncAsync, () => _files is not null);
@@ -136,9 +123,29 @@ public sealed class StreamSetupViewModel : DialogViewModel
 
     public string SyncMask { get => _syncMask; set => Set(ref _syncMask, value); }
 
-    public decimal? BitsInMinorFrame { get => _bitsInMinorFrame; set => Set(ref _bitsInMinorFrame, value); }
+    // The five number fields are plain text boxes (no up/down arrows): what is typed is what the dialog holds, and a
+    // value that is not an integer (Bits Per Frame, Num Rcvrs, Num Channels) or not a number (Data Rate, Scale) is a
+    // problem that holds OK, as an out-of-range one is. The parsed value is null until the text is one.
 
-    public decimal? DataRateMbps { get => _dataRateMbps; set => Set(ref _dataRateMbps, value); }
+    public string BitsPerFrameText { get => _bitsPerFrameText; set => Set(ref _bitsPerFrameText, value ?? string.Empty); }
+
+    public string DataRateText { get => _dataRateText; set => Set(ref _dataRateText, value ?? string.Empty); }
+
+    public string ScaleText { get => _scaleText; set => Set(ref _scaleText, value ?? string.Empty); }
+
+    public string NumReceiversText { get => _numReceiversText; set => Set(ref _numReceiversText, value ?? string.Empty); }
+
+    public string ReceiverChannelsText { get => _receiverChannelsText; set => Set(ref _receiverChannelsText, value ?? string.Empty); }
+
+    public int? BitsInMinorFrame => NumberText.ParseInteger(_bitsPerFrameText);
+
+    public double? DataRateMbps => NumberText.ParseNumber(_dataRateText);
+
+    public double? ScaleDdBPerV => NumberText.ParseNumber(_scaleText);
+
+    public int? NumReceivers => NumberText.ParseInteger(_numReceiversText);
+
+    public int? ReceiverChannels => NumberText.ParseInteger(_receiverChannelsText);
 
     public int PeriodIndex { get => _periodIndex; set => Set(ref _periodIndex, value); }
 
@@ -149,12 +156,6 @@ public sealed class StreamSetupViewModel : DialogViewModel
     public int PolarityIndex { get => _polarityIndex; set => Set(ref _polarityIndex, value); }
 
     public int SlopeIndex { get => _slopeIndex; set => Set(ref _slopeIndex, value); }
-
-    public decimal? ScaleDdBPerV { get => _scaleDdBPerV; set => Set(ref _scaleDdBPerV, value); }
-
-    public decimal? NumReceivers { get => _numReceivers; set => Set(ref _numReceivers, value); }
-
-    public decimal? ReceiverChannels { get => _receiverChannels; set => Set(ref _receiverChannels, value); }
 
     public bool ApplyToAll { get => _applyToAll; set => SetProperty(ref _applyToAll, value); }
 
@@ -250,22 +251,22 @@ public sealed class StreamSetupViewModel : DialogViewModel
             : string.Create(CultureInfo.InvariantCulture, $"Applied non-linear calibration to {_calibration.Count} channel(s)."));
     }
 
-    /// <summary>The row as the dialog holds it. A field left empty (a spin box cleared) keeps the value it opened with;
+    /// <summary>The row as the dialog holds it. A field left empty or not a number keeps the value it opened with;
     /// <see cref="Problems"/> has already said so.</summary>
     public StreamSetup ToSetup() => _start with
     {
         SyncPattern = SyncPattern ?? string.Empty,
         SyncMask = SyncMask ?? string.Empty,
-        BitsInMinorFrame = BitsInMinorFrame is decimal b ? (int)b : _start.BitsInMinorFrame,
-        DataRateMbps = DataRateMbps is decimal r ? (double)r : _start.DataRateMbps,
+        BitsInMinorFrame = BitsInMinorFrame ?? _start.BitsInMinorFrame,
+        DataRateMbps = DataRateMbps ?? _start.DataRateMbps,
         SamplePeriod = (SamplePeriod)PeriodIndex,
         Randomized = Randomized,
         Inverted = Inverted,
         PolarityIndex = PolarityIndex,
         SlopeIndex = SlopeIndex,
-        ScaleDdBPerV = ScaleDdBPerV is decimal s ? (double)s : _start.ScaleDdBPerV,
-        NumReceivers = NumReceivers is decimal n ? (int)n : _start.NumReceivers,
-        ReceiverChannels = ReceiverChannels is decimal c ? (int)c : _start.ReceiverChannels,
+        ScaleDdBPerV = ScaleDdBPerV ?? _start.ScaleDdBPerV,
+        NumReceivers = NumReceivers ?? _start.NumReceivers,
+        ReceiverChannels = ReceiverChannels ?? _start.ReceiverChannels,
         ReceiverParamsToml = _receiverParamsToml,
         Calibration = _calibration,
         CalCh10Path = _calCh10Path,
@@ -282,13 +283,13 @@ public sealed class StreamSetupViewModel : DialogViewModel
     private void Recheck()
     {
         var problems = new List<string>();
-        if (BitsInMinorFrame is null) problems.Add("Bits Per Frame is empty.");
-        if (DataRateMbps is null) problems.Add("Data Rate is empty.");
+        CheckInteger(problems, _bitsPerFrameText, "Bits Per Frame");
+        CheckNumber(problems, _dataRateText, "Data Rate");
         if (IsReceiverSnr)
         {
-            if (ScaleDdBPerV is null) problems.Add("Scale (dB/V) is empty.");
-            if (NumReceivers is null) problems.Add("Num Rcvrs is empty.");
-            if (ReceiverChannels is null) problems.Add("Num Channels is empty.");
+            CheckNumber(problems, _scaleText, "Scale (dB/V)");
+            CheckInteger(problems, _numReceiversText, "Num Rcvrs");
+            CheckInteger(problems, _receiverChannelsText, "Num Channels");
         }
         problems.AddRange(StreamRules.Problems(ToSetup()));
         Problems = problems;
@@ -298,6 +299,18 @@ public sealed class StreamSetupViewModel : DialogViewModel
         OnPropertyChanged(nameof(CanApplyCal));
         OnPropertyChanged(nameof(ApplyCalTip));
         ApplyCalCommand.NotifyCanExecuteChanged();
+    }
+
+    private static void CheckInteger(List<string> problems, string text, string name)
+    {
+        if (text.Trim().Length == 0) problems.Add(name + " is empty.");
+        else if (NumberText.ParseInteger(text) is null) problems.Add(name + " must be a whole number.");
+    }
+
+    private static void CheckNumber(List<string> problems, string text, string name)
+    {
+        if (text.Trim().Length == 0) problems.Add(name + " is empty.");
+        else if (NumberText.ParseNumber(text) is null) problems.Add(name + " must be a number.");
     }
 
     private void Ok()
@@ -311,14 +324,14 @@ public sealed class StreamSetupViewModel : DialogViewModel
     {
         SyncPattern = s.SyncPattern;
         SyncMask = s.SyncMask;
-        BitsInMinorFrame = s.BitsInMinorFrame;
+        BitsPerFrameText = NumberText.FormatInteger(s.BitsInMinorFrame);
         Randomized = s.Randomized;
         Inverted = s.Inverted;
         PolarityIndex = s.PolarityIndex;
         SlopeIndex = s.SlopeIndex;
-        ScaleDdBPerV = (decimal)s.ScaleDdBPerV;
-        NumReceivers = s.NumReceivers;
-        ReceiverChannels = s.ReceiverChannels;
+        ScaleText = NumberText.FormatNumber(s.ScaleDdBPerV);
+        NumReceiversText = NumberText.FormatInteger(s.NumReceivers);
+        ReceiverChannelsText = NumberText.FormatInteger(s.ReceiverChannels);
         _receiverParamsToml = s.ReceiverParamsToml;
         OnPropertyChanged(nameof(ReceiverParamsName));
         Recheck();

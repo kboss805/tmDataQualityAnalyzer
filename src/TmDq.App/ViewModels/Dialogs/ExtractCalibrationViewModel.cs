@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
@@ -42,7 +43,9 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
     private string _stepPath = string.Empty, _calPath = string.Empty;
     private string _stepStatus = string.Empty, _calStatus = string.Empty;
     private CalibrationStatusKind _stepKind, _calKind;
-    private decimal? _clipStart = 0m, _clipEnd = 0m;
+    private decimal _clipStart, _clipEnd;
+    private string _clipStartText = NumberText.FormatDecimal(0m), _clipEndText = NumberText.FormatDecimal(0m);
+    private string? _clipStartProblem, _clipEndProblem;
 
     /// <param name="initialStepPath">The step file the stream last used; it is loaded if it exists, else the shipped
     /// default.</param>
@@ -94,30 +97,73 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
 
     public CalibrationStatusKind CalKind => _calKind;
 
-    /// <summary>Seconds left off the start of the calibration recording before steps are detected (0 to 100,000, one
-    /// decimal); a change extracts again.</summary>
-    public decimal? ClipStart
+    // The two clips are plain text boxes (no up/down arrows). What is typed is held in the *Text strings; text that is a
+    // number from 0 to ClipMaximum becomes the clip and extracts again, and anything else is a problem that holds OK and
+    // leaves the clip, and the calibration, as they were.
+
+    /// <summary>Seconds left off the start of the calibration recording before steps are detected (0 to 100,000); a
+    /// change extracts again. Setting it types it into <see cref="ClipStartText"/>.</summary>
+    public decimal ClipStart
     {
         get => _clipStart;
-        set
-        {
-            if (SetProperty(ref _clipStart, value)) _ = ExtractAsync();
-        }
+        set => ClipStartText = NumberText.FormatDecimal(value);
     }
 
     /// <summary>Seconds left off the end, likewise.</summary>
-    public decimal? ClipEnd
+    public decimal ClipEnd
     {
         get => _clipEnd;
+        set => ClipEndText = NumberText.FormatDecimal(value);
+    }
+
+    public string ClipStartText
+    {
+        get => _clipStartText;
         set
         {
-            if (SetProperty(ref _clipEnd, value)) _ = ExtractAsync();
+            if (!SetProperty(ref _clipStartText, value ?? string.Empty)) return;
+            if (TakeClip(_clipStartText, "Clip Start", ref _clipStartProblem) is decimal clip && SetProperty(ref _clipStart, clip, nameof(ClipStart))) _ = ExtractAsync();
+            ClipProblemsChanged();
         }
     }
 
-    public double ClipStartSec => (double)(_clipStart ?? 0m);
+    public string ClipEndText
+    {
+        get => _clipEndText;
+        set
+        {
+            if (!SetProperty(ref _clipEndText, value ?? string.Empty)) return;
+            if (TakeClip(_clipEndText, "Clip End", ref _clipEndProblem) is decimal clip && SetProperty(ref _clipEnd, clip, nameof(ClipEnd))) _ = ExtractAsync();
+            ClipProblemsChanged();
+        }
+    }
 
-    public double ClipEndSec => (double)(_clipEnd ?? 0m);
+    public double ClipStartSec => (double)_clipStart;
+
+    public double ClipEndSec => (double)_clipEnd;
+
+    /// <summary>What is wrong with the clips as typed, one line each, or empty.</summary>
+    public string ClipProblemText => string.Join(Environment.NewLine, new[] { _clipStartProblem, _clipEndProblem }.OfType<string>());
+
+    public bool HasClipProblem => _clipStartProblem is not null || _clipEndProblem is not null;
+
+    /// <summary>The clip the text is, or null with the reason in <paramref name="problem"/> (null when it is one).</summary>
+    private static decimal? TakeClip(string text, string name, ref string? problem)
+    {
+        decimal? clip = NumberText.ParseDecimal(text);
+        problem = text.Trim().Length == 0 ? name + " is empty."
+            : clip is null ? name + " must be a number."
+            : clip is < 0m or > ClipMaximum ? string.Create(CultureInfo.InvariantCulture, $"{name} must be from 0 to {ClipMaximum:0} s.")
+            : null;
+        return problem is null ? clip : null;
+    }
+
+    private void ClipProblemsChanged()
+    {
+        OnPropertyChanged(nameof(ClipProblemText));
+        OnPropertyChanged(nameof(HasClipProblem));
+        UpdateOk();
+    }
 
 
     /// <summary>The usable profiles of the last extraction; empty until one calibrated a channel.</summary>
@@ -127,7 +173,7 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
     /// the clips were ignored.</summary>
     public string Report { get; private set; } = string.Empty;
 
-    public bool CanAccept => _stepOk && _calOk;
+    public bool CanAccept => _stepOk && _calOk && !HasClipProblem;
 
     /// <summary>The folders the two Browse buttons last used, for the next dialog.</summary>
     public string? StepFolder { get; private set; }
