@@ -1,8 +1,9 @@
 using System;
-using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using TmDq.App.ViewModels;
 using TmDq.App.ViewModels.Plot;
 using TmDq.App.Views.Controls;
 
@@ -64,25 +65,46 @@ public sealed class NumberPromptWindow : PromptWindow<double?>
         _min = min;
         _max = Math.Max(min, max);
         _decimals = decimals;
-        Field = new NumericUpDown
+        // A plain text box, no up/down arrows: text that is not a number (a whole number, when there are no decimals) is
+        // said so and holds OK. A number outside the range is kept inside it, and rounded to the decimals, by SpinValue.
+        Field = new TextBox { Text = NumberText.FormatFixed(PlotCommands.SpinValue(value, min, max, decimals), decimals), MinWidth = 200 };
+        Problem = new TextBlock { IsVisible = false };
+        Problem[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("SystemFillColorCriticalBrush");
+        Field.PropertyChanged += (_, e) =>
         {
-            Minimum = (decimal)_min,
-            Maximum = (decimal)_max,
-            Value = (decimal)PlotCommands.SpinValue(value, min, max, decimals),
-            Increment = 1,
-            FormatString = "F" + decimals.ToString(CultureInfo.InvariantCulture),
-            MinWidth = 200,
+            if (e.Property == TextBox.TextProperty) Check();
         };
         var body = new StackPanel { Spacing = 8 };
         body.Children.Add(new TextBlock { Text = label });
         body.Children.Add(Field);
+        body.Children.Add(Problem);
         Lay(body);
-        Opened += (_, _) => Field.Focus();
+        Opened += (_, _) =>
+        {
+            Field.Focus();
+            Field.SelectAll();
+        };
     }
 
-    public NumericUpDown Field { get; }
+    public TextBox Field { get; }
 
-    protected override double? Answer() => PlotCommands.SpinValue((double)(Field.Value ?? (decimal)_min), _min, _max, _decimals);
+    /// <summary>Why OK is held, or hidden while the text is a number.</summary>
+    public TextBlock Problem { get; }
+
+    private double? Entered => _decimals == 0 ? NumberText.ParseInteger(Field.Text ?? "") : NumberText.ParseNumber(Field.Text ?? "");
+
+    private void Check()
+    {
+        string text = Field.Text ?? "";
+        string? problem = text.Trim().Length == 0 ? "Enter a " + (_decimals == 0 ? "whole " : "") + "number."
+            : Entered is null ? "Not a " + (_decimals == 0 ? "whole " : "") + "number."
+            : null;
+        Problem.Text = problem ?? "";
+        Problem.IsVisible = problem is not null;
+        OkButton.IsEnabled = problem is null;
+    }
+
+    protected override double? Answer() => Entered is double v ? PlotCommands.SpinValue(v, _min, _max, _decimals) : null;
 }
 
 /// <summary>The Set Time Window dialog: a start and a stop as DDD:HH:MM:SS.</summary>

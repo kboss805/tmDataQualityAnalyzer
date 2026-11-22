@@ -217,7 +217,7 @@ public sealed class StreamWindowsTests
     public async Task EachRowsReadyMarkIsInTheStatusColourOfItsState()
     {
         // Light theme: Fluent's success (ready), critical (blocks processing) and neutral (the rest).
-        ConfigureStreamsViewModel vm = Configure(new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok(d => d.DataRateMbps = 4) });
+        ConfigureStreamsViewModel vm = Configure(new FakeStreamDialogs { OnEdit = FakeStreamDialogs.Ok(d => d.DataRateText = "4") });
         vm.Rows[0].Process = true;
         await vm.Rows[0].ConfigureCommand.ExecuteAsync(null);   // configured: ready
         vm.Rows[1].Process = true;                              // selected, not configured: blocks
@@ -271,7 +271,7 @@ public sealed class StreamWindowsTests
         Assert.Equal("Configure Frame Sync Lock — CH-01 PRN 15 5M", w.Title);
         Assert.False(w.FindControl<Control>("ReceiverGroup")!.IsVisible);
         Assert.Equal("334AABBF", w.FindControl<TextBox>("SyncPattern")!.Text);
-        Assert.Equal(32767m, w.FindControl<NumericUpDown>("BitsPerFrame")!.Value);
+        Assert.Equal("32767", w.FindControl<TextBox>("BitsPerFrame")!.Text);
         Assert.Equal("1 s", w.FindControl<ComboBox>("Period")!.SelectedItem);
         Assert.Equal("Apply to all Frame Sync Lock streams", w.FindControl<CheckBox>("ApplyToAll")!.Content);
         Assert.Equal("0 = TMATS (5.000 Mbps)", w.FindControl<TextBlock>("DataRateHint")!.Text);
@@ -281,25 +281,72 @@ public sealed class StreamWindowsTests
     }
 
     [AvaloniaFact]
-    public void TheSetupDialogSpinBoxesTakeTheirBoundsFromTheRules()
+    public void TheSetupDialogsHaveNoSpinnersAndTheNumberFieldsAreTextBoxes()
     {
-        // The window states none of the limits: each is StreamRules' (the one place the rules and their messages
-        // read), through the view model's decimals.
+        // The user's decision of 2026-11-21: no up/down arrows in either stream-setup dialog, only validation.
+        foreach (StreamMode mode in new[] { StreamMode.FrameSyncLock, StreamMode.ReceiverChannelInfo })
+        {
+            var w = Shown(new StreamSetupWindow { DataContext = new StreamSetupViewModel(Row(mode), new FakeFilePicker(), null, null) });
+            Assert.Empty(w.GetVisualDescendants().OfType<NumericUpDown>());
+            Assert.Empty(w.GetVisualDescendants().OfType<ButtonSpinner>());
+            Assert.Empty(w.GetVisualDescendants().OfType<RepeatButton>());
+            foreach (string name in new[] { "BitsPerFrame", "DataRate", "Scale", "NumReceivers", "ReceiverChannels" })
+            {
+                TextBox box = Assert.IsType<TextBox>(w.FindControl<Control>(name));
+                Assert.Equal(150, box.Width);   // as wide as the spin boxes were, and as the other fields of the form
+            }
+            w.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void TypingTextThatIsNotANumberIsRefusedLikeAValueOutOfRange()
+    {
         var vm = new StreamSetupViewModel(Row(StreamMode.ReceiverChannelInfo), new FakeFilePicker(), null, null);
         var w = Shown(new StreamSetupWindow { DataContext = vm });
-        var expected = new (string Name, decimal Min, decimal Max)[]
+        TextBlock problems = w.FindControl<TextBlock>("Problems")!;
+        Button ok = w.FindControl<Button>("OkButton")!;
+        Assert.True(ok.IsEffectivelyEnabled);
+
+        (string Box, string Typed, string Message)[] refused =
         {
-            ("BitsPerFrame", StreamRules.MinBitsInMinorFrame, StreamRules.MaxBitsInMinorFrame),
-            ("DataRate", (decimal)StreamRules.MinDataRateMbps, (decimal)StreamRules.MaxDataRateMbps),
-            ("Scale", (decimal)StreamRules.MinScaleDdBPerV, (decimal)StreamRules.MaxScaleDdBPerV),
-            ("NumReceivers", StreamRules.MinReceivers, StreamRules.MaxReceivers),
-            ("ReceiverChannels", StreamRules.MinReceiverChannels, StreamRules.MaxReceiverChannels),
+            ("BitsPerFrame", "800.5", "Bits Per Frame must be a whole number."),
+            ("BitsPerFrame", "63", "Bits Per Frame must be from 64 to 65536."),
+            ("DataRate", "fast", "Data Rate must be a number."),
+            ("DataRate", "1001", "Data Rate must be from 0 (the TMATS rate) to 1000 Mbps."),
+            ("Scale", "1,5", "Scale (dB/V) must be a number."),
+            ("NumReceivers", "two", "Num Rcvrs must be a whole number."),
+            ("NumReceivers", "101", "Num Rcvrs must be from 1 to 100."),
+            ("ReceiverChannels", "3.5", "Num Channels must be a whole number."),
+            ("ReceiverChannels", "", "Num Channels is empty."),
         };
-        foreach ((string name, decimal min, decimal max) in expected)
+        foreach ((string name, string typed, string message) in refused)
         {
-            NumericUpDown box = w.FindControl<NumericUpDown>(name)!;
-            Assert.Equal((min, max), (box.Minimum, box.Maximum));
+            TextBox box = w.FindControl<TextBox>(name)!;
+            string before = box.Text!;
+            box.Text = typed;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(problems.IsVisible, name + " = " + typed);
+            Assert.Equal(message, problems.Text);
+            Assert.False(ok.IsEffectivelyEnabled, name + " = " + typed);
+            box.Text = before;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(problems.IsVisible, name + " restored");
+            Assert.True(ok.IsEffectivelyEnabled);
         }
+        w.Close();
+    }
+
+    [AvaloniaFact]
+    public void ATypedNumberReachesTheRowTheDialogGivesBack()
+    {
+        var vm = new StreamSetupViewModel(Row(StreamMode.ReceiverChannelInfo), new FakeFilePicker(), null, null);
+        var w = Shown(new StreamSetupWindow { DataContext = vm });
+        foreach ((string name, string typed) in new[] { ("BitsPerFrame", "800"), ("DataRate", "0.8"), ("Scale", "12.5"), ("NumReceivers", "4"), ("ReceiverChannels", "5") })
+            w.FindControl<TextBox>(name)!.Text = typed;
+        Dispatcher.UIThread.RunJobs();
+        StreamSetup s = vm.ToSetup();
+        Assert.Equal((800, 0.8, 12.5, 4, 5), (s.BitsInMinorFrame, s.DataRateMbps, s.ScaleDdBPerV, s.NumReceivers, s.ReceiverChannels));
         w.Close();
     }
 
@@ -314,9 +361,9 @@ public sealed class StreamWindowsTests
         Assert.True(group.Bounds.Height > 60, $"receiver group {group.Bounds}");
         Assert.Equal("Negative", w.FindControl<ComboBox>("Polarity")!.SelectedItem);
         Assert.Equal("0–10 V", w.FindControl<ComboBox>("Slope")!.SelectedItem);
-        Assert.Equal(20m, w.FindControl<NumericUpDown>("Scale")!.Value);
-        Assert.Equal(16m, w.FindControl<NumericUpDown>("NumReceivers")!.Value);
-        Assert.Equal(3m, w.FindControl<NumericUpDown>("ReceiverChannels")!.Value);
+        Assert.Equal("20.000", w.FindControl<TextBox>("Scale")!.Text);
+        Assert.Equal("16", w.FindControl<TextBox>("NumReceivers")!.Text);
+        Assert.Equal("3", w.FindControl<TextBox>("ReceiverChannels")!.Text);
         // Everything fits in the window the content sized.
         foreach (string name in new[] { "SyncPattern", "LoadFrameSync", "SaveReceiverParams", "OkButton", "CancelButton" })
         {

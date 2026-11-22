@@ -1,0 +1,217 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.StreamSetupViewModelTests",
+    "-class",
+    "TmDq.App.Tests.StreamWindowsTests",
+    "-class",
+    "TmDq.App.Tests.CalibrationDialogTests",
+    "-class",
+    "TmDq.App.Tests.ChartPromptWindowTests",
+    "-class",
+    "TmDq.App.Tests.NoSpinnersTests"
+  ],
+  "mutants": [
+    {
+      "id": "T1",
+      "file": "src/TmDq.App/ViewModels/NumberText.cs",
+      "old": "NumberStyles.AllowTrailingWhite;",
+      "new": "NumberStyles.AllowTrailingWhite | NumberStyles.AllowDecimalPoint;",
+      "expect": "caught",
+      "note": "Bits Per Frame takes 800.0 as an integer"
+    },
+    {
+      "id": "T2",
+      "file": "src/TmDq.App/ViewModels/NumberText.cs",
+      "old": "double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double v)",
+      "new": "double.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out double v)",
+      "expect": "caught",
+      "note": "a Data Rate of 5,0 is read as 50"
+    },
+    {
+      "id": "T3",
+      "file": "src/TmDq.App/ViewModels/NumberText.cs",
+      "old": " && double.IsFinite(v) ? v : null;",
+      "new": " ? v : null;",
+      "expect": "caught",
+      "note": "NaN and Infinity are numbers"
+    },
+    {
+      "id": "T4",
+      "file": "src/TmDq.App/ViewModels/NumberText.cs",
+      "old": "? (int)Math.Clamp(v, int.MinValue, int.MaxValue)",
+      "new": "? (int)Math.Abs(v % 4294967296L)",
+      "expect": "caught",
+      "note": "an integer past int wraps round into the valid range (2^32 + 800 reads as 800)"
+    },
+    {
+      "id": "T5",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "        CheckNumber(problems, _dataRateText, \"Data Rate\");\n",
+      "new": "",
+      "expect": "caught",
+      "note": "Data Rate is not checked for being a number"
+    },
+    {
+      "id": "T6",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "        if (IsReceiverSnr)\n        {\n            CheckNumber(problems, _scaleText",
+      "new": "        if (IsReceiverSnr || !IsReceiverSnr)\n        {\n            CheckNumber(problems, _scaleText",
+      "expect": "caught",
+      "note": "the Receiver SNR fields are checked in the Frame Sync Lock dialog too"
+    },
+    {
+      "id": "T7",
+      "file": "src/TmDq.App/ViewModels/NumberText.cs",
+      "old": "        return double.Parse(fixedPoint, CultureInfo.InvariantCulture) == value ? fixedPoint : value.ToString(\"R\", CultureInfo.InvariantCulture);",
+      "new": "        return fixedPoint;",
+      "expect": "caught",
+      "note": "a number is shown to three decimals even when that changes it (0.0005 as 0.001)"
+    },
+    {
+      "id": "T8",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "BitsInMinorFrame = BitsInMinorFrame ?? _start.BitsInMinorFrame,",
+      "new": "BitsInMinorFrame = BitsInMinorFrame ?? 0,",
+      "expect": "caught",
+      "note": "a bits-per-frame entry that is no number gives 0 rather than the value the dialog opened with"
+    },
+    {
+      "id": "T9",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "        BitsPerFrameText = NumberText.FormatInteger(s.BitsInMinorFrame);\n",
+      "new": "",
+      "expect": "caught",
+      "note": "a loaded frame-sync file leaves the Bits Per Frame box as it was"
+    },
+    {
+      "id": "T10",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "        if (text.Trim().Length == 0) problems.Add(name + \" is empty.\");\n        else if (NumberText.ParseNumber(text) is null)",
+      "new": "        if (text.Length == 0) problems.Add(name + \" is empty.\");\n        else if (NumberText.ParseNumber(text) is null)",
+      "expect": "caught",
+      "note": "a Data Rate of spaces is not empty but \"not a number\""
+    },
+    {
+      "id": "T11",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "public string BitsPerFrameText { get => _bitsPerFrameText; set => Set(ref _bitsPerFrameText, value ?? string.Empty); }",
+      "new": "public string BitsPerFrameText { get => _bitsPerFrameText; set => Set(ref _bitsPerFrameText, value); }",
+      "expect": "caught",
+      "note": "a box that reports no text breaks the check"
+    },
+    {
+      "id": "T12",
+      "file": "src/TmDq.App/Views/Dialogs/StreamSetupWindow.axaml",
+      "old": "Text=\"{Binding ScaleText}\"",
+      "new": "Text=\"{Binding DataRateText}\"",
+      "expect": "caught",
+      "note": "the Scale box is bound to the data rate"
+    },
+    {
+      "id": "T13",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "_numReceiversText = NumberText.FormatInteger(edited.NumReceivers);",
+      "new": "_numReceiversText = NumberText.FormatInteger(edited.ReceiverChannels);",
+      "expect": "caught",
+      "note": "the Num Rcvrs box opens with the channel count"
+    },
+    {
+      "id": "C1",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "clip is < 0m or > ClipMaximum",
+      "new": "clip is < 0m",
+      "expect": "caught",
+      "note": "a clip above the maximum is taken"
+    },
+    {
+      "id": "C2",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "        return problem is null ? clip : null;",
+      "new": "        return clip;",
+      "expect": "caught",
+      "note": "a clip that is a problem (out of range) is still taken, and extracts"
+    },
+    {
+      "id": "C3",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "public bool CanAccept => _stepOk && _calOk && !HasClipProblem;",
+      "new": "public bool CanAccept => _stepOk && _calOk;",
+      "expect": "caught",
+      "note": "OK is not held by a clip problem"
+    },
+    {
+      "id": "C4",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "&& SetProperty(ref _clipEnd, clip, nameof(ClipEnd))) _ = ExtractAsync();",
+      "new": "&& SetProperty(ref _clipEnd, clip, nameof(ClipEnd))) { }",
+      "expect": "caught",
+      "note": "a change of Clip End does not extract again"
+    },
+    {
+      "id": "C5",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "set => ClipStartText = NumberText.FormatDecimal(value);",
+      "new": "set => ClipStartText = value.ToString(\"F0\", CultureInfo.InvariantCulture);",
+      "expect": "caught",
+      "note": "a clip set in code is shown rounded to a whole second"
+    },
+    {
+      "id": "C6",
+      "file": "src/TmDq.App/Views/Dialogs/ExtractCalibrationWindow.axaml",
+      "old": "Text=\"{Binding ClipEndText}\"",
+      "new": "Text=\"{Binding ClipStartText}\"",
+      "expect": "caught",
+      "note": "the Clip End box is bound to Clip Start"
+    },
+    {
+      "id": "P1",
+      "file": "src/TmDq.App/Views/Dialogs/PromptWindows.cs",
+      "old": "OkButton.IsEnabled = problem is null;",
+      "new": "OkButton.IsEnabled = true;",
+      "expect": "caught",
+      "note": "a prompt's OK is not held by text that is no number"
+    },
+    {
+      "id": "P2",
+      "file": "src/TmDq.App/Views/Dialogs/PromptWindows.cs",
+      "old": "_decimals == 0 ? NumberText.ParseInteger(Field.Text ?? \"\") : NumberText.ParseNumber(Field.Text ?? \"\")",
+      "new": "NumberText.ParseNumber(Field.Text ?? \"\")",
+      "expect": "caught",
+      "note": "a prompt with no decimals takes 12.5"
+    },
+    {
+      "id": "P3",
+      "file": "src/TmDq.App/Views/Dialogs/PromptWindows.cs",
+      "old": "Entered is double v ? PlotCommands.SpinValue(v, _min, _max, _decimals) : null;",
+      "new": "Entered is double v ? v : null;",
+      "expect": "caught",
+      "note": "a prompt's answer is not kept in its range and rounded"
+    },
+    {
+      "id": "N1",
+      "file": "src/TmDq.App/ViewModels/NumberText.cs",
+      "old": "decimal.TryParse(text, NumberStyles.Float,",
+      "new": "decimal.TryParse(text, NumberStyles.Float | NumberStyles.AllowThousands,",
+      "expect": "caught",
+      "note": "a clip of 5,5 is read as 55"
+    },
+    {
+      "id": "N2",
+      "file": "src/TmDq.App/ViewModels/NumberText.cs",
+      "old": "        return decimal.Parse(fixedPoint, CultureInfo.InvariantCulture) == value ? fixedPoint : value.ToString(CultureInfo.InvariantCulture);",
+      "new": "        return fixedPoint;",
+      "expect": "caught",
+      "note": "a clip of 0.25 is shown as 0.3"
+    },
+    {
+      "id": "S1",
+      "file": "src/TmDq.App/Views/Dialogs/StreamSetupWindow.axaml",
+      "old": "<TextBox x:Name=\"BitsPerFrame\"",
+      "new": "<NumericUpDown x:Name=\"BitsPerFrame\"",
+      "expect": "caught",
+      "note": "a spinner comes back to a dialog"
+    }
+  ]
+}

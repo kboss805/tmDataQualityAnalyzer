@@ -29,6 +29,37 @@ public sealed class ChartPromptWindowTests
 {
     public ChartPromptWindowTests() => NativeCore.EnsureLoaded();
 
+    [AvaloniaTheory]
+    [InlineData(0, "12", true)]
+    [InlineData(0, " -3 ", true)]
+    [InlineData(0, "12.5", false)]
+    [InlineData(0, "1e1", false)]
+    [InlineData(0, "twelve", false)]
+    [InlineData(0, "", false)]
+    [InlineData(1, "12.54", true)]
+    [InlineData(1, ".5", true)]
+    [InlineData(1, "1e1", true)]
+    [InlineData(1, "1,5", false)]
+    [InlineData(1, "NaN", false)]
+    [InlineData(1, "-", false)]
+    public void TheNumberPromptHasNoArrowsAndRefusesTextThatIsNotANumber(int decimals, string typed, bool accepted)
+    {
+        var w = Frames.Shown(new NumberPromptWindow("Set", "Value:", 5, 0, 99, decimals));
+        Assert.Empty(w.GetVisualDescendants().OfType<NumericUpDown>());
+        Assert.Empty(w.GetVisualDescendants().OfType<ButtonSpinner>());
+        Assert.True(w.OkButton.IsEnabled);
+        Assert.False(w.Problem.IsVisible);
+        w.Field.Text = typed;
+        Assert.Equal(accepted, w.OkButton.IsEnabled);
+        Assert.Equal(!accepted, w.Problem.IsVisible);
+        if (!accepted)
+            Assert.Equal(typed.Trim().Length == 0 ? "Enter a " + (decimals == 0 ? "whole " : "") + "number." : "Not a " + (decimals == 0 ? "whole " : "") + "number.", w.Problem.Text);
+        w.Field.Text = "7";
+        Assert.True(w.OkButton.IsEnabled);
+        Assert.False(w.Problem.IsVisible);
+        w.Close();
+    }
+
     [AvaloniaFact]
     public async Task EachPromptAnswersOnOkAndNothingOnCancel()
     {
@@ -55,18 +86,16 @@ public sealed class ChartPromptWindowTests
         Task<double?> number = prompts.AskNumberAsync("Set Left Y-Axis Minimum", "Minimum lock %:", 12.4, 0, 99, 0);
         Dispatcher.UIThread.RunJobs();
         var nw = Assert.IsType<NumberPromptWindow>(owner.OwnedWindows.Single());
-        Assert.Equal(12m, nw.Field.Value);
-        Assert.Equal((0m, 99m), (nw.Field.Minimum, nw.Field.Maximum));
-        Assert.Equal("F0", nw.Field.FormatString);
-        nw.Field.Value = 150;   // past its maximum
+        Assert.Equal("12", nw.Field.Text);
+        nw.Field.Text = "150";   // past its maximum: kept inside it
         Press(nw.OkButton);
         Assert.Equal(99.0, await Closed(number, "the number prompt"));
 
         number = prompts.AskNumberAsync("t", "l", 1, -999, 49, 1);
         Dispatcher.UIThread.RunJobs();
         nw = (NumberPromptWindow)owner.OwnedWindows.Single();
-        Assert.Equal("F1", nw.Field.FormatString);
-        nw.Field.Value = -12.54m;
+        Assert.Equal("1.0", nw.Field.Text);
+        nw.Field.Text = "-12.54";
         Press(nw.OkButton);
         Assert.Equal(-12.5, await Closed(number, "the number prompt (decimals)"));
         number = prompts.AskNumberAsync("t", "l", 1, 0, 10, 0);

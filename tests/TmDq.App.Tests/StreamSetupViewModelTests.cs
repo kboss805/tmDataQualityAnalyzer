@@ -40,7 +40,7 @@ public sealed class StreamSetupViewModelTests : IDisposable
         StreamSetup s = Row() with { SyncPattern = "A345CA5C", SyncMask = "FFFF0000", BitsInMinorFrame = 1600, DataRateMbps = 2.5,
                                      SamplePeriod = SamplePeriod.TenMilliseconds, Randomized = true, Inverted = true };
         StreamSetupViewModel vm = Dialog(s);
-        Assert.Equal(("A345CA5C", "FFFF0000", 1600m, 2.5m, 2, true, true),
+        Assert.Equal(("A345CA5C", "FFFF0000", 1600, 2.5, 2, true, true),
                      (vm.SyncPattern, vm.SyncMask, vm.BitsInMinorFrame, vm.DataRateMbps, vm.PeriodIndex, vm.Randomized, vm.Inverted));
         Assert.Equal("Configure Frame Sync Lock \u2014 CH-01 PRN 15 5M", vm.Title);
         Assert.Equal("Apply to all Frame Sync Lock streams", vm.ApplyToAllText);
@@ -56,7 +56,8 @@ public sealed class StreamSetupViewModelTests : IDisposable
         Assert.Equal("Copy these settings to every other selected stream currently set to Receiver SNR mode.", snr.ApplyToAllTip);
         Assert.True(snr.IsReceiverSnr);
         Assert.Equal("e.g. FE6B2840", snr.SyncPlaceholder);
-        Assert.Equal((1, 2, 41.5m, 7m, 5m), (snr.PolarityIndex, snr.SlopeIndex, snr.ScaleDdBPerV, snr.NumReceivers, snr.ReceiverChannels));
+        Assert.Equal((1, 2, 41.5, 7, 5), (snr.PolarityIndex, snr.SlopeIndex, snr.ScaleDdBPerV, snr.NumReceivers, snr.ReceiverChannels));
+        Assert.Equal(("41.500", "7", "5"), (snr.ScaleText, snr.NumReceiversText, snr.ReceiverChannelsText));
         Assert.Equal("(default word map)", snr.ReceiverParamsName);
     }
 
@@ -94,11 +95,11 @@ public sealed class StreamSetupViewModelTests : IDisposable
         Assert.True(vm.CanAccept);
         Assert.True(vm.OkCommand.CanExecute(null));
 
-        vm.BitsInMinorFrame = null;
-        vm.DataRateMbps = null;
+        vm.BitsPerFrameText = "";
+        vm.DataRateText = "  ";
         Assert.Equal(new[] { "Bits Per Frame is empty.", "Data Rate is empty." }, vm.Problems);
-        vm.BitsInMinorFrame = 800;
-        vm.DataRateMbps = 0;
+        vm.BitsPerFrameText = "800";
+        vm.DataRateText = "0";
         Assert.Empty(vm.Problems);
     }
 
@@ -106,19 +107,146 @@ public sealed class StreamSetupViewModelTests : IDisposable
     public void TheReceiverFieldsAreCheckedOnlyForReceiverSnr()
     {
         StreamSetupViewModel lockDialog = Dialog(Row());
-        lockDialog.ScaleDdBPerV = null;
-        lockDialog.NumReceivers = 0;
+        lockDialog.ScaleText = "";
+        lockDialog.NumReceiversText = "0";
         Assert.Empty(lockDialog.Problems);
 
         StreamSetupViewModel snr = Dialog(Row(StreamMode.ReceiverChannelInfo));
-        snr.ScaleDdBPerV = null;
-        snr.NumReceivers = null;
-        snr.ReceiverChannels = null;
+        snr.ScaleText = "";
+        snr.NumReceiversText = "";
+        snr.ReceiverChannelsText = "";
         Assert.Equal(new[] { "Scale (dB/V) is empty.", "Num Rcvrs is empty.", "Num Channels is empty." }, snr.Problems);
-        snr.ScaleDdBPerV = 20;
-        snr.NumReceivers = 101;
-        snr.ReceiverChannels = 3;
+        snr.ScaleText = "20";
+        snr.NumReceiversText = "101";
+        snr.ReceiverChannelsText = "3";
         Assert.Equal(new[] { "Num Rcvrs must be from 1 to 100." }, snr.Problems);
+    }
+
+    [Theory]
+    [InlineData("800", true)]
+    [InlineData(" 800 ", true)]
+    [InlineData("+800", true)]
+    [InlineData("1e3", false)]
+    [InlineData("800.5", false)]
+    [InlineData("800.0", false)]
+    [InlineData("8 00", false)]
+    [InlineData("8,000", false)]
+    [InlineData("abc", false)]
+    [InlineData("0x40", false)]
+    [InlineData("99999999999999999999999", false)]
+    public void BitsPerFrameMustBeAnInteger(string text, bool whole)
+    {
+        StreamSetupViewModel vm = Dialog(Row());
+        vm.BitsPerFrameText = text;
+        if (whole)
+            Assert.DoesNotContain("Bits Per Frame must be a whole number.", vm.Problems);
+        else
+        {
+            Assert.Equal(new[] { "Bits Per Frame must be a whole number." }, vm.Problems);
+            Assert.Null(vm.BitsInMinorFrame);
+            Assert.False(vm.CanAccept);
+            Assert.False(vm.OkCommand.CanExecute(null));
+            Assert.Equal(Row().BitsInMinorFrame, vm.ToSetup().BitsInMinorFrame);   // the row keeps what it opened with
+        }
+    }
+
+    [Theory]
+    [InlineData("0", true)]
+    [InlineData("5", true)]
+    [InlineData("5.", true)]
+    [InlineData(".5", true)]
+    [InlineData("2.500", true)]
+    [InlineData("1e1", true)]
+    [InlineData("-0", true)]
+    [InlineData("5,0", false)]
+    [InlineData("5 Mbps", false)]
+    [InlineData("NaN", false)]
+    [InlineData("Infinity", false)]
+    [InlineData("-", false)]
+    [InlineData("1.2.3", false)]
+    public void DataRateMustBeANumber(string text, bool number)
+    {
+        StreamSetupViewModel vm = Dialog(Row());
+        vm.DataRateText = text;
+        if (number)
+        {
+            Assert.DoesNotContain("Data Rate must be a number.", vm.Problems);
+            Assert.NotNull(vm.DataRateMbps);
+        }
+        else
+        {
+            Assert.Equal(new[] { "Data Rate must be a number." }, vm.Problems);
+            Assert.Null(vm.DataRateMbps);
+            Assert.False(vm.CanAccept);
+        }
+    }
+
+    [Fact]
+    public void ADataRateOfZeroStillMeansTmatsAndALimitIsStillALimit()
+    {
+        StreamSetupViewModel vm = Dialog(Row());
+        vm.DataRateText = "0";
+        Assert.True(vm.CanAccept);
+        Assert.Equal(0.0, vm.ToSetup().DataRateMbps);
+        vm.DataRateText = "1000.5";
+        Assert.Equal(new[] { "Data Rate must be from 0 (the TMATS rate) to 1000 Mbps." }, vm.Problems);
+        vm.DataRateText = "-1";
+        Assert.Equal(new[] { "Data Rate must be from 0 (the TMATS rate) to 1000 Mbps." }, vm.Problems);
+        vm.BitsPerFrameText = "63";
+        Assert.Contains("Bits Per Frame must be from 64 to 65536.", vm.Problems);
+        vm.BitsPerFrameText = "99999999999";   // past an int: the nearest one, which is out of range
+        Assert.Contains("Bits Per Frame must be from 64 to 65536.", vm.Problems);
+        vm.DataRateText = "0";
+        vm.BitsPerFrameText = "4294968096";   // 2^32 + 800: an int that wrapped would be a valid 800
+        Assert.Equal(new[] { "Bits Per Frame must be from 64 to 65536." }, vm.Problems);
+        vm.BitsPerFrameText = null!;   // a box that reports no text is an empty one
+        Assert.Equal(new[] { "Bits Per Frame is empty." }, vm.Problems);
+    }
+
+    [Fact]
+    public void TheReceiverFieldsAreRefusedAsTheyAreTyped()
+    {
+        StreamSetupViewModel snr = Dialog(Row(StreamMode.ReceiverChannelInfo));
+        snr.ScaleText = "twenty";
+        snr.NumReceiversText = "2.5";
+        snr.ReceiverChannelsText = "3x";
+        Assert.Equal(new[] { "Scale (dB/V) must be a number.", "Num Rcvrs must be a whole number.", "Num Channels must be a whole number." }, snr.Problems);
+        Assert.False(snr.CanAccept);
+        snr.ScaleText = "12.5";
+        snr.NumReceiversText = "4";
+        snr.ReceiverChannelsText = "3";
+        Assert.Empty(snr.Problems);
+        snr.ScaleText = "0";
+        Assert.Equal(new[] { "Scale (dB/V) must be from 0.001 to 999.999." }, snr.Problems);
+
+        // The lock dialog does not check what it does not show.
+        StreamSetupViewModel lockDialog = Dialog(Row());
+        lockDialog.ScaleText = "twenty";
+        lockDialog.NumReceiversText = "2.5";
+        Assert.Empty(lockDialog.Problems);
+    }
+
+    [Fact]
+    public void ANumberIsShownWithoutLosingAnyOfIt()
+    {
+        // Three decimals as the spin boxes showed them, unless that would change the value now that the text is what is held.
+        StreamSetupViewModel vm = Dialog(Row() with { DataRateMbps = 0.0005 });
+        Assert.Equal("0.0005", vm.DataRateText);
+        Assert.Equal(0.0005, vm.ToSetup().DataRateMbps);
+        Assert.Equal("5.000", Dialog(Row() with { DataRateMbps = 5 }).DataRateText);
+        Assert.Equal("32767", Dialog(Row() with { BitsInMinorFrame = 32767 }).BitsPerFrameText);
+    }
+
+    [Fact]
+    public void TypingANumberTellsEveryoneWhoReadsTheProblems()
+    {
+        StreamSetupViewModel vm = Dialog(Row());
+        var said = new System.Collections.Generic.List<string?>();
+        vm.PropertyChanged += (_, e) => said.Add(e.PropertyName);
+        vm.BitsPerFrameText = "x";
+        Assert.Contains(nameof(StreamSetupViewModel.BitsPerFrameText), said);
+        Assert.Contains(nameof(StreamSetupViewModel.ProblemText), said);
+        Assert.Contains(nameof(StreamSetupViewModel.CanAccept), said);
     }
 
     [Fact]
@@ -145,16 +273,16 @@ public sealed class StreamSetupViewModelTests : IDisposable
         StreamSetupViewModel vm = Dialog(Row(StreamMode.ReceiverChannelInfo));
         vm.SyncPattern = "FE6B2840";
         vm.SyncMask = "FFFF0000";
-        vm.BitsInMinorFrame = 800;
-        vm.DataRateMbps = 0.8m;
+        vm.BitsPerFrameText = "800";
+        vm.DataRateText = "0.8";
         vm.PeriodIndex = 1;
         vm.Randomized = true;
         vm.Inverted = true;
         vm.PolarityIndex = 1;
         vm.SlopeIndex = 0;
-        vm.ScaleDdBPerV = 12.5m;
-        vm.NumReceivers = 12;
-        vm.ReceiverChannels = 4;
+        vm.ScaleText = "12.5";
+        vm.NumReceiversText = "12";
+        vm.ReceiverChannelsText = "4";
         Assert.Equal(Row(StreamMode.ReceiverChannelInfo) with
         {
             SyncPattern = "FE6B2840", SyncMask = "FFFF0000", BitsInMinorFrame = 800, DataRateMbps = 0.8,
@@ -210,8 +338,9 @@ public sealed class StreamSetupViewModelTests : IDisposable
         FrameSyncFileData file = FrameSyncFile.Read(prn11);
         StreamSetupViewModel vm = Dialog(Row() with { DataRateMbps = 3 }, new FakeFilePicker(prn11));
         await vm.LoadFrameSyncCommand.ExecuteAsync(null);
-        Assert.Equal((file.Pattern.ToUpperInvariant(), (decimal?)file.BitsPerFrame), (vm.SyncPattern, vm.BitsInMinorFrame));
-        Assert.Equal(3m, vm.DataRateMbps);   // a per-session field: not in the file, left alone
+        Assert.Equal((file.Pattern.ToUpperInvariant(), (int?)file.BitsPerFrame), (vm.SyncPattern, vm.BitsInMinorFrame));
+        Assert.Equal(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{file.BitsPerFrame}"), vm.BitsPerFrameText);
+        Assert.Equal(3.0, vm.DataRateMbps);   // a per-session field: not in the file, left alone
         Assert.Equal("Loaded framesync_PRN11.toml.", vm.FileMessage);
         Assert.Equal(Path.GetDirectoryName(prn11), vm.LastFolder);
         Assert.True(vm.CanAccept);
@@ -223,7 +352,7 @@ public sealed class StreamSetupViewModelTests : IDisposable
         string target = Path.Combine(_dir, "mine");
         StreamSetupViewModel vm = Dialog(Row(), new FakeFilePicker(target));
         vm.SyncPattern = "fe6b2840";
-        vm.BitsInMinorFrame = 800;
+        vm.BitsPerFrameText = "800";
         vm.Inverted = true;
         await vm.SaveFrameSyncCommand.ExecuteAsync(null);
         FrameSyncFileData written = FrameSyncFile.Read(target + ".toml");
@@ -256,9 +385,10 @@ public sealed class StreamSetupViewModelTests : IDisposable
         await vm.LoadReceiverParamsCommand.ExecuteAsync(null);
         ReceiverParams expected = ReceiverParamsFile.Read(rasa, StreamFiles.ReceiverParamsOf(shown));
         Assert.NotEqual(StreamFiles.ReceiverParamsOf(shown), expected);
-        Assert.Equal((expected.PolarityIndex, expected.SlopeIndex, (decimal)expected.ScaleDdBPerV, (decimal)expected.NumReceivers, (decimal)expected.ReceiverChannels),
+        Assert.Equal((expected.PolarityIndex, expected.SlopeIndex, expected.ScaleDdBPerV, expected.NumReceivers, expected.ReceiverChannels),
                      (vm.PolarityIndex, vm.SlopeIndex, vm.ScaleDdBPerV, vm.NumReceivers, vm.ReceiverChannels));
-        Assert.Equal(3m, vm.ReceiverChannels);
+        Assert.Equal(3, vm.ReceiverChannels);
+        Assert.Equal("3", vm.ReceiverChannelsText);
         Assert.Equal("RASA.toml", vm.ReceiverParamsName);
         Assert.Equal(rasa, vm.ToSetup().ReceiverParamsToml);
         Assert.Equal("Loaded RASA.toml.", vm.FileMessage);
@@ -269,8 +399,8 @@ public sealed class StreamSetupViewModelTests : IDisposable
     {
         string target = Path.Combine(_dir, "rx.toml");
         StreamSetupViewModel vm = Dialog(Row(StreamMode.ReceiverChannelInfo) with { BitsInMinorFrame = 800 }, new FakeFilePicker(target));
-        vm.ScaleDdBPerV = 12.5m;
-        vm.NumReceivers = 4;
+        vm.ScaleText = "12.5";
+        vm.NumReceiversText = "4";
         await vm.SaveReceiverParamsCommand.ExecuteAsync(null);
         Assert.Equal(new ReceiverParams(0, 3, 12.5, 4, 3), ReceiverParamsFile.Read(target));
         Assert.Equal("Saved rx.toml.", vm.FileMessage);

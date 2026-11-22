@@ -35,6 +35,51 @@ recording or a finer period freezes it for longer. The write now runs on a pool 
 How it was checked: two new tests in `ExportImportTests` (the task is not complete when the call returns and the file holds what the
 plot held when asked; the window is busy during the write and takes no second export) and the mutation list
 `eng/mutants/csv-export-async.json` (7 mutants, all caught: the write on the calling thread, the columns taken late, the window not busy, a second export taken, busy left on, no status line, a batch not waiting for the CSV). App baseline 692 -> 694 passed (726 -> 728 total, 34 not run).
+#### No incrementers anywhere: every number is a text box that refuses what is not a number
+
+The user's decision of 2026-11-21, looking at Configure Frame Sync Lock: the up/down arrows on Bits Per Frame and Data
+Rate add nothing for a value typed or loaded from a TOML, and the real requirement is that the text is valid. Widened the
+same day to every dialog. The application now has no `NumericUpDown`, and none can come back.
+
+- **Configure Frame Sync Lock and the Receiver SNR dialog.** Bits Per Frame, Data Rate (Mbps), and in Receiver SNR Scale,
+  Num Rcvrs and Num Channels are plain text boxes, as wide as the other fields (150 px), bound to `StreamSetupViewModel`'s
+  `BitsPerFrameText`, `DataRateText`, `ScaleText`, `NumReceiversText` and `ReceiverChannelsText`: what is typed is what the
+  dialog holds (`BitsInMinorFrame`, `DataRateMbps`, ... are now read-only parses of it, null until the text is a number).
+  Text that is not an integer (Bits Per Frame, Num Rcvrs, Num Channels) or not a number (Data Rate, Scale) is a problem as
+  it is typed, in the list under the fields, and holds OK, as an out-of-range value does: `... must be a whole number.`,
+  `... must be a number.`, and the existing `... is empty.` and range messages unchanged (the limits are still `StreamRules`'
+  alone, so the view model's `Min*`/`Max*` decimals the spin boxes bound to are gone). A row keeps the value the dialog
+  opened with until its text is valid; 0 for Data Rate still means "= TMATS". Apply to all, the templates, the Load and Save
+  TOML round trip and the job builder are untouched: `ToSetup()` gives the same `StreamSetup` it did.
+- **Extract Calibration's two clips** are text boxes (`ClipStartText`, `ClipEndText`). Text that is a number from 0 to
+  100,000 becomes the clip (`ClipStart`/`ClipEnd`, now `decimal`; set in code they type themselves) and extracts again as
+  before; anything else shows `Clip Start must be a number.`, `... is empty.` or `... must be from 0 to 100000 s.` under the
+  fields, holds OK, and leaves the clip and the calibration as they were (no extraction on a half-typed value).
+- **The plot's number prompt** (Set Left/Right Y-Axis Minimum and Maximum, `NumberPromptWindow`) is a text box. Text that is
+  not a number (a whole one when the prompt has no decimals) is said so (`Not a number.`, `Not a whole number.`, `Enter a
+  number.`) and holds OK; a number outside the range is kept inside it and rounded to the prompt's decimals by
+  `PlotCommands.SpinValue`, as the spin box kept it.
+- **One reader for all of it:** `ViewModels/NumberText.cs` (`ParseInteger`, `ParseNumber`, `ParseDecimal` and the `Format*`
+  that give a number back without losing a digit: three decimals, or every digit when three would change it, so a Data Rate
+  of 0.0005 is not shown as 0.001 and then held as that). Always the invariant culture, a point for the decimal separator, as
+  the settings files, the readouts and the CSV have it: the spin boxes read the current culture, so a locale that writes a
+  comma is now refused with a message where it used to be accepted.
+- **The guard:** `NoSpinnersTests` fails when any `.axaml` or `.cs` file of the application names `NumericUpDown`,
+  `ButtonSpinner` or a "Spinner", and when any window of any kind holds one, in either theme; `NumberText`'s parsing is held
+  there too.
+
+How it was checked. The app suite is 777 passed / 0 failed (34 not run), up from 694 (#345's two tests are in it) (the CLAUDE.md baseline moves with
+it): the spin-box tests became text tests, with tables of what each field accepts and refuses. Rendered and measured both
+setup dialogs, Extract Calibration and the number prompt in both themes, valid and with an invalid entry (every box 150x32
+beside the others, the problem text in the critical colour under them, OK disabled). The mutation check
+(`eng\mutate.ps1 -List eng\mutants\stream-setup-text-entry.json`, kept): 25 mutants (Bits Per Frame taking `800.0`, a
+thousands separator, NaN and Infinity as numbers, an integer past `int` wrapping into range, a missing check or one run in
+the wrong dialog, a lossy display, a Load that leaves the box alone, a clip over the maximum or a problem clip taken, OK not
+held, no extraction on a clip change, a prompt's OK not held or its answer not clamped, boxes bound to the wrong property, a
+spinner put back) all CAUGHT, none survived. Three mutants first had no verdict (a stale `obj` file lock twice, and an
+unused `using` the mutant left behind) and were re-run or rewritten until each had one. The manual's figures were
+re-rendered (`eng\build_manual.ps1`): the two setup dialogs and the two Extract Calibration figures changed; the four
+run-log and plot figures the capture does not reproduce byte for byte were left as committed.
 
 #### The scan skips through a frame it is locked on, 4.1x faster again, with the same answers
 

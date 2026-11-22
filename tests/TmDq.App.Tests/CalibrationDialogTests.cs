@@ -320,6 +320,71 @@ public sealed class CalibrationDialogTests : IDisposable
         Assert.Equal(CalibrationStatusKind.Warn, vm.CalKind);
     }
 
+    [Theory]
+    [InlineData("5", true)]
+    [InlineData(" 5.25 ", true)]
+    [InlineData(".5", true)]
+    [InlineData("1e2", true)]
+    [InlineData("0", true)]
+    [InlineData("100000", true)]
+    [InlineData("-0.1", false)]
+    [InlineData("100000.1", false)]
+    [InlineData("5,5", false)]
+    [InlineData("five", false)]
+    [InlineData("1e99", false)]
+    [InlineData("", false)]
+    public void AClipIsTakenOnlyWhenItsTextIsANumberFromZeroToTheMaximum(string text, bool valid)
+    {
+        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null);
+        vm.ClipStartText = text;
+        Assert.Equal(valid, !vm.HasClipProblem);
+        if (valid)
+        {
+            Assert.Equal(decimal.Parse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture), vm.ClipStart);
+            Assert.Equal("", vm.ClipProblemText);
+        }
+        else
+        {
+            Assert.Equal(0m, vm.ClipStart);   // the clip it had
+            Assert.StartsWith("Clip Start ", vm.ClipProblemText);
+        }
+    }
+
+    [Fact]
+    public async Task ATextThatIsNoClipLeavesTheCalibrationAloneAndHoldsOkUntilItIsOne()
+    {
+        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = new FakeProgress() };
+        await vm.LoadCalibrationAsync(StepCal);
+        Assert.True(vm.CanAccept);
+        Task first = vm.Extraction!;
+        vm.ClipEndText = "ten";
+        Assert.Equal(("Clip End must be a number.", 0m), (vm.ClipProblemText, vm.ClipEnd));
+        Assert.Same(first, vm.Extraction);   // nothing was extracted again
+        Assert.Equal(CalibrationStatusKind.Ok, vm.CalKind);   // and the calibration is as it was
+        Assert.False(vm.CanAccept);
+        Assert.False(vm.OkCommand.CanExecute(null));
+        vm.ClipEndText = "10";
+        await vm.Extraction!;
+        Assert.NotSame(first, vm.Extraction);
+        Assert.True(vm.CanAccept);
+        Assert.True(vm.OkCommand.CanExecute(null));
+        Assert.Equal(10.0, vm.ToRequest().ClipEndSec);
+    }
+
+    [Fact]
+    public void TheClipsAreShownToOneDecimalAndTypingThemDoesNotReformatThem()
+    {
+        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null);
+        Assert.Equal(("0.0", "0.0"), (vm.ClipStartText, vm.ClipEndText));
+        vm.ClipStart = 5m;
+        vm.ClipEnd = 0.25m;
+        Assert.Equal(("5.0", "0.25"), (vm.ClipStartText, vm.ClipEndText));   // a clip is not rounded to its display
+        vm.ClipStartText = "7.";
+        Assert.Equal((7m, "7."), (vm.ClipStart, vm.ClipStartText));
+        vm.ClipStart = 7m;   // the same value again: neither moves
+        Assert.Equal("7.0", vm.ClipStartText);
+    }
+
     [Fact]
     public async Task TheExtractionIsAskedForWithTheBaseGivenAndTheTimeChannelIsUsed()
     {
@@ -442,7 +507,7 @@ public sealed class CalibrationDialogTests : IDisposable
         StreamSetup row = StepCalRow() with { StepTomlPath = Shipped("RASA.toml") };
         var vm = new StreamSetupViewModel(row, null, Repo.Root, null, 1, true, dialogs);
         vm.SyncPattern = " fe6b2840 ";
-        vm.NumReceivers = 16;
+        vm.NumReceiversText = "16";
         var said = new List<string?>();
         vm.PropertyChanged += (_, args) => said.Add(args.PropertyName);
         await vm.ApplyCalCommand.ExecuteAsync(null);
@@ -671,19 +736,44 @@ public sealed class CalibrationDialogTests : IDisposable
         TextBlock step = window.FindControl<TextBlock>("StepStatus")!, cal = window.FindControl<TextBlock>("CalStatus")!;
         Assert.Equal(("✓ 11 steps parsed (loaded automatically).", Color.Parse("#0F7B0F")), (step.Text, ((ISolidColorBrush)step.Foreground!).Color));
         Assert.Equal(("No file selected.", Color.Parse("#72000000")), (cal.Text, ((ISolidColorBrush)cal.Foreground!).Color));
-        NumericUpDown start = window.FindControl<NumericUpDown>("ClipStart")!, end = window.FindControl<NumericUpDown>("ClipEnd")!;
-        Assert.Equal((0m, 0m, 100000m, "0.0"), (start.Value, start.Minimum, start.Maximum, start.FormatString));
-        Assert.Equal((0m, 100000m), (end.Value, end.Maximum));
-        Assert.Equal(ExtractCalibrationViewModel.ClipMaximum, start.Maximum);   // the window states no limit of its own
-        Assert.Equal(ExtractCalibrationViewModel.ClipMaximum, end.Maximum);
+        TextBox start = window.FindControl<TextBox>("ClipStart")!, end = window.FindControl<TextBox>("ClipEnd")!;
+        Assert.Equal(("0.0", "0.0"), (start.Text, end.Text));
+        Assert.False(window.FindControl<TextBlock>("ClipProblems")!.IsVisible);
         Assert.Same(vm.BrowseStepCommand, window.FindControl<Button>("BrowseStep")!.Command);
         Assert.Same(vm.BrowseCalCommand, window.FindControl<Button>("BrowseCal")!.Command);
         Button ok = window.FindControl<Button>("OkButton")!;
         Assert.True(ok.IsDefault);
         Assert.True(window.FindControl<Button>("CancelButton")!.IsCancel);
         Assert.False(ok.IsEffectivelyEnabled);
-        end.Value = 12m;
+        end.Text = "12";
+        Dispatcher.UIThread.RunJobs();
         Assert.Equal(12m, vm.ClipEnd);
+        Assert.Equal("12", vm.ClipEndText);   // what is typed is not reformatted under the cursor
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void ATextThatIsNotAClipIsSaidSoAndHoldsOk()
+    {
+        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null, new FakeCalFiles());
+        var window = new ExtractCalibrationWindow { DataContext = vm };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        TextBlock problems = window.FindControl<TextBlock>("ClipProblems")!;
+        window.FindControl<TextBox>("ClipStart")!.Text = "soon";
+        window.FindControl<TextBox>("ClipEnd")!.Text = "100001";
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(problems.IsVisible);
+        Assert.Equal("Clip Start must be a number." + Environment.NewLine + "Clip End must be from 0 to 100000 s.", problems.Text);
+        Assert.Equal((Color.Parse("#C42B1C")), ((ISolidColorBrush)problems.Foreground!).Color);   // Fluent's critical, light
+        window.FindControl<TextBox>("ClipStart")!.Text = "1.5";
+        window.FindControl<TextBox>("ClipEnd")!.Text = "";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Clip End is empty.", problems.Text);
+        window.FindControl<TextBox>("ClipEnd")!.Text = "2";
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(problems.IsVisible);
+        Assert.Equal((1.5m, 2m), (vm.ClipStart, vm.ClipEnd));
         window.Close();
     }
 
