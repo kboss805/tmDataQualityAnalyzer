@@ -316,6 +316,11 @@ TEST_CASE("Ch10PacketReader: a data source TMATS does not fully describe is not 
         // Without its data type the PCM source cannot be taken for PCM, so the stream cannot be set up: said, not crashed.
         {"the PCM source has no CDT-n", {R"(R-1\CDT-27:PCMIN;)", R"(R-1\CDX-27:PCMIN;)"}, false,
          "Unable to load PCM attributes for channel 26."},
+        // Two sources that name one track number: the first in the tree is the channel, and a later one is ignored. The
+        // earlier source here (data source 11) is an analog input, so the channel has no PCM attributes: said, not
+        // quietly given to the later PCM source.
+        {"an earlier source claims the PCM source's track number", {R"(R-1\TK1-11:10;)", R"(R-1\TK1-11:26;)"}, false,
+         "Unable to load PCM attributes for channel 26."},
     };
     for (const Row& row : rows)
     {

@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
     Runs the side-by-side soak (plan step 5.2): every run in tests\TmDq.App.Tests\Soak\soak.json through the Avalonia
-    application, each CSV export compared byte for byte with the Qt application's.
+    application, each CSV export compared byte for byte with v2.14.2's.
 .DESCRIPTION
     The soak's runs read the full recordings and the local ones under tests\data, which are not committed, so its tests
     (SoakTests) are explicit: the app suite lists them and does not run them. This script runs them, one process a run
-    so that each run's peak working set is its own, and prints a line a run: whether its CSV export matched the Qt
-    application's (the manifest's "qt" block), how long it took and the process's peak working set.
+    so that each run's peak working set is its own, and prints a line a run: whether its CSV export matched
+    v2.14.2's (the manifest's "qt" block), how long it took and the process's peak working set.
 
     Each run writes its CSV, a 1600 x 900 image of its plot (light theme) and result.json to <Out>\<run>\, for
     comparing the plots by eye. A run whose recording is missing fails; it does not skip.
@@ -71,5 +71,5 @@ foreach ($name in $names) {
 Remove-Item Env:TMDQ_SOAK_ONLY, Env:TMDQ_SOAK_OUT -ErrorAction SilentlyContinue
 
 Write-Host "Output: $Out"
-if ($failed.Count -gt 0) { throw "$($failed.Count) of $($names.Count) run(s) did not export what the Qt application exported: $($failed -join ', ')" }
-Write-Host "All $($names.Count) run(s) exported what the Qt application exported."
+if ($failed.Count -gt 0) { throw "$($failed.Count) of $($names.Count) run(s) did not export what v2.14.2 exported: $($failed -join ', ')" }
+Write-Host "All $($names.Count) run(s) exported what v2.14.2 exported."

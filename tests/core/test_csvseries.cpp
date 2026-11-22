@@ -2,7 +2,7 @@
 // time column (clocktime::format), called directly. What a host does around them (the series a stream becomes, the
 // source filter, the load warning) is the host's to test.
 //
-// The oracle is v2.14.2 (its Qt implementation): its CSV reader and writer, over generated files and series, and its
+// The oracle is v2.14.2: its CSV reader and writer, over generated files and series, and its
 // number reader over awkward texts. What they answered was recorded once with a throwaway diagnostic (removed again):
 // one FNV-1a digest per comparison, and the counters the reach checks read. Each generator is the one that recording
 // used, token for token, on the same seeds.

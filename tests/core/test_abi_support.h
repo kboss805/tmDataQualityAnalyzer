@@ -30,6 +30,7 @@
 #include "abi_events.h"
 #include "abi_internal.h"
 #include "calibrationextractor.h"
+#include "calibrationreport.h"
 #include "calibrationrequest.h"
 #include "chapter10reader.h"
 #include "chartgeometry.h"
@@ -886,7 +887,7 @@ inline DirectCalibration runDirectCalibration(const CalCase& c)
     out.error       = extractor.error();
     out.seconds     = extractor.recordingSeconds();
     out.clipIgnored = extractor.clipIgnored();
-    out.report      = CalibrationExtractor::summarize(out.results, int(c.in.steps.size()));
+    out.report      = calibrationReport(out.results, int(c.in.steps.size()));
     return out;
 }
 

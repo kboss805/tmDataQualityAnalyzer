@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <format>
 #include <memory>
+#include <new>
 #include <optional>
 #include <system_error>
 #include <vector>
@@ -45,14 +46,13 @@ Ch10PacketReader::Ch10PacketReader()
       m_irig_time(),
       m_abort_requested(false)
 {
-    m_channel_info.resize(PCMConstants::kMaxChannelCount, nullptr);
     m_buffer.resize(PCMConstants::kDefaultBufferSize);
 }
 
 Ch10PacketReader::~Ch10PacketReader()   // NOLINT(bugprone-exception-escape): only a mutex that cannot be locked throws
 {
     closeFile();
-    freeChanInfoTable(m_channel_info);
+    m_channel_info.clear();
     // After the table, whose entries point into the tree. irig106 allocates the tree and only gives it back when
     // asked; it touches only this reader's tree, so it needs no lock.
     enI106_Free_TmatsInfo(&m_tmats_info);
@@ -85,40 +85,19 @@ void Ch10PacketReader::setEvents(std::shared_ptr<ProcessingEvents> events)
 //                          IRIG106 HELPERS                                   //
 ////////////////////////////////////////////////////////////////////////////////
 
-void Ch10PacketReader::freeChanInfoTable(std::vector<SuChanInfo*>& channel_info)
+void ChannelInfo::PcmAttributesDeleter::operator()(SuPcmF1_Attributes* attributes) const
 {
-    for (auto* info : channel_info)
-    {
-        if (info != nullptr)
-        {
-            if (info->psuAttributes != nullptr)
-            {
-                if (strcasecmp(info->psuRDataSrc->szChannelDataType, PCMConstants::kChannelTypePcm) == 0)
-                {
-                    FreeOutputBuffers_PcmF1(static_cast<SuPcmF1_Attributes*>(info->psuAttributes));
-                }
-                free(info->psuAttributes); // NOLINT(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
-                info->psuAttributes = nullptr;
-            }
-            delete info;
-        }
-    }
-    channel_info.clear();
-    channel_info.resize(PCMConstants::kMaxChannelCount, nullptr);
+    FreeOutputBuffers_PcmF1(attributes);
+    delete attributes; // NOLINT(cppcoreguidelines-owning-memory): the one place these are given back
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 EnI106Status Ch10PacketReader::assembleAttributesFromTMATS(SuTmatsInfo* tmats_info,
-                                                           std::vector<SuChanInfo*>& channel_info)
+                                                           std::map<int, ChannelInfo>& channel_info)
 {
     if ((tmats_info->psuFirstGRecord == nullptr) || (tmats_info->psuFirstRRecord == nullptr))
     {
         return I106_INVALID_DATA;
-    }
-
-    if (channel_info.size() < PCMConstants::kMaxChannelCount)
-    {
-        channel_info.resize(PCMConstants::kMaxChannelCount, nullptr);
     }
 
     EnI106Status status = I106_OK;
@@ -137,28 +116,24 @@ EnI106Status Ch10PacketReader::assembleAttributesFromTMATS(SuTmatsInfo* tmats_in
             return tmatswalk::Walk::Stop;
         }
 
-        if (channel_info[iTrackNumber] == nullptr)
+        if (!channel_info.contains(iTrackNumber))
         {
-            channel_info[iTrackNumber] = new SuChanInfo();
-            memset(channel_info[iTrackNumber], 0, sizeof(SuChanInfo));
-
-            channel_info[iTrackNumber]->psuRDataSrc = &data_source;
+            ChannelInfo& info = channel_info[iTrackNumber];
 
             // The decoder leaves a field the TMATS does not carry NULL, and Chapter10Reader lists such a channel
             // (a missing CHE-n counts as enabled), so the data type is checked before it is compared. A source with
             // none is not taken for PCM: it gets no attributes, and a stream asked of it is refused in prepare().
             if (data_source.szChannelDataType != nullptr && strcasecmp(data_source.szChannelDataType, PCMConstants::kChannelTypePcm) == 0)
             {
-                // NOLINTNEXTLINE(cppcoreguidelines-owning-memory, cppcoreguidelines-no-malloc)
-                channel_info[iTrackNumber]->psuAttributes = calloc(1, sizeof(SuPcmF1_Attributes));
-                if (channel_info[iTrackNumber]->psuAttributes == nullptr)
+                // Zeroed, as the decoder expects; a refusal to allocate is a status, not an exception.
+                info.pcm.reset(new (std::nothrow) SuPcmF1_Attributes());
+                if (info.pcm == nullptr)
                 {
-                    freeChanInfoTable(channel_info);
+                    channel_info.clear();
                     status = I106_BUFFER_TOO_SMALL;
                     return tmatswalk::Walk::Stop;
                 }
-                (void)Set_Attributes_PcmF1(&data_source,
-                    static_cast<SuPcmF1_Attributes*>(channel_info[iTrackNumber]->psuAttributes));
+                (void)Set_Attributes_PcmF1(&data_source, info.pcm.get());
             }
         }
         return tmatswalk::Walk::Continue;
@@ -197,7 +172,7 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
     closeFile();   // a reader prepared again gives its earlier handle back first (before the lock: the close takes it)
     // The decoder frees whatever tree an earlier prepare() left (the member starts zeroed; zeroing it would orphan that
     // tree), so the table that points into that tree goes first.
-    freeChanInfoTable(m_channel_info);
+    m_channel_info.clear();
     m_time_channel_id = time_channel_id;
     // 64-bit, so a recording over 2 GB is sized correctly; 0 (no progress) if it cannot be sized.
     std::error_code size_error;
@@ -232,12 +207,13 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
     for (ProcessingParams* p : params_list)
     {
         const int ch = p->pcmChannelId;
-        if (ch < 0 || ch >= PCMConstants::kMaxChannelCount || m_channel_info[ch] == nullptr)
+        const auto channel = m_channel_info.find(ch);
+        if (ch < 0 || ch >= PCMConstants::kMaxChannelCount || channel == m_channel_info.end())
         {
             error = "Channel info not set up for PCM channel " + std::to_string(ch) + ".";
             return false;
         }
-        auto* pcm_attrs = static_cast<SuPcmF1_Attributes*>(m_channel_info[ch]->psuAttributes);
+        SuPcmF1_Attributes* pcm_attrs = channel->second.pcm.get();
         if (pcm_attrs == nullptr)
         {
             error = "Unable to load PCM attributes for channel " + std::to_string(ch) + ".";

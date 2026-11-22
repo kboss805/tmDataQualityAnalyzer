@@ -17,6 +17,6 @@ data/test files/*
 # pins the calibration-import resilience fixes against the file that exposed them.
 !data/test files/step_cal, example.ch10
 
-# Output of the Qt-era test runner (QtTest's results*.txt): nothing writes here any more, so a leftover folder is
+# Output of the test runner v2.x used (results*.txt): nothing writes here any more, so a leftover folder is
 # not a change to commit.
 output/

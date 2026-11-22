@@ -13,7 +13,7 @@ insert_final_newline = true
 trim_trailing_whitespace = true
 max_line_length = 120
 
-# The formats that were written with two spaces. The Qt-written templates under tests/ are compared byte for byte
+# The formats that were written with two spaces. The templates v2.x wrote, under tests/, are compared byte for byte
 # (.gitattributes marks them -text), so nothing here may rewrite them.
 [*.{json,axaml,xaml,props,targets,csproj,vcxproj,yml,yaml,md,xml}]
 indent_size = 2

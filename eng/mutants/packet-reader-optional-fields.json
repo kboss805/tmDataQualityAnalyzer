@@ -1,6 +1,8 @@
 {
   "suite": "native",
-  "args": ["-tc=Ch10PacketReader*"],
+  "args": [
+    "-tc=Ch10PacketReader*"
+  ],
   "mutants": [
     {
       "id": "R1",
@@ -25,14 +27,6 @@
       "new": "error = \"Unable to load PCM attributes.\";",
       "expect": "caught",
       "note": "the refusal of a PCM source with no attributes loses the channel it names"
-    },
-    {
-      "id": "R4",
-      "file": "src/core/src/ch10packetreader.cpp",
-      "old": "channel_info[iTrackNumber]->psuRDataSrc = &data_source;\n",
-      "new": "",
-      "expect": "caught",
-      "note": "the data source not kept: freeing and setting up read it back"
     }
   ]
 }

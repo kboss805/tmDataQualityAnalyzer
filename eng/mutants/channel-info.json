@@ -1,0 +1,50 @@
+{
+  "suite": "native",
+  "args": [],
+  "mutants": [
+    {
+      "id": "C1",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "info.pcm.reset(new (std::nothrow) SuPcmF1_Attributes());",
+      "new": "info.pcm.reset();",
+      "args": [
+        "-tc=Ch10PacketReader*"
+      ],
+      "expect": "caught",
+      "note": "a PCM source gets no attributes, so no stream can be prepared"
+    },
+    {
+      "id": "C2",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "if (!channel_info.contains(iTrackNumber))",
+      "new": "if (true)",
+      "args": [
+        "-tc=Ch10PacketReader*"
+      ],
+      "expect": "caught",
+      "note": "a second data source with a track number already seen replaces the first"
+    },
+    {
+      "id": "C3",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "FreeOutputBuffers_PcmF1(attributes);",
+      "new": "(void)attributes;",
+      "args": [
+        "-tc=Ch10PacketReader*"
+      ],
+      "expect": "survived",
+      "note": "the decoder's output buffers are not given back; prepare() allocates none, so only a run leaks them and no test measures that"
+    },
+    {
+      "id": "C4",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "delete attributes; // NOLINT(cppcoreguidelines-owning-memory): the one place these are given back",
+      "new": "(void)attributes;",
+      "args": [
+        "-tc=Ch10PacketReader*"
+      ],
+      "expect": "survived",
+      "note": "the attributes struct is leaked, a few hundred bytes a reader; the memory guard's 8 MiB limit cannot see it"
+    }
+  ]
+}

@@ -15,10 +15,25 @@
 #ifndef TEXTFILE_H
 #define TEXTFILE_H
 
+#include <cstddef>
 #include <filesystem>
 #include <string>
 
 namespace textfile {
+
+/// What a file starts with that says how its text is encoded.
+enum class ByteOrderMark
+{
+    None,              ///< No mark: the text is taken to be UTF-8.
+    Utf8,              ///< EF BB BF, three bytes to skip.
+    Utf16LittleEndian, ///< FF FE, two bytes to skip.
+    Utf16BigEndian,    ///< FE FF, two bytes to skip.
+};
+
+/// The mark that the first @p size bytes at @p head begin with (three bytes are enough to tell). The one place
+/// the marks are recognised: `decodeText` and the CSV reader, which streams a file instead of reading it whole,
+/// both ask it.
+ByteOrderMark byteOrderMark(const unsigned char* head, std::size_t size);
 
 /// The whole file as UTF-8 text, BOM handled. @return false if it cannot be opened,
 /// leaving @p out untouched.

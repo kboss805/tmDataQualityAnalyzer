@@ -1,0 +1,56 @@
+{
+  "suite": "native",
+  "args": [
+    "-tc=textfile*,csvseries*"
+  ],
+  "mutants": [
+    {
+      "id": "M1",
+      "file": "src/core/src/textfile.cpp",
+      "old": "size >= 3 && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF",
+      "new": "size >= 3 && head[0] == 0xEF && head[1] == 0xBB",
+      "expect": "caught",
+      "note": "a UTF-8 mark is two bytes of it"
+    },
+    {
+      "id": "M2",
+      "file": "src/core/src/textfile.cpp",
+      "old": "size >= 2 && head[0] == 0xFF && head[1] == 0xFE",
+      "new": "size >= 2 && head[0] == 0xFF",
+      "expect": "caught",
+      "note": "a little-endian UTF-16 mark is its first byte"
+    },
+    {
+      "id": "M3",
+      "file": "src/core/src/textfile.cpp",
+      "old": "return utf16ToUtf8(bytes, 2, true);",
+      "new": "return utf16ToUtf8(bytes, 2, false);",
+      "expect": "caught",
+      "note": "big-endian UTF-16 text is decoded as little-endian"
+    },
+    {
+      "id": "M4",
+      "file": "src/core/src/csvseriesparser.cpp",
+      "old": "else if (mark == textfile::ByteOrderMark::Utf8)",
+      "new": "else if (false)",
+      "expect": "caught",
+      "note": "the CSV reader keeps a UTF-8 mark in the first header"
+    },
+    {
+      "id": "M5",
+      "file": "src/core/src/csvseriesparser.cpp",
+      "old": "if (mark == textfile::ByteOrderMark::Utf16LittleEndian || mark == textfile::ByteOrderMark::Utf16BigEndian)",
+      "new": "if (mark == textfile::ByteOrderMark::Utf16LittleEndian)",
+      "expect": "caught",
+      "note": "the CSV reader streams a big-endian UTF-16 file as bytes"
+    },
+    {
+      "id": "M6",
+      "file": "src/core/src/textfile.cpp",
+      "old": "return ByteOrderMark::Utf16BigEndian;",
+      "new": "return ByteOrderMark::Utf16LittleEndian;",
+      "expect": "caught",
+      "note": "a big-endian mark is reported as little-endian"
+    }
+  ]
+}

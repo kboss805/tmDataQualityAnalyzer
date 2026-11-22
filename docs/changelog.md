@@ -12,6 +12,41 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Core and build leftovers of the cleanup audit (S4, S6, C3, A4), and the Qt wording out of core and tooling
+
+The audit's follow-up listed the items done in part; this finishes the core and build ones. No behaviour of the application changes.
+
+- **S4: the calibration report is its own unit.** `CalibrationExtractor::summarize`, 250 lines of pure text-building, is now
+  `calibrationReport` in `calibrationreport.h` / `.cpp`; `calibrationextractor.cpp` is 420 lines, down from 709, and keeps the
+  driver. `topResolvedDb` (the extractor and the report both read it) is an inline function of `calibrationprofile.h`. The report's
+  text and its tests are unchanged: the call sites moved, and one case name that spoke of `summarize` says `calibrationReport`.
+- **S6: one place knows the byte-order marks.** `textfile::byteOrderMark` names the mark a file starts with (UTF-8, UTF-16 either
+  way, or none); `decodeText` and the CSV reader, which streams a file instead of reading it whole, both ask it, where each had
+  its own bytes. The default settings paths, the audit's other half, were already built once each (`defaultReceiverParamsFile`,
+  `initialStepConfigPath`), so nothing was left there.
+- **C3: the packet reader's channel table owns what it holds.** `typedef struct SuChanInfo`, a `void*` of attributes, `new` then `memset`,
+  `calloc` and `free` and a 65,536-slot vector of raw pointers are `ChannelInfo` (a `unique_ptr` of the PCM
+  attributes whose deleter gives the decoder's buffers back first; the data-source pointer it also kept was read only to free
+  the old table, so it is gone) in a `std::map` by track number. It is emptied where the table was freed, so the tree outlives it
+  as before. An allocation that is refused is still a status, not an exception (`std::nothrow`).
+  `Chapter10Reader`'s `getXxx` and `ID` names are left: the audit proposed fixing the first two parts of C3 only.
+- **A4: four switches that did nothing are gone.** `/Zc:externConstexpr`, `/wd4577`, `/wd4467` and `_ENABLE_EXTENDED_ALIGNED_STORAGE`
+  were kept from v2.x's build in the core's and the tests' projects and in `gen_compile_flags.py`. Both configurations rebuild (`-Rebuild`) with
+  no warning without them, and the Release DLL's disassembly (`dumpbin /disasm`) is identical to the one built with them, apart
+  from the line that prints the file's path.
+- **Qt wording.** Narration that only retold the move off Qt is reworded (v2.x, v2.14.2) or removed in `src/core`, `tests/core`, the
+  `eng` scripts, `.editorconfig`, `.gitattributes` and `tests/.gitignore`. Kept on purpose: the checks that no Qt import creeps back
+  (`build_core_dll.ps1`, `test_native.ps1`, `TestCoreQtFree`) and the manifest's `qt` key, which names v2.14.2's recorded output.
+
+How it was checked. Native baseline 527 to **528** test cases (one for `byteOrderMark`) and a row in the packet reader's TMATS
+test (an earlier source claiming the PCM source's track number is the channel and a later one is ignored; it pins a rule the
+refactor kept, and its mutant, below, survived until it existed). Mutation lists: `eng/mutants/byte-order-mark.json` (6, all caught)
+and `eng/mutants/channel-info.json` (4: C1 and C2 caught; C3 and C4, the decoder's buffers and the attributes struct not given back,
+survive on purpose, since `prepare()` allocates no buffers and the struct is a few hundred bytes a reader under the memory guard's
+8 MiB). The kept `reader-lifetime.json` and `reader-setup.json` were re-anchored (`freeChanInfoTable(m_channel_info);` is `m_channel_info.clear();`) and
+re-run: 15 of 15 and 15 caught, 2 survived, as marked. In `packet-reader-optional-fields.json` R4 (the data source not kept) is removed with the field
+it mutated, and R1 to R3 re-run caught.
+
 #### The v3.0.0 release notes give the window size the application opens at
 
 `deploy/RELEASENOTES.txt` said v3.0.0's window "now opens at 1280 x 800". The window opens at 1920 x 1080 (`MainWindow.DefaultSize`,

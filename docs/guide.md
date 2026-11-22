@@ -608,7 +608,7 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
 2. **Ch10PacketReader** (`ch10packetreader`) - the single-pass reader: `prepare()` opens the file, parses TMATS,
    resolves each stream's PCM attributes and routes channel ids to `PacketQueue`s; `run()`, on its own thread, reads
    the file once, tracks IRIG time, dispatches each PCM packet's payload to its queues, and ends each with a sentinel.
-   It owns the per-channel `SuChanInfo` table.
+   It owns the per-channel `ChannelInfo` table (by track number; the decoder's PCM attributes are owned, and given back with their buffers).
 3. **PacketQueue** (`packetqueue.h`) - the bounded, thread-safe hand-off from the reader to one worker.
 4. **FrameProcessor** (`frameprocessor`) - the per-stream worker: drains its queue, runs the bit-serial frame-sync
    scanner (acquire and lock, off-phase rejection, bit-span lock %), and accumulates lock %, missed frames and (Receiver
@@ -644,8 +644,10 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
     **`stepconfigfile`** reads the `[[Step]]` step file it pairs them with, and finds the one the Extract Calibration dialog
     opens with (beside `framesyncfile` and `receiverparamsfile`).
 11. **CalibrationExtractor** (`calibrationextractor`, with `calibrationrequest`) - *US5.3*: a raw extraction over a
-    calibration recording through the same reader and worker, then the step detector per channel, and the report.
-12. **TomlDocument** (`tomldocument`, with `textfile`) - the TOML subset every settings file uses, sections in file
+    calibration recording through the same reader and worker, then the step detector per channel; **`calibrationreport`**
+    is the operator-facing report of the results (`calibrationReport`, pure: results in, text out).
+12. **TomlDocument** (`tomldocument`, with `textfile`, which also names a file's byte-order mark, `byteOrderMark`, for the
+    CSV reader that streams a file as well as for `decodeText`) - the TOML subset every settings file uses, sections in file
     order, arrays of tables (`[[Name]]`) read only; `FrameSyncFile` (`framesyncfile`) is the pattern file over it.
 13. **CsvSeriesParser / CsvSeriesWriter** (`csvseriesparser`, `csvserieswriter`, `clocktime`) - the two directions of
     the application's CSV, matched inverses, with the `DDD:HH:MM:SS.mmm` stamp; **SeriesColumnSchema**
@@ -1041,9 +1043,9 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
   its encodings and non-ASCII paths, its error messages, and which step file the dialog opens with.
 - **CalibrationExtractor** and **CalibrationRequest** (`test_calibrationextractor`, `test_calibrationrequest`) - whole
   extractions of `step_cal` and the committed `agc_rnrz-l_trc_testfile` against recorded numbers, clips, the report's exact text in every
-  scenario, the lifecycle and cancel; and the request built from the dialog's fields with its refusals.
+  scenario (`calibrationReport`, in `calibrationreport`), the lifecycle and cancel; and the request built from the dialog's fields with its refusals.
 - **TomlDocument and textfile** (`test_tomldocument`, `test_textfile`) - the TOML subset (sections in order, arrays of
-  tables, comments, escapes, the number and boolean rules, the exact bytes written) and the text encodings.
+  tables, comments, escapes, the number and boolean rules, the exact bytes written), the text encodings, and `byteOrderMark` (which marks it names, and how many bytes it needs).
 - **FrameSyncFile** (`test_framesyncfile`) - the pattern file both ways, Randomized only when the file has the key.
 - **CsvSeries and SeriesColumnSchema** (`test_csvseries`, `test_seriescolumnschema`) - the CSV both ways and its clock
   stamp; every column header formatted and parsed back, source qualifiers, edge cases, and 40,000 generated headers.
