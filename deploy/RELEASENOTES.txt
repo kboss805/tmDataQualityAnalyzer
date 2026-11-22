@@ -111,4 +111,4 @@ tmDataQualityAnalyzer v3.0.0 - What's New
     is the cost of a Windows security protection (the hardware shadow stack)
     that this version runs with and v2.x did not.
 
-  - The window now opens at 1280 x 800.
+  - The window now opens at 1920 x 1080.
