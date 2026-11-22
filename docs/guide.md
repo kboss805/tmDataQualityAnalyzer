@@ -586,7 +586,9 @@ profile, so a batch processes with the linear calibration.
 - **Export and import** (`ExportViewModel`, `PlotImageExport`; `Models/Export`: `ImageFiles`, an image export's format
   from its file name, and `ExportKind`): the CSV through the core's writer (every series), the
   image through one Skia renderer for PNG, SVG and PDF (exactly what the chart shows), the log as text; Import CSV
-  through the core's parser.
+  through the core's parser. Every import asks what the file is (`ICsvKindDialog`, `CsvKind` in `Models/Export`: standalone
+  telemetry receivers, or an AV phased array antenna, US10.0); a `PlotSeries` read from an antenna log is `IsPhasedArray`, which
+  Customize View reads as "Stream n" with H, V and C and which `PlotCsv.Columns` never exports.
 - **Templates** (`Models/Templates`): `TemplateFile` (the JSON), `TemplateBatch` (matching, a file's run), and
   beside the plot `PlotTemplates` (`ViewModels/Plot`: building a template from a recording's series, putting its looks
   back); the batch confirmation (`BatchApplyViewModel` and its window).
@@ -601,7 +603,7 @@ profile, so a batch processes with the linear calibration.
 The binding of every ABI function: `Ch10File` (a recording's channels), `ProcessingRun` and `StreamResult` (a run and
 what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile`, the file formats (`FrameSyncFile`,
 `ReceiverParamsFile`, `CsvFile`, `TemplateMatcher`, `ClockTime`), series construction (`SeriesSet`, `TimeBase`,
-`ImportedStreams`) and `ChartGeometry` with `SeriesIndex` (a series' envelope index, revision 3). The public types are in
+`ImportedStreams`) and `ChartGeometry` with `SeriesIndex` (a series' envelope index, revision 3; `CsvFile.ParsePhasedArrayLog`, revision 4). The public types are in
 the folder's root and the file formats in `Formats/` (a type to a file); what touches the DLL is in `Interop/`: `Native`
 (the C ABI's P/Invoke declarations) and `NativeStructs` (its structs and the struct ids), `Arena` the native memory for one
 call's arguments (strings, a copy of a list, an array of pointers, a boxed struct), `Text` the strings that cross, `ObserverBridge` the callbacks a native run calls back into (an exception
@@ -669,7 +671,11 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
     order, arrays of tables (`[[Name]]`) read only; `FrameSyncFile` (`framesyncfile`) is the pattern file over it.
 13. **CsvSeriesParser / CsvSeriesWriter** (`csvseriesparser`, `csvserieswriter`, `clocktime`) - the two directions of
     the application's CSV, matched inverses, with the `DDD:HH:MM:SS.mmm` stamp; **SeriesColumnSchema**
-    (`seriescolumnschema`) is the single source of the column headers both use.
+    (`seriescolumnschema`) is the single source of the column headers both use. **PhasedArrayLogParser**
+    (`phasedarraylogparser`, US10.0) reads a third party's phased array antenna SNR log (ISO 8601 UTC time, a unit name, HPol / VPol /
+    Comb, one column a stream) into the same `CsvParseResult`, each stream three series H, V and C; both parsers read a
+    file through `csvlines::LineSource` (`linesource`: UTF-8 or UTF-16 with a mark, any line end) and reach a host through one set of accessors
+    (`tmdq_csv_*`; `tmdq_phased_array_parse`, ABI revision 4).
 14. **SeriesBuilder** (`seriesbuilder`, `seriesrange.h`) - a processed stream's plot series, the shared time base
     across sources, imported streams' order, and stream identity; **ChartGeometry** (`chartgeometry`) - the plot's
     envelope, culling, min-max band, transforms and time ticks; and `SeriesIndex`, a pyramid of each 32-sample block's
@@ -1070,6 +1076,9 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 - **FrameSyncFile** (`test_framesyncfile`) - the pattern file both ways, Randomized only when the file has the key.
 - **CsvSeries and SeriesColumnSchema** (`test_csvseries`, `test_seriescolumnschema`) - the CSV both ways and its clock
   stamp; every column header formatted and parsed back, source qualifiers, edge cases, and 40,000 generated headers.
+- **PhasedArrayLog** (`test_phasedarraylog`) - an antenna's SNR log: the ISO 8601 UTC time (leap years, a month's and a day's ends,
+  what is refused), three series a stream, skipped and empty rows, several units, midnight and a year's end, a mark, the two kinds of CSV
+  told apart by their headers, and the committed 30-stream sample (`av_snr_log.csv`).
 - **SeriesBuild** (`test_seriesbuild`) - a stream's series, the shared time base across sources, imported streams'
   order.
 - **ChartGeometry** (`test_chartgeometry`) - the envelope, band, transforms and ticks, against the code they replaced
@@ -1097,7 +1106,7 @@ every kept mutant in `eng/mutants` still naming text that is in its file exactly
 script's root still resolving from where they are); the recordings' channels (`FileTests`); runs of
 the committed recordings against numbers v2.14.2 produced, every setting reaching the job, failures, observers, cancel
 and lifetimes (`RunTests`); calibration against the core's extractor (`CalibrationTests`, an extraction disposed from its own callback included); the file formats byte for
-byte against the core (`FormatsTests`); loading the DLL (`LibraryTests`, `IsolatedLoadTests` in a child process, the
+byte against the core (`FormatsTests`, `PhasedArrayLogTests` for an antenna's log); loading the DLL (`LibraryTests`, `IsolatedLoadTests` in a child process, the
 suite's one skip); `ChartGeometryTests`, `ReceiverParamsTests`, `SeriesTests`, `ArenaTests`, `HandleTests` (a handle released once, when it is disposed and the last call using it has
 returned; a Dispose while another thread waits on a run, and a run disposed from its own callback, which still reports its end and is
 released afterwards), `ObserverBridgeTests` (which thread is inside a callback, nested and after a throw); and `TempFilesTests`, the
@@ -1127,7 +1136,8 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   rebuilds it, the zoom rule, chips, menu, keys, read from the controls and from rendered frames) and
   `ChartPromptWindowTests` (each prompt's window: OK answers, Cancel does not).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
-  CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing).
+  CSV), `PhasedArrayImportTests` (the kind question every import asks, an antenna's log as 90 series read H, V and C, and none of it exported),
+  `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `StatusBarTests` (the bar's place, colour and hairline, its marks, its trimming), `MenuStyleTests` (no icons, the accent row and white text, the dimmed shortcut, the row height and inset), `DialogAnatomyTests`
   (every window kind's footer band, padding, button widths and spacing, accent and cancel, in both themes; a status text following the theme), `PreferencesTests`
   (the preferences file, and v2.x's INI file left unread), `MainWindowStartupTests`.

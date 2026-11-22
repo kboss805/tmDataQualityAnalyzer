@@ -147,6 +147,7 @@
     <ClCompile Include="test_framesyncfile.cpp" />
     <ClCompile Include="test_intervalgate.cpp" />
     <ClCompile Include="test_packetqueue.cpp" />
+    <ClCompile Include="test_phasedarraylog.cpp" />
     <ClCompile Include="test_pipelinerunner.cpp" />
     <ClCompile Include="test_receivernames.cpp" />
     <ClCompile Include="test_receiverparamsfile.cpp" />
@@ -179,6 +180,8 @@
     <ClCompile Include="..\..\src\core\src\frameprocessor.cpp" />
     <ClCompile Include="..\..\src\core\src\framesetup.cpp" />
     <ClCompile Include="..\..\src\core\src\framesyncfile.cpp" />
+    <ClCompile Include="..\..\src\core\src\linesource.cpp" />
+    <ClCompile Include="..\..\src\core\src\phasedarraylogparser.cpp" />
     <ClCompile Include="..\..\src\core\src\pipelinerunner.cpp" />
     <ClCompile Include="..\..\src\core\src\receivernames.cpp" />
     <ClCompile Include="..\..\src\core\src\receiverparamsfile.cpp" />

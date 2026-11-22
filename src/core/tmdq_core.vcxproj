@@ -147,7 +147,9 @@
     <ClInclude Include="include\framesyncfile.h" />
     <ClInclude Include="include\intervalgate.h" />
     <ClInclude Include="include\irig106lock.h" />
+    <ClInclude Include="include\linesource.h" />
     <ClInclude Include="include\packetqueue.h" />
+    <ClInclude Include="include\phasedarraylogparser.h" />
     <ClInclude Include="include\pipelinerunner.h" />
     <ClInclude Include="include\receivernames.h" />
     <ClInclude Include="include\receiverparamsfile.h" />
@@ -198,6 +200,8 @@
     <ClCompile Include="src\frameprocessor.cpp" />
     <ClCompile Include="src\framesetup.cpp" />
     <ClCompile Include="src\framesyncfile.cpp" />
+    <ClCompile Include="src\linesource.cpp" />
+    <ClCompile Include="src\phasedarraylogparser.cpp" />
     <ClCompile Include="src\pipelinerunner.cpp" />
     <ClCompile Include="src\receivernames.cpp" />
     <ClCompile Include="src\receiverparamsfile.cpp" />

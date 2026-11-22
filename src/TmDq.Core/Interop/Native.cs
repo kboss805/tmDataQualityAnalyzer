@@ -184,6 +184,11 @@ internal static unsafe partial class Native
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
     internal static partial int tmdq_csv_parse(byte* pathUtf8, out IntPtr csv);
 
+    // a phased array antenna's SNR log, read into the same result a CSV is (revision 4)
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_phased_array_parse(byte* pathUtf8, out IntPtr csv);
+
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
     internal static partial int tmdq_csv_info_get(IntPtr csv, CsvInfoNative* info);

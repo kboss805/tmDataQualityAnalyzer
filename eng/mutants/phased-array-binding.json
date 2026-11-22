@@ -1,0 +1,23 @@
+{
+  "suite": "managed",
+  "args": ["-class", "TmDq.Core.Tests.PhasedArrayLogTests"],
+  "mutants": [
+    {
+      "id": "B1",
+      "file": "src/TmDq.Core/Formats/CsvFile.cs",
+      "old": "Library.Check(Native.tmdq_phased_array_parse(arena.Utf8(path), out IntPtr csv));",
+      "new": "Library.Check(Native.tmdq_csv_parse(arena.Utf8(path), out IntPtr csv));",
+      "expect": "caught",
+      "note": "ParsePhasedArrayLog reads the application's own CSV"
+    },
+    {
+      "id": "B2",
+      "file": "src/TmDq.Core/Library.cs",
+      "old": "public const int MinimumRevision = 4;",
+      "new": "public const int MinimumRevision = 3;",
+      "args": ["-class", "TmDq.Core.Tests.LibraryTests"],
+      "expect": "caught",
+      "note": "a DLL without the phased array log accepted"
+    }
+  ]
+}

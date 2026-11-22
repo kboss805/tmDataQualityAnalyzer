@@ -1,6 +1,7 @@
 // The file formats through the C ABI (src/core/abi/abi_formats.cpp): the frame sync file, template matching, the CSV,
 // clock stamps, and the receiver parameters file (revision 1), each read and written like the core does.
 
+#include "phasedarraylogparser.h"
 #include "receiverparamsfile.h"
 #include "test_abi_support.h"
 
@@ -276,6 +277,43 @@ TEST_CASE("Abi: a CSV is parsed like the core")
     tmdq_csv_free(nullptr);
 }
 
+TEST_CASE("Abi: a phased array log is parsed like the core, and refused when it is not one")
+{
+    Scratch dir;
+    const std::string log = writeFile(dir.filePath("array.csv"),
+        "Time, Name, Polarity, Stream 1, Stream 2\r\n"
+        "2026-11-13T19:15:35.500Z,SCU1,HPol,1.0,10.0\r\n"
+        "2026-11-13T19:15:35.500Z,SCU1,VPol,2.0,20.0\r\n"
+        "2026-11-13T19:15:35.500Z,SCU1,Comb,3.0,30.0\r\n"
+        "garbage\r\n"
+        "2026-11-13T19:15:36.500Z,SCU1,HPol,1.5,10.5\r\n");
+    const CsvParseResult want = PhasedArrayLogParser::parse(textfile::pathFromUtf8(log));
+    REQUIRE(want.success);
+    REQUIRE(want.series.size() == 6);
+    REQUIRE(want.skippedRows == 1);
+
+    // The same accessors as a CSV's read it: every field the core holds comes through.
+    tmdq_csv* csv = nullptr;
+    REQUIRE(tmdq_phased_array_parse(log.c_str(), &csv) == int(TMDQ_OK));
+    REQUIRE(csv != nullptr);
+    const std::string diff = csvDifferences(csv, want);
+    REQUIRE_MESSAGE(diff.empty(), diff);
+    tmdq_csv_free(csv);
+
+    // A file that is not the log, the application's own CSV among them, and arguments that cannot be used.
+    const std::string ours = writeFile(dir.filePath("ours.csv"), "Time (DOY:HH:MM:SS.mmm),A Lock (%)\n120:00:00:00.000,5\n");
+    for (const std::string& path : { tempUtf8() + "/tst_abi_no_such_array.csv", ours })
+    {
+        tmdq_csv* none = reinterpret_cast<tmdq_csv*>(std::uintptr_t{1});
+        CHECK(tmdq_phased_array_parse(path.c_str(), &none) == int(TMDQ_ERR_PREPARE));
+        REQUIRE(none == nullptr);
+        REQUIRE(!std::string(tmdq_last_error()).empty());
+    }
+    CHECK(tmdq_phased_array_parse(nullptr, &csv) == int(TMDQ_ERR_BADARG));
+    CHECK(tmdq_phased_array_parse(log.c_str(), nullptr) == int(TMDQ_ERR_BADARG));
+    tmdq_csv* ours_csv = nullptr;
+    CHECK(tmdq_csv_parse(log.c_str(), &ours_csv) == int(TMDQ_ERR_PREPARE));   // and the application's parser refuses the log
+}
 TEST_CASE("Abi: a CSV is written like the core")
 {
     Scratch dir;
