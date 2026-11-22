@@ -325,9 +325,22 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     /// <summary>
     /// Writes what <paramref name="choice"/> asks for, in v2.x's order (the data, the image, then the log, which so
     /// carries the lines about the other two), each saying in the log where it went or that it failed; a failure does
-    /// not stop the rest. Nothing without data.
+    /// not stop the rest. Nothing without data. The data is written off the UI thread, with the window busy
+    /// meanwhile (nothing else may open, import or export); ignored while busy.
     /// </summary>
-    public Task ExportAsync(ExportViewModel choice) => _export.WriteAsync(choice);
+    public async Task ExportAsync(ExportViewModel choice)
+    {
+        if (IsBusy) return;
+        IsBusy = true;
+        try
+        {
+            await _export.WriteAsync(choice);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
 
     // ---- templates and batch (plan step 4.7, US1.1) ------------------------------------------------------------------
 

@@ -988,6 +988,85 @@ public sealed class ExportImportTests
         }
     }
 
+    /// <summary>A plot with one long series, so that writing it takes a good fraction of a second: ten million
+    /// milliseconds' worth of rows would be needed to be sure, a million is enough to see the write has not finished
+    /// by the time the call returns.</summary>
+    private static PlotViewModel LongPlot()
+    {
+        const int points = 1_000_000;
+        double[] x = new double[points], y = new double[points];
+        for (int i = 0; i < points; i++)
+        {
+            x[i] = i * 0.001;
+            y[i] = i % 100;
+        }
+        var plot = new PlotViewModel();
+        plot.SetSeries(new[] { PlotFixtures.Lock(0, "long", 1, 0, x, y) });
+        return plot;
+    }
+
+    [Fact]
+    public async Task TheDataIsWrittenOffTheCallingThreadFromWhatThePlotHeldWhenAsked()
+    {
+        string sync = TempPath(".csv"), viaTask = TempPath(".csv");
+        try
+        {
+            PlotViewModel plot = LongPlot();
+            Assert.True(plot.ExportCsv(sync));
+
+            // Not written when the call returns (it would be, on the calling thread), and what is written is what
+            // the plot held when it was asked, not what is left of it after: the plot is replaced before the await.
+            Task<bool> writing = plot.ExportCsvAsync(viaTask);
+            Assert.False(writing.IsCompleted);
+            plot.SetSeries(new[] { PlotFixtures.Lock(0, "other", 1, 0, new[] { 0.0 }, new[] { 1.0 }) });
+            Assert.True(await writing);
+            Assert.Equal(File.ReadAllBytes(sync), File.ReadAllBytes(viaTask));
+
+            // A refusal is the same one: no columns, no file, false.
+            string none = TempPath(".csv");
+            Assert.False(await new PlotViewModel().ExportCsvAsync(none));
+            Assert.False(File.Exists(none));
+            Assert.False(await plot.ExportCsvAsync(Path.Combine(TempPath(""), "no-such-folder", "x.csv")));
+        }
+        finally
+        {
+            TempFiles.Delete(sync);
+            TempFiles.Delete(viaTask);
+        }
+    }
+
+    [Fact]
+    public async Task TheWindowIsBusyWhileTheDataIsBeingWrittenAndTakesNoSecondExport()
+    {
+        string folder = TempPath("");
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var vm = new MainWindowViewModel(new MainWindowServices { ExportDialog = new FakeExportDialog(), ImageExporter = new FakeImages() });
+            vm.Plot.SetSeries(new[] { LongPlot().Series[0] });
+            (string image, string data, string log) = ExportViewModel.DefaultPaths(folder, "long");
+            var choice = new ExportViewModel(image, data, log) { ExportData = true, ExportImage = false, ExportLog = false };
+
+            Task writing = vm.ExportAsync(choice);
+            Assert.True(vm.IsBusy);
+            Assert.Equal("Exporting data...", vm.Status);
+            Assert.False(vm.ExportCommand.CanExecute(null));
+            Assert.False(vm.OpenCommand.CanExecute(null));
+            await vm.ExportAsync(choice);          // ignored: it would write the same file at the same time
+            Assert.True(vm.IsBusy);
+            await writing;
+
+            Assert.False(vm.IsBusy);
+            Assert.True(vm.ExportCommand.CanExecute(null));
+            Assert.Equal(("Exported data.", LogLevel.Success), (vm.Status, vm.StatusLevel));
+            Assert.Equal(1, vm.Log.Entries.Count(e => e.Line.Contains("Data exported to", StringComparison.Ordinal)));
+        }
+        finally
+        {
+            TempFiles.DeleteDirectory(folder, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task AFailedExportSaysSoAndTheRestStillRun()
     {

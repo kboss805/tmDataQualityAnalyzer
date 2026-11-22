@@ -224,9 +224,27 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// 0 or more keeps that source's series only (per-file batch export, 4.7). False, with no file written, when there
     /// is nothing to write; false when the file cannot be written.
     /// </summary>
-    public bool ExportCsv(string path, int sourceId = -1) =>
+    public bool ExportCsv(string path, int sourceId = -1)
+    {
+        (List<CsvColumn> columns, TimeBaseInfo clock) = CsvSnapshot(sourceId);
         // No columns at all is the writer's to refuse, and it writes no file.
-        PlotCsv.Write(path, PlotCsv.Columns(_series, sourceId), _timeBase?.Info ?? new TimeBaseInfo(0, 0.0, 0.0));
+        return PlotCsv.Write(path, columns, clock);
+    }
+
+    /// <summary>
+    /// <see cref="ExportCsv"/> with the file written off the UI thread (the export's matched partner of
+    /// <see cref="LoadCsvAsync"/>): what is written is taken on the calling thread, before the first await, so a
+    /// plot cleared or replaced meanwhile does not change the file. The series' arrays are never written to once
+    /// a series exists, so the snapshot shares them.
+    /// </summary>
+    public Task<bool> ExportCsvAsync(string path, int sourceId = -1)
+    {
+        (List<CsvColumn> columns, TimeBaseInfo clock) = CsvSnapshot(sourceId);
+        return Task.Run(() => PlotCsv.Write(path, columns, clock));
+    }
+
+    private (List<CsvColumn> Columns, TimeBaseInfo Clock) CsvSnapshot(int sourceId) =>
+        (PlotCsv.Columns(_series, sourceId), _timeBase?.Info ?? new TimeBaseInfo(0, 0.0, 0.0));
 
     /// <summary>Whether a CSV is being read for the plot (the "Loading..." overlay).</summary>
     public bool IsLoading

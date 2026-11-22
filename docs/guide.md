@@ -359,7 +359,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Imported data can be re-exported (CSV/image) and the recent-files list records the imported CSV.
 - [x] A CSV that is not in the application's export format (e.g. the legacy `Day,Time,…` layout, a wrong/missing header, or a file with no parseable data rows) is rejected with a clear error in the log rather than producing garbage series.
 - [x] Malformed or short data rows are skipped, and the user is informed how many rows were skipped.
-  - **Scope:** The import is the core's CSV parser (`CsvSeriesParser`, through `PlotCsv.Parse`) behind `PlotViewModel.LoadCsv` / `LoadCsvAsync`, the matched partner of the export (`PlotViewModel.ExportCsv`, the core's `CsvSeriesWriter`); the app adds the entry points (the menu, drag and drop, Recent Files) and the error reporting. It does not add a CSV import dialog with column mapping, and it does not attempt to import arbitrary third-party CSVs — only files this application produced.
+  - **Scope:** The import is the core's CSV parser (`CsvSeriesParser`, through `PlotCsv.Parse`) behind `PlotViewModel.LoadCsv` / `LoadCsvAsync`, the matched partner of the export (`PlotViewModel.ExportCsv` / `ExportCsvAsync`, the core's `CsvSeriesWriter`; the app writes it off the UI thread, with the window busy and the columns taken before the first await); the app adds the entry points (the menu, drag and drop, Recent Files) and the error reporting. It does not add a CSV import dialog with column mapping, and it does not attempt to import arbitrary third-party CSVs — only files this application produced.
 
 ### US7.0: Error Checking — Complete
 

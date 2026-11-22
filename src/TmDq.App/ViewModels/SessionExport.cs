@@ -45,7 +45,11 @@ internal sealed class SessionExport
         var done = new List<string>();
         var failed = new List<string>();
         void Note(bool ok, string what) => (ok ? done : failed).Add(what);
-        if (choice.ExportData) Note(Csv(choice.DataPath, -1, "Data exported to ", "Error: Failed to export data to "), "data");
+        if (choice.ExportData)
+        {
+            _report("Exporting data...", LogLevel.Info);
+            Note(await CsvAsync(choice.DataPath, -1, "Data exported to ", "Error: Failed to export data to "), "data");
+        }
         if (choice.ExportImage) Note(await ImageAsync(choice.ImagePath), "plot image");
         if (choice.ExportLog)
         {
@@ -65,7 +69,7 @@ internal sealed class SessionExport
         items.Count <= 1 ? string.Concat(items) : string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1];
 
     /// <summary>One recording's series as CSV, as a batch writes each file's: "Exported:" or "Failed to export CSV:".</summary>
-    public void SourceCsv(string path, int sourceId) => Csv(path, sourceId, "Exported: ", "Failed to export CSV: ");
+    public Task<bool> SourceCsvAsync(string path, int sourceId) => CsvAsync(path, sourceId, "Exported: ", "Failed to export CSV: ");
 
     /// <summary>The plot as an image at <paramref name="path"/> (its format by its suffix), and the log told which.</summary>
     public async Task<bool> ImageAsync(string path)
@@ -76,9 +80,9 @@ internal sealed class SessionExport
         return written is not null;
     }
 
-    private bool Csv(string path, int sourceId, string done, string failed)
+    private async Task<bool> CsvAsync(string path, int sourceId, string done, string failed)
     {
-        bool ok = _plot.ExportCsv(path, sourceId);
+        bool ok = await _plot.ExportCsvAsync(path, sourceId);
         if (ok) _log.Success(done + path);
         else _log.Error(failed + path);
         return ok;
