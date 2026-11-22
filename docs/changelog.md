@@ -14,14 +14,18 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 #### US10.0: a user story for importing a third-party application's CSV (planned)
 
-`docs/guide.md` has a new story, **US10.0: Import a CSV file written by a third-party application**, marked **Planned**: the
-file's time column is ISO 8601 and each sample carries three measurements, one per polarization (H, V and combined). Its six
-criteria are open (`[ ]`); the file's header, the exact ISO form (and its time zone), and what the three measurements are
-(metric, unit, axis) are listed in the story as to be settled against a sample file the user will add to `tests/data`, which
-the tests will read. Two sentences that said every story was Complete now say US1.0 to US9.0 are, and US6.3's scope notes that
-US10.0 adds one third-party layout to the importer it described as only for this application's own files. Documentation
-only; no code changed and no baseline moved. When the sample arrives it needs an exception in `tests/.gitignore`, which ignores
-every file under `data/test files/` that is not listed there.
+`docs/guide.md` has a new story, **US10.0: Import a CSV file written by a third-party application**, marked **Planned**. The
+sample the user supplied, `tests/data/test files/av_snr_log.csv` (1.3 MB), shows the layout: `Time, Name, Polarity, Stream 1 ...
+Stream 30`, an ISO 8601 UTC time to the millisecond, and three rows to a sample (HPol, VPol and Comb, in any order). Each column
+after the polarization is a channel of its own, as each receiver is, so 30 channels of three polarizations give 90 series; they
+keep the file's H, V and C language, not the application's L, R and C. Importing asks first what the file is, in a selection dialog:
+**Standalone Telemetry Receivers…** (this application's own export, US6.3) or **AV Phased Array Antenna…** (this story's layout). A phased
+array log is never exported (the third party's system writes it), so Export Data leaves its series out. The story's eight criteria are open (`[ ]`) and say so; what the values are (metric, unit, axis), the
+series' names, whether 90 series start visible and what several unit names do are listed in it as still to settle. Two
+sentences that said every story was Complete now say US1.0 to US9.0 are, and US6.3's scope notes that US10.0 adds one
+third-party layout to the importer it described as only for this application's own files. `tests/.gitignore` lists the sample
+(it ignores every file under `data/test files/` that is not named there) so that it is committed and CI can read it.
+Documentation and the fixture list only; no code changed and no baseline moved.
 
 #### A test that read a freshly written 20 MB CSV no longer fails when the file is held for a moment
 
