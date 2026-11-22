@@ -10,7 +10,9 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
-### Unreleased
+### v3.2.0 — The VS Code look, a much faster scan, and a calmer window
+
+The first release since v3.1.0 (2026-11-08). What a user sees: the application is drawn in VS Code's Dark Modern and Light Modern (flush panes, hairlines, a grey title bar, 13 px text), its menu is four submenus, a status bar is back, every number is a validated text box, Export no longer freezes the window, a heavy plot pans and zooms smoothly, and the frame-sync scan takes about a seventh of the time with byte-identical output. One fix changes numbers: Receiver SNR words were read one bit late in the rare frame where data looked like the sync while locked. The rest is the whole-tree cleanup audit, finished by #348 to #350, which changes no behaviour. The entries below are in the order they landed, newest first.
 
 #### Docs and tooling leftovers of the cleanup audit (F4, M4, T11, A5), and the Qt wording out of the rest
 

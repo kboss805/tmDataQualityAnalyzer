@@ -1,3 +1,74 @@
+tmDataQualityAnalyzer v3.2.0 - What's New
+=================================
+
+  Upgrading from v3.0.0 or v3.1.0 keeps everything: your settings files and
+  your window preferences. Upgrading from v2.x: please read the v3.1.0 notes
+  below about your window preferences.
+
+  New:
+
+  - A status bar along the foot of the window says, in one short sentence,
+    what the application is doing or has just done. It stays visible when the
+    log is hidden.
+
+  - The menu behind the three-line button is four submenus: File,
+    Import/Export, Settings and Help. The light and dark theme are two
+    entries of their own, with the one in use ticked. Help opens the User
+    Manual, and Process Multiple Files... and Save Template... are named as
+    the windows they open.
+
+  Improved:
+
+  - Processing is much faster. On a high-rate stream the frame sync scan now
+    takes about a seventh of the time: a 20 Mbps channel of a 640 MB
+    recording went from 11.6 seconds to 1.6. The answers are unchanged: every
+    exported file for every recording we hold came out byte for byte the
+    same as before.
+
+  - A plot with a lot of data stays responsive while you pan and zoom it, with
+    the mouse wheel, by dragging, or with the keys. The full picture is drawn
+    when you let go.
+
+  - Export no longer freezes the window while the data is written; a large
+    recording used to leave it unresponsive for a second or more.
+
+  - Numbers in the stream settings, the Receiver SNR dialog, Extract
+    Calibration and the plot's prompts are typed into plain boxes, with no
+    up and down arrows. A box refuses what is not a number.
+
+  - A new look, taken from Visual Studio Code's Dark Modern and Light Modern
+    themes: panes sit side by side separated by thin lines, the title bar is
+    a dark grey, and the text is a little smaller (13 pixels). The dialogs share one layout with
+    their buttons in the same place, and settings that are on or off are
+    switches.
+
+  - The window opens at 1920 x 1080, with the empty chart already showing its
+    grid, and the divider between the log and the chart can be found and
+    dragged.
+
+  - The yellow Receiver SNR lines and their legend swatches are easier to see
+    on the light theme.
+
+  - The plot is drawn correctly on displays scaled above 100 percent.
+
+  Fixed:
+
+  - Receiver SNR values could be read from the wrong bit in the rare frames
+    where data happened to look like the sync pattern while the stream was
+    locked: about one frame in 65,536 with a sparse mask, far fewer with a
+    full 32-bit pattern. Frame Sync Lock results were not affected.
+
+  - If the shipped default receiver parameters file cannot be used, Extract
+    Calibration now falls back the same way processing does and says so,
+    rather than failing.
+
+  - A drag on the plot that loses the mouse no longer carries on panning with
+    no button held, and dropping a file on the window while a recording is
+    being processed no longer shows a drop it would ignore.
+
+  - If Extract Calibration cannot hand back its result, it says so instead of
+    leaving "Processing calibration file..." on the screen.
+
 tmDataQualityAnalyzer v3.1.0 - What's New
 =================================
 
