@@ -12,6 +12,49 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The scan skips through a frame it is locked on, 4.1x faster again, with the same answers
+
+The step before this one made each bit cheaper; this one stops looking at most bits. In lock, nothing the state machine
+does between a frame's boundary and the bit before the next one depends on more than counting: an off-phase sync match is
+ignored (the match test is not acted on), no lock decision falls there, and the frame's words are the register's contents
+at known bit counts. So `scanBits` now takes those bits in one step, from the bits themselves:
+
+- **What a skip does.** From a position in lock (`sync_count >= min_syncs`, at least 64 bits into the packet so the
+  register can be read from the data) it takes up to the bit before the frame's boundary, or the run's end if that is
+  nearer, and applies what the bits would have done: the lock and total bit counts, the frame position, the register
+  (`bitsBefore`: the 64 bits ending there), each word that completes (the register at its last bit, stored as before), and
+  the word count and `save_data` state. The boundary bit and what follows still go through the one-at-a-time loop, so a
+  frame that ends in a sync, a lost one or a rollover is handled by the code that always handled it. A skip is not taken
+  for fewer than 16 bits, nor for a sync mask wider than 57 bits (see below), nor in the odd state where the frame
+  has all its words but is still collecting.
+- **Syncs found are still counted exactly.** Every sync match is counted in `total_syncs_found`, which the run's report
+  prints, so a skipped stretch cannot just be jumped: `countSyncMatches` tests the register at all eight bit positions of
+  each byte at once. That needs the whole match window in the 64-bit register with the byte beside it, hence the 57-bit
+  limit; a longer mask takes the bit-at-a-time path, as before.
+- **Measured** (Release core, pinned to the performance cores, `eng\run_throughput_bench.ps1`; before -> after, and the
+  two steps together against v3.1.0): the 1 Mbps channel 335 -> 87 ms, 5 Mbps 1712 -> 398 and 1711 -> 604, 20 Mbps
+  6654 -> 1617 ms (4.1x; 7.2x against 11643); the four streams together 6549 -> 1650 ms (4.0x; 6.9x against 11460). The two
+  5 Mbps channels no longer take the same time (398 and 604 ms: a PRN-11 and a PRN-15 stream); the cause was not
+  investigated.
+- **Same answers, checked three ways.** The 60 short pinned scenarios of the last step still reproduce. A second pinned set,
+  `FrameProcessor: the scan's output on long synthetic streams is what it was`, runs 62 long ones (20 to 120 thousand bits,
+  frames of up to 2300 bits, words of 3 to 32 bits, syncs of 2 to 60 bits, packets of up to 9000 bits, the same noise, decoys
+  and gaps, every word of the frame mapped to a channel): the scenarios stay in lock across many frames, which the short
+  ones barely do, a skip starts mid-word whenever a window ends mid-frame, and a quarter of the frames carry a sync-like
+  stretch inside their words (a long sync never matches by chance, so without them the count of matches would be only the
+  frames'). Its hashes were printed from the scan without the skip (v3.1.0 plus the last step), and the new scan
+  reproduced all 62. The 34-run soak is byte for byte v2.14.2's exports. The managed and app suites pass.
+- **Mutants** in `eng\mutants\scan-skip.json`: 15, all caught. The first run left two alive, and both were gaps in the
+  scenarios rather than in the code: a 58-bit sync (the limit of the byte-wise count) never matched inside a frame, and
+  only the first three words of a frame were read, so a word stored wrongly later in it showed nowhere. The long
+  scenarios now plant syncs in frames, give a long sync its top bit, and read every word; the pins were taken again from
+  the scan without the skip.
+- **A kept list moved.** `scan-runs.json` S12 (the bit order in a byte) named text that two places now had; the read of a
+  bit is one helper, `bitAt`, so it is still said once.
+- **Not done.** Derandomizing a word at a time (RNRZ-L only) and the unlocked path (acquisition, a stream with no lock) are
+  as they were: a stream that never locks is still scanned at the last step's speed.
+  Baseline: native 526 -> 527.
+
 #### The frame-sync scan is 1.75x faster, with the same answers
 
 The scan is the limit on a big recording: one bit per pass, one core per stream, so a stream's time is its bit count
