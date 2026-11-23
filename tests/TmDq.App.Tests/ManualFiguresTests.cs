@@ -657,8 +657,17 @@ public sealed class ManualFiguresTests : IDisposable
     [AvaloniaFact]
     public async Task TheBatchConfirmationAndPlotFile()
     {
-        ProcessingTemplate template = PrnTemplate();
-        var copies = new[] { "flight 1.ch10", "flight 2.ch10", "flight 3.ch10" }.Select(n =>
+        // The template a user saves names each series for its stream (which is what they saw when they saved it), not "Fifteen" and
+        // "Eleven" as the fixture does for the soak's sake. The files are named as files, since the selector lists recordings.
+        ProcessingTemplate fixture = PrnTemplate();
+        ProcessingTemplate template = fixture with
+        {
+            Entries = fixture.Entries.Select(e => e with
+            {
+                Appearance = e.Appearance.Select(a => a with { Name = e.Config.Label }).ToList(),
+            }).ToList(),
+        };
+        var copies = new[] { "prn_testfile 1.ch10", "prn_testfile 2.ch10", "prn_testfile 3.ch10" }.Select(n =>
         {
             string path = Path.Combine(_scratch, n);
             File.Copy(Prn, path);
@@ -680,8 +689,10 @@ public sealed class ManualFiguresTests : IDisposable
         PlotCommands commands = view.Commands!;
         List<object?> items = Take(view.ChartMenu);
         var plotFile = (MenuItem)items.OfType<MenuItem>().Single(i => (string)i.Header! == "Plot File");
-        Assert.Equal(new[] { "All files (overlaid)", "flight 1", "flight 2", "flight 3" },
+        Assert.Equal(new[] { "All files (overlaid)", "prn_testfile 1", "prn_testfile 2", "prn_testfile 3" },
                      commands.PlotFiles.Where(c => !c.IsSeparator).Select(c => c.Header));
+        // The legend names streams as the recording does (CH-01 PRN 15 5M), not by names that mean nothing to a reader.
+        Assert.All(vm.Plot.Series, s => Assert.StartsWith("CH-", s.Name, StringComparison.Ordinal));
         Window context = MenuOf(items, commands), sub = MenuOf(commands.PlotFiles, theme: plotFile.ItemContainerTheme);
         var at = new SKPointI(chart.Left + 260, chart.Top + 80);
         Point item = plotFile.TranslatePoint(new Point(plotFile.Bounds.Width, 0), context)!.Value;

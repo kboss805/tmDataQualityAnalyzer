@@ -12,6 +12,28 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Manual figures deep dive, part 1: the names a reader meets, and a menu that ate underscores
+
+The user began the review of the manual's figures with one that "didn't make sense": the Plot File selector listed **flight 1, flight 2,
+flight 3**, where they expected stream names such as PCM 01. All 28 figures were read against their captions (ten findings, kept in the
+memory note); this entry is the first three, which are about names.
+
+- **Plot File figure.** The three recordings are now `prn_testfile 1.ch10` to `3`, named as files, and the series are named for their streams
+  (`CH-01 PRN 15 5M`) by a template the scene builds from the fixture (the fixture's own "Fifteen" and "Eleven" stay: the soak's CSV names
+  depend on them). The caption and a new paragraph say the selector lists **files**, and that the streams of the one shown are in the legend and
+  Customize View. `ManualFiguresTests` now asserts that every series in that scene is named `CH-…`.
+- **A stream's name and its number** (the other two findings): a note in the frame sync walkthrough says what `CH-01 PRN 15 5M` (TMATS' label) and `13`
+  (the Chapter 10 channel ID) are, and where each turns up (`CH 13` in Customize View, `[CH 13 …]` in the log, `CH26 C_RCVR1` in a Receiver
+  SNR legend). The manual said a log line is prefixed `[CH 13 PCM03]` and a CSV column is `Ch 13 L_RCVR1`; the application writes
+  `[CH 13 CH-01 PRN 15 5M]` and `26 - CH-16 AGC STEP CALS 800K L_RCVR1` (`SeriesColumnSchema::snrSeriesName`), and the text now says so.
+- **A real defect the re-render showed.** The new file names drew as "prntestfile 1": Avalonia reads a lone underscore in a menu item's text as its
+  shortcut's mark and leaves it out, so **any recording with an underscore in its name was misspelled in Recent Files and in Plot File** (the
+  sample, `prn_testfile, sample.ch10`, among them). `MenuChoice.DisplayHeader` doubles each underscore and the `MenuChoice` theme binds to it. The test helper
+  `Menus` reads headers as drawn (undoing the doubling).
+- **Checked.** `MenuStyleTests.AFileNameInAMenuKeepsItsUnderscores` (measures the drawn text with and without the fix);
+  `eng/mutants/menu-underscores.json`, 2 mutants, both CAUGHT. Figures re-rendered by `eng\build_manual.ps1`; five changed (the batch dialog and the Plot File menu, which show the
+  new names, and the three that show the log, whose time stamps are those of the render). Baseline: app 797 passed (was 796).
+
 #### An antenna's log joins the plot, placed by the clock, instead of replacing it
 
 US10.0 says the point of importing a phased array antenna's log is to compare it with what this application measures, and says an

@@ -1,0 +1,22 @@
+{
+  "suite": "app",
+  "args": ["-stopOnFail", "-class", "TmDq.App.Tests.MenuStyleTests"],
+  "mutants": [
+    {
+      "id": "U1",
+      "file": "src/TmDq.App/App.axaml",
+      "old": "<Setter Property=\"Header\" Value=\"{Binding DisplayHeader}\" />",
+      "new": "<Setter Property=\"Header\" Value=\"{Binding Header}\" />",
+      "expect": "caught",
+      "note": "the menu draws the header as it is, and Avalonia drops the underscore of a file name"
+    },
+    {
+      "id": "U2",
+      "file": "src/TmDq.App/ViewModels/MenuChoice.cs",
+      "old": "Header.Replace(\"_\", \"__\", System.StringComparison.Ordinal);",
+      "new": "Header;",
+      "expect": "caught",
+      "note": "the underscores are not doubled"
+    }
+  ]
+}

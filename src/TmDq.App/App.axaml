@@ -34,7 +34,7 @@
       <!-- The entries of a menu that come from the data (a MenuChoice each): Recent Files, and the plot's Plot File and
            Readout. A choice whose header is "-" is drawn as the menu's separator. -->
       <ControlTheme x:Key="MenuChoice" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:MenuChoice">
-        <Setter Property="Header" Value="{Binding Header}" />
+        <Setter Property="Header" Value="{Binding DisplayHeader}" />
         <Setter Property="Command" Value="{Binding Command}" />
         <Setter Property="CommandParameter" Value="{Binding Parameter}" />
         <Setter Property="IsEnabled" Value="{Binding IsEnabled}" />

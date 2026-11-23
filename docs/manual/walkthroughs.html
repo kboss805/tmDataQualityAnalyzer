@@ -131,6 +131,15 @@ synchronisation, and find the moments where it did not.</p>
 quick even on a multi-gigabyte recording — and opens the Configure Streams dialog listing every
 PCM channel it found.</p>
 
+<div class="note"><strong>A stream has a name and a number.</strong> The name is the label the
+recording's TMATS metadata gives it, such as <code>CH-01 PRN 15 5M</code>; Configure Streams
+shows it, and so do the legend and the plot's series. The number is its Chapter 10 channel ID,
+which the recorder assigns (<code>13</code> here), so it need not match the <code>01</code> in the
+name. The number turns up where the application has to tell channels apart: <code>CH 13</code>
+beside a stream in Customize View, <code>[CH 13 &hellip;]</code> at the start of a log line, and
+<code>CH26</code> in a Receiver SNR legend entry, as in <code>CH26 C_RCVR1</code>, the combined
+channel of receiver 1 of channel 26.</div>
+
 <h3>Step 2 — Choose which streams to process, and how</h3>
 
 {{FIG:walk-fs-02-configure-streams.png|Configure Streams. Three streams are selected for processing; the fourth is switched off and greys out. The Ready column shows at a glance which are fully configured.|Configure Streams dialog with four PCM channels, three enabled, showing green and red ready indicators}}
@@ -584,7 +593,10 @@ mislabelled result you cannot.</div>
 <p>Every processed file stays loaded. Right-click the chart and use <strong>Plot File</strong>
 to choose which one you are looking at.</p>
 
-{{FIG:walk-batch-03-plot-file-menu.png|After a batch run, Plot File lists every recording that was processed. All files (overlaid) draws them together on one time axis.|Plot File submenu listing three processed recordings plus an All files overlaid option}}
+{{FIG:walk-batch-03-plot-file-menu.png|After a batch run, Plot File lists every recording that was processed, by its file name. All files (overlaid) draws them together on one time axis. The streams of the recording shown, here CH-01 PRN 15 5M and CH-03 PRN 11 1M, are in the legend and in Customize View.|Plot File submenu listing three processed recordings by file name plus an All files overlaid option}}
+
+<p>The list is of <em>files</em>, not streams: each entry is a recording you processed, named
+after its file. Which streams of it are drawn is a separate choice, made in Customize View.</p>
 
 <p>Two ways to use this. Pick a <strong>single file</strong> to review each recording on its
 own, with the time axis zoomed to that recording's span. Or choose <strong>All files
