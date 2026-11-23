@@ -142,7 +142,7 @@ channel of receiver 1 of channel 26.</div>
 
 <h3>Step 2 — Choose which streams to process, and how</h3>
 
-{{FIG:walk-fs-02-configure-streams.png|Configure Streams. Three streams are selected for processing; the fourth is switched off and greys out. The Ready column shows at a glance which are fully configured.|Configure Streams dialog with four PCM channels, three enabled, showing green and red ready indicators}}
+{{FIG:walk-fs-02-configure-streams.png|Configure Streams, ready to run. CH-01 and CH-03 are switched on and configured, so each shows a green ✓; CH-02 and CH-04 are switched off, greyed out, and need nothing. This walkthrough follows those two streams, the ones in the sample recording that carry data, through the figures below.|Configure Streams dialog with four PCM channels, two switched on with green ready indicators and two switched off with grey ones, and Process available}}
 
 <p>For each stream you want to measure, switch <strong>Process</strong> on and leave
 <strong>Mode</strong> at <em>Frame Sync Lock</em>. Then open its gear dialog and fill in the
@@ -155,7 +155,8 @@ has enough information to run:</p>
 <ul>
   <li><span style="color:green;">✓</span> — configured and ready to process.</li>
   <li><span style="color:red;">✗</span> — selected for processing but not yet configured.
-      Open the gear dialog.</li>
+      Open the gear dialog. (Switch on CH-02 in the figure above and it shows this mark, and the
+      line under the rows names it.)</li>
   <li><span style="color:gray;">✗</span> — not selected. Nothing is required of it.</li>
 </ul>
 
@@ -186,7 +187,7 @@ misconfigured is a large sync count with almost no frames.</p>
 
 <h3>Step 4 — Read the plot</h3>
 
-{{FIG:FrameSync Perctentage Plot with Legend.png|Lock % over time. These streams hold near 100% and drop vertically to zero at loss of lock — the cliffs are the events worth investigating.|Frame sync lock percentage plot with four streams near 100 percent dropping to zero}}
+{{FIG:FrameSync Perctentage Plot with Legend.png|Lock % over time. These streams hold near 100% and drop vertically to zero at loss of lock — the cliffs are the events worth investigating.|Frame sync lock percentage plot with two streams near 100 percent, one dropping to zero}}
 
 <p>The left axis is the percentage of each averaging window in which the stream held lock.
 There is no right-hand axis here because this recording carries no receiver data — an axis

@@ -129,7 +129,7 @@ after('accumulation line.</p>',
           'Lock&nbsp;% view. These streams hold near 100% and then drop vertically to zero at loss '
           'of lock — the sharp cliffs are the events worth investigating. The legend names each '
           'stream, and there is no SNR scale on the right because this file carries none.',
-          'Frame sync lock percentage plot with four streams near 100 percent dropping vertically to zero')
+          'Frame sync lock percentage plot with two streams near 100 percent, one dropping vertically to zero')
     + fig('Frame Error Accumulation Plot with Legend.png',
           'The same streams in <strong>Accumulation</strong> view (press <kbd>V</kbd>, or use the '
           'on-chart button, to switch). Each vertical rise is frames lost at one of those cliffs; a '
@@ -172,7 +172,7 @@ after('<h2 id="plot">3. Working with the plot</h2>',
       fig('walk-cust-01-lock-tab.png',
           'Customize View, on the Frame Sync Lock tab: one row per stream with its colour and an '
           'editable name. Hiding a stream here removes it from the plot without reprocessing.',
-          'Customize Plot Series dialog on the Frame Sync Lock Streams tab listing four streams')
+          'Customize Plot Series dialog on the Frame Sync Lock Streams tab listing two streams')
     + fig('walk-cust-02-snr-tree.png',
           'The same dialog on the Receiver SNR tab. Channels are grouped under their receiver, '
           'and a group toggle shows a partial state when only some of its channels are visible - '
@@ -194,8 +194,8 @@ after('<h3>Navigating</h3>',
 after('<h2 id="interface">7. Interface &amp; settings</h2>',
       fig('walk-err-01-log-error.png',
           'The log sidebar. Errors appear in red and warnings in amber among the normal progress '
-          'messages - here a stream whose frame sync pattern was not found, which is why only '
-          'two of the three curves reached the plot.',
+          'messages - here the same recording as above with CH-04 switched on as well. It found no '
+          'frame sync, which is why only two of the three streams reached the plot.',
           'The application showing the log sidebar with a red error message among progress lines')
     + fig('walk-theme-01-light-plot.png',
           'The light theme. The choice persists between sessions and applies to every window, '
