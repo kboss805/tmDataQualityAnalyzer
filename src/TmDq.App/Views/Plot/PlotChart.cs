@@ -47,10 +47,13 @@ public sealed class PlotChart : Control
 
     // The chart's layout, in pixels, as v2.x laid it out.
     public const double OuterMargin = 10, AxisLabelGap = 6, TickLength = 4, TickLabelGap = 12, TopInset = 12;
-    public const double FontSize = 12, PenWidth = 1.5;
+    public const double FontSize = 12, PenWidth = 1.5, StrongPenWidth = 2.25;
     public const int XTickCount = 10, YTickCount = 6;
     // The dotted grid's and the crosshair's dash patterns (a pen reads them and never changes them).
     private static readonly double[] GridDashes = { 1.0, 2.0 };
+
+    /// <summary>A dotted series' dashes, in multiples of its line's width: a dot, then twice as long a gap.</summary>
+    public static readonly IReadOnlyList<double> SeriesDots = new[] { 1.0, 2.0 };
     private static readonly double[] CrosshairDashes = { 4.0, 2.0 };
 
     public const byte BandAlpha = 90, BandEdgeAlpha = 190, CrosshairAlpha = 140, ZoomBandAlpha = 45;
@@ -448,7 +451,11 @@ public sealed class PlotChart : Control
         }
         // A draft's line is one device pixel, which Skia draws as a hairline without its stroker: measured, 52 dense
         // series' lines went from 32 ms to 4 ms.
-        dc.DrawGeometry(null, new ImmutablePen(new ImmutableSolidColorBrush(color), draft ? draftLine : PenWidth, lineJoin: PenLineJoin.Bevel), line);
+        // A dotted series is dotted at rest; a draft keeps its hairline solid, for the same reason as above. The combined
+        // polarization is a little thicker.
+        double width = draft ? draftLine : s.Strong ? StrongPenWidth : PenWidth;
+        ImmutableDashStyle? dots = s.Dotted && !draft ? new ImmutableDashStyle(SeriesDots, 0) : null;
+        dc.DrawGeometry(null, new ImmutablePen(new ImmutableSolidColorBrush(color), width, dots, lineJoin: PenLineJoin.Bevel), line);
     }
 
     /// <summary>The index of a long series with ordered times, built the first time it is drawn; null for the rest.</summary>

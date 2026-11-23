@@ -28,6 +28,13 @@ public sealed class PlotSeries
     public double YMin { get; init; }
     public double YMax { get; init; }
     public Color Color { get; set; }
+
+    /// <summary>Whether the line is drawn dotted: the second 15 of a run of streams (see <see cref="PlotColors.Assign"/>).</summary>
+    public bool Dotted { get; set; }
+
+    /// <summary>Whether the line is drawn a little thicker, the strongest of a stream's polarizations: the combined one.</summary>
+    public bool Strong { get; set; }
+
     public bool Visible { get; set; } = true;
 
     /// <summary>Whether the times are ordered, so the chart can walk only those in view (computed once).</summary>

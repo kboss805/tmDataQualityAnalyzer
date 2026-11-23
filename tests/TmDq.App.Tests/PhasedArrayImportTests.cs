@@ -63,7 +63,10 @@ public sealed class PhasedArrayImportTests
         Assert.Equal(new[] { "Info Importing CSV: av_snr_log.csv", "Success Imported CSV: av_snr_log.csv" },
                      vm.Log.Entries.Skip(before).Select(e => e.Level + " " + e.Text));
         Assert.Equal(90, vm.Plot.Series.Count);
-        Assert.All(vm.Plot.Series, s => Assert.True(s.IsPhasedArray && s.Visible && s.Metric == MetricType.Snr));
+        Assert.All(vm.Plot.Series, s => Assert.True(s.IsPhasedArray && s.Metric == MetricType.Snr));
+        // Only each stream's combined polarization shows at first (the 30 of the 90): Customize View shows the rest.
+        Assert.Equal(30, vm.Plot.Series.Count(s => s.Visible));
+        Assert.All(vm.Plot.Series.Where(s => s.Visible), s => Assert.Equal(PlotColors.CombinedChannelIndex, s.ChannelIndex));
         Assert.Equal("av_snr_log", vm.Plot.Title);
         Assert.Equal(("Imported av_snr_log.csv.", LogLevel.Success), (vm.Status, vm.StatusLevel));
         Assert.Contains(Sample, vm.RecentFiles);
@@ -146,6 +149,8 @@ public sealed class PhasedArrayImportTests
         Assert.Equal("Stream 1", streams[0].Label);
         Assert.Equal("Stream 30", streams[^1].Label);
         Assert.Equal(new[] { "H", "V", "C" }, streams[0].Channels.Select(c => c.Label));
+        Assert.Equal(new[] { false, false, true }, streams[0].Channels.Select(c => c.IsChecked));   // C alone is shown at first
+        Assert.Null(streams[0].IsChecked);                                                           // so its box is partly set
 
         // The legend names the series for their stream and polarization, not as a receiver's CH, RCVR and L, R, C.
         Assert.Equal("Stream 1 H", PlotViewModel.LegendLabel(vm.Plot.Series[0]));

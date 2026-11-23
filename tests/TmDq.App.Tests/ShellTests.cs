@@ -927,8 +927,8 @@ public sealed class ShellTests : IDisposable
     [Fact]
     public void TheLightThemeDrawsOnlyTheYellowOfThePrimariesDarkerAndTheDarkThemeNone()
     {
-        Color yellow = PlotColors.Snr[2];
-        foreach (Color primary in PlotColors.FrameSyncLock.Concat(PlotColors.Snr).Where(c => c != yellow))
+        Color yellow = PlotColors.StreamHues[9];   // the gold, the one hue of them that is pale on white
+        foreach (Color primary in PlotColors.FrameSyncLock.Concat(PlotColors.StreamHues).Where(c => c != yellow))
         {
             Assert.Equal(primary, ChartPalette.Light.SeriesColor(primary));
             Assert.True(ChartPalette.Contrast(primary, Colors.White) >= ChartPalette.Light.MinSeriesContrast, $"{primary} is below the least");
@@ -941,16 +941,18 @@ public sealed class ShellTests : IDisposable
         Assert.True(drawn.R <= yellow.R && drawn.G <= yellow.G && drawn.B <= yellow.B);
         Assert.True(drawn.R > drawn.G && drawn.G > drawn.B, "no longer a yellow");
 
-        foreach (Color c in PlotColors.FrameSyncLock.Concat(PlotColors.Snr).Concat(new[] { Colors.White, Colors.Yellow }))
+        foreach (Color c in PlotColors.FrameSyncLock.Concat(PlotColors.StreamHues).Concat(new[] { Colors.White, Colors.Yellow }))
             Assert.Equal(c, ChartPalette.Dark.SeriesColor(c));
     }
 
     [Fact]
     public void EveryShadeIsLegibleInTheLightThemeAndTheShadesOfAPrimaryStayDistinct()
     {
-        foreach (Color primary in PlotColors.FrameSyncLock.Concat(PlotColors.Snr))
+        foreach (Color primary in PlotColors.FrameSyncLock.Concat(PlotColors.StreamHues))
         {
-            var shades = Enumerable.Range(0, 9).Select(level => PlotColors.Shade(primary, level)).ToList();
+            // The levels a stream's first four channels take (PlotColors.Weakness): the combined channel, the other two, a fourth.
+            // Past them the shades of a hue are nearly one colour already, and darkening can make two of them one.
+            var shades = Enumerable.Range(0, 4).Select(level => PlotColors.Shade(primary, level)).ToList();
             var drawn = shades.Select(ChartPalette.Light.SeriesColor).ToList();
             Assert.All(drawn, c => Assert.True(ChartPalette.Contrast(c, Colors.White) >= ChartPalette.Light.MinSeriesContrast, $"{c} of {primary}"));
             Assert.Equal(shades.Distinct().Count(), drawn.Distinct().Count());

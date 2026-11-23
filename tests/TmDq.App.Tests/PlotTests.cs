@@ -91,15 +91,16 @@ public sealed class PlotTests
     public void TheShadesStartFromThePrimaries()
     {
         Assert.Equal(new[] { "106,13,173", "67,97,238", "46,184,92" }, PlotColors.FrameSyncLock.Select(c => $"{c.R},{c.G},{c.B}"));
-        Assert.Equal(new[] { "204,0,0", "255,140,0", "230,200,30" }, PlotColors.Snr.Select(c => $"{c.R},{c.G},{c.B}"));
+        Assert.Equal(new[] { "204,0,0", "30,90,220", "20,150,60", "255,140,0", "120,40,190", "0,170,200", "210,30,140", "130,170,20", "0,140,120", "230,190,0", "70,50,200", "240,80,120", "160,80,20", "70,160,255", "10,100,50" },
+                     PlotColors.StreamHues.Select(c => $"{c.R},{c.G},{c.B}"));
     }
 
     [AvaloniaFact]
     public void EachStreamAndEachReceiverTakesItsColour()
     {
         // Four lock streams: the three primaries, then the first again a shade lighter; a stream's missed frames share
-        // its lock colour. SNR: each receiver its primary (cycling, a shade lighter past the third), each further
-        // channel a shade lighter again.
+        // its lock colour. SNR: each receiver its own hue of the 15, a channel the hue made lighter (the third, the
+        // combined one, not at all: it is the strongest).
         double[] x = { 0, 1 }, y = { 1, 2 };
         var plot = new PlotViewModel();
         plot.SetSeries(new[]
@@ -116,12 +117,47 @@ public sealed class PlotTests
         Assert.Equal(Rgb("67,97,238"), ColorOf(2));
         Assert.Equal(Rgb("46,184,92"), ColorOf(3));
         Assert.Equal(Rgb("135,60,193"), ColorOf(4));
-        Assert.Equal(Rgb("204,0,0"), ColorOf(5));
-        Assert.Equal(Rgb("224,53,53"), ColorOf(6));
-        Assert.Equal(Rgb("255,140,0"), ColorOf(7));
-        Assert.Equal(Rgb("230,200,30"), ColorOf(8));
-        Assert.Equal(Rgb("224,53,53"), ColorOf(9));     // receiver 4: red again, a shade lighter
-        Assert.Equal(Rgb("255,180,180"), ColorOf(10));  // and its third channel three shades
+        IReadOnlyList<Color> hues = PlotColors.StreamHues;
+        Assert.Equal(PlotColors.Shade(hues[0], 1), ColorOf(5));    // receiver 1, its first channel: one tint
+        Assert.Equal(PlotColors.Shade(hues[0], 2), ColorOf(6));    // its second: two
+        Assert.Equal(PlotColors.Shade(hues[1], 1), ColorOf(7));    // receiver 2 has its own hue
+        Assert.Equal(PlotColors.Shade(hues[2], 1), ColorOf(8));
+        Assert.Equal(PlotColors.Shade(hues[3], 1), ColorOf(9));
+        Assert.Equal(hues[3], ColorOf(10));                        // receiver 4's third channel, the combined one: the hue itself
+    }
+
+    [Fact]
+    public void TheFifteenHuesRunSolidAndThenDottedAndTheCombinedChannelIsTheStrongest()
+    {
+        double[] x = { 0, 1 }, y = { 1, 2 };
+        var plot = new PlotViewModel();
+        // Thirty-one streams of three channels (a receiver's L, R and C, an antenna's H, V and C): id = stream * 3 + channel.
+        plot.SetSeries(Enumerable.Range(1, 31).SelectMany(stream => Enumerable.Range(0, 3).Select(channel =>
+            PlotFixtures.Snr((stream - 1) * 3 + channel, $"s{stream}c{channel}", 20, 0, stream, channel, x, y))));
+        PlotSeries Of(int stream, int channel) => plot.Series.Single(s => s.ReceiverIndex == stream && s.ChannelIndex == channel);
+
+        for (int stream = 1; stream <= 31; stream++)
+        {
+            // The first 15 solid, the second 15 dotted, the 31st solid again; every channel of a stream alike.
+            bool dotted = stream is >= 16 and <= 30;
+            Assert.All(Enumerable.Range(0, 3), channel => Assert.Equal(dotted, Of(stream, channel).Dotted));
+            // One hue to a stream, repeated every 15; its combined channel the hue itself, the other two tints of it.
+            Color hue = PlotColors.StreamHues[(stream - 1) % 15];
+            Assert.Equal(hue, Of(stream, 2).Color);
+            Assert.Equal(PlotColors.Shade(hue, 1), Of(stream, 0).Color);
+            Assert.Equal(PlotColors.Shade(hue, 2), Of(stream, 1).Color);
+            Assert.Equal(new[] { false, false, true }, Enumerable.Range(0, 3).Select(channel => Of(stream, channel).Strong));
+        }
+        Assert.Equal(Of(1, 2).Color, Of(16, 2).Color);   // the 16th stream is the first's hue, dotted
+        Assert.NotEqual(Of(1, 0).Color, Of(1, 1).Color);   // the two lighter tints are told apart, in every hue
+        Assert.All(PlotColors.StreamHues, hue => Assert.Equal(3, new[] { hue, PlotColors.Shade(hue, 1), PlotColors.Shade(hue, 2) }.Distinct().Count()));
+        // How many times lighter each channel is: L or H once, R or V twice, C not at all, then one more for each channel beyond.
+        Assert.Equal(new[] { 1, 2, 0, 3, 4 }, Enumerable.Range(0, 5).Select(PlotColors.Weakness));
+
+        // A Frame Sync Lock series is neither dotted nor strong, whatever it was assigned before.
+        plot.SetSeries(new[] { PlotFixtures.Lock(0, "a", 10, 0, x, y), PlotFixtures.Snr(1, "r", 20, 1, 20, 2, x, y) });
+        Assert.Equal((false, false), (plot.Series[0].Dotted, plot.Series[0].Strong));
+        Assert.Equal((true, true), (plot.Series[1].Dotted, plot.Series[1].Strong));
     }
 
     // ---- the plot's state, from runs --------------------------------------------------------------------------
@@ -875,6 +911,7 @@ public sealed class PlotTests
         double[] ys = Range(200000, _ => 100.0);
         var plot = new PlotViewModel();
         plot.SetSeries(new[] { PlotFixtures.Snr(0, "d", 1, 0, 1, 0, xs, ys) });
+        plot.RecolorSeries(0, PlotColors.StreamHues[0]);   // pure red: the first channel of a stream is a tint of its hue
         plot.SetRightMinOverride(0);
         plot.SetRightMaxOverride(100);
         Shown s = Show(plot);
@@ -882,6 +919,7 @@ public sealed class PlotTests
         Assert.True(perColumn > 10);
         ys[100000 + perColumn / 2] = 0.0;
         plot.SetSeries(new[] { PlotFixtures.Snr(0, "d", 1, 0, 1, 0, xs, ys) });
+        plot.RecolorSeries(0, PlotColors.StreamHues[0]);   // pure red: the first channel of a stream is a tint of its hue
         plot.SetRightMinOverride(0);
         plot.SetRightMaxOverride(100);
         Dispatcher.UIThread.RunJobs();
@@ -891,6 +929,7 @@ public sealed class PlotTests
 
         // Alternating 10 and 90: the band reaches both, and the mean runs through the middle.
         plot.SetSeries(new[] { PlotFixtures.Snr(0, "d", 1, 0, 1, 0, xs, Range(200000, i => i % 2 == 1 ? 90.0 : 10.0)) });
+        plot.RecolorSeries(0, PlotColors.StreamHues[0]);   // pure red: the first channel of a stream is a tint of its hue
         plot.SetRightMinOverride(0);
         plot.SetRightMaxOverride(100);
         Dispatcher.UIThread.RunJobs();
@@ -902,15 +941,67 @@ public sealed class PlotTests
         {
             Rect a = s.Area;
             var inside = new Rect(a.X + a.Width * 0.1, a.Y + a.Height * 0.25, a.Width * 0.8, a.Height * 0.15);
-            Assert.True(Frames.Near(fb, inside, PlotColors.Snr[0]) > inside.Width * inside.Height * 0.5, "the band is not filled in the series' colour");
+            Assert.True(Frames.Near(fb, inside, PlotColors.StreamHues[0]) > inside.Width * inside.Height * 0.5, "the band is not filled in the series' colour");
         }
         s.Window.Close();
     }
 
     [AvaloniaFact]
+    public void OnlyTheCombinedChannelOfEachReceiverShowsAtFirstWhetherProcessedOrImported()
+    {
+        // A processed recording: each receiver's third channel (C) shows, its L and R do not.
+        using RunOutcome cal = Run(StepCal, 1, StepCalSnr());
+        using var plot = new PlotViewModel();
+        plot.AddStream(cal.Results[0]);
+        Assert.Contains(plot.Series, s => s.Metric == MetricType.Snr && s.ChannelIndex != PlotColors.CombinedChannelIndex);
+        Assert.All(plot.Series.Where(s => s.Metric == MetricType.Snr),
+                   s => Assert.Equal(s.ChannelIndex == PlotColors.CombinedChannelIndex, s.Visible));
+        Assert.Equal(plot.Series.Select(s => s.ReceiverIndex).Distinct().Count(), plot.Series.Count(s => s.Visible));   // one a receiver
+
+        // The rule on its own: a group with no combined channel keeps every series, and Frame Sync Lock is left as it was.
+        double[] x = { 0, 1 }, y = { 1, 2 };
+        var series = new[]
+        {
+            PlotFixtures.Snr(0, "r1l", 20, 0, 1, 0, x, y), PlotFixtures.Snr(1, "r1r", 20, 0, 1, 1, x, y), PlotFixtures.Snr(2, "r1c", 20, 0, 1, 2, x, y),
+            PlotFixtures.Snr(3, "r2l", 20, 0, 2, 0, x, y), PlotFixtures.Snr(4, "r2r", 20, 0, 2, 1, x, y),   // a receiver with two channels
+            PlotFixtures.Snr(5, "other stream, same receiver number", 21, 1, 1, 0, x, y),                  // another stream: its own group
+            PlotFixtures.Lock(6, "lock", 10, 2, x, y),
+        };
+        PlotViewModel.ShowOnlyTheCombinedChannels(series);
+        Assert.Equal(new[] { false, false, true, true, true, true, true }, series.Select(s => s.Visible));
+    }
+
+    [AvaloniaFact]
+    public void ADottedSeriesIsDrawnInDotsAndAStrongOneThickerThanAPlainOne()
+    {
+        // The same flat line three times: plain, dotted, strong. Red pixels along it, across the plot's whole width.
+        int Drawn(bool dotted, bool strong)
+        {
+            var plot = new PlotViewModel();
+            plot.SetSeries(new[] { PlotFixtures.Snr(0, "line", 1, 0, 1, 0, new[] { 0.0, 2.0 }, new[] { 50.0, 50.0 }) });
+            plot.RecolorSeries(0, PlotColors.StreamHues[0]);
+            plot.Series[0].Dotted = dotted;
+            plot.Series[0].Strong = strong;
+            plot.SetRightMinOverride(0);
+            plot.SetRightMaxOverride(100);
+            Shown s = Show(plot);
+            int n = RedIn(s, 0.05, 0.95, 0.30, 0.70);
+            s.Window.Close();
+            return n;
+        }
+        int plain = Drawn(false, false), dotted = Drawn(true, false), strong = Drawn(false, true);
+
+        Assert.True(plain > 100, $"the plain line is {plain} pixels");
+        // A dot and then twice as long a gap: about a third of a plain line's pixels, whatever the anti-aliasing at the ends.
+        Assert.InRange(dotted, plain * 0.20, plain * 0.55);
+        // 2.25 against 1.5 pixels thick.
+        Assert.InRange(strong, plain * 1.25, plain * 1.9);
+    }
+
+    [AvaloniaFact]
     public void ThePaleYellowLineIsDrawnDarkerInTheLightThemeAndAsItWasInTheDark()
     {
-        Color yellow = PlotColors.Snr[2];
+        Color yellow = PlotColors.StreamHues[9];   // the gold: pale on the light theme
         Color darker = ChartPalette.Light.SeriesColor(yellow);
         Assert.NotEqual(yellow, darker);
         var plot = new PlotViewModel();

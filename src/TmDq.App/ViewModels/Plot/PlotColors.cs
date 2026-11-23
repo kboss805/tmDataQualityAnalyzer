@@ -5,8 +5,10 @@ using Avalonia.Media;
 namespace TmDq.App.ViewModels.Plot;
 
 /// <summary>
-/// The series colours of US4.0: Frame Sync Lock in purple, blue and green, one per stream; Receiver SNR in red,
-/// orange and yellow, one per receiver; and beyond the primaries, progressively lighter shades of them.
+/// The series colours of US4.0: Frame Sync Lock in purple, blue and green, one per stream, and beyond them progressively
+/// lighter shades; Receiver SNR in 15 hues, one per stream (a receiver, or a channel of a phased array antenna), the
+/// first 15 streams solid and the next 15 dotted, and within a stream the combined channel in the full hue and a little
+/// thicker, with its other two lighter tints of it.
 /// <para>A shade is made in 16-bit HSV, converted in <c>float</c> and rounded half away from zero: the arithmetic
 /// of the colour class v2.x drew with, step for step, so every shade is the very colour v2.x drew.
 /// <c>PlotTests</c> holds it to 84 shades v2.14.2 printed, round the whole hue wheel.</para>
@@ -21,13 +23,32 @@ public static class PlotColors
         Color.FromRgb(46, 184, 92),    // green
     };
 
-    /// <summary>The Receiver SNR primaries.</summary>
-    public static readonly IReadOnlyList<Color> Snr = new[]
+    /// <summary>
+    /// The hues of a Receiver SNR stream, 15 of them, each a saturated colour so that its two lighter tints (the stream's
+    /// polarizations, see <see cref="Assign"/>) stay different from it and from each other. A stream is a receiver, or a
+    /// channel of a phased array antenna; the 16th stream takes the first hue again, dotted.
+    /// </summary>
+    public static readonly IReadOnlyList<Color> StreamHues = new[]
     {
         Color.FromRgb(204, 0, 0),      // red
+        Color.FromRgb(30, 90, 220),    // blue
+        Color.FromRgb(20, 150, 60),    // green
         Color.FromRgb(255, 140, 0),    // orange
-        Color.FromRgb(230, 200, 30),   // yellow
+        Color.FromRgb(120, 40, 190),   // purple
+        Color.FromRgb(0, 170, 200),    // cyan
+        Color.FromRgb(210, 30, 140),   // magenta
+        Color.FromRgb(130, 170, 20),   // lime
+        Color.FromRgb(0, 140, 120),    // teal
+        Color.FromRgb(230, 190, 0),    // gold
+        Color.FromRgb(70, 50, 200),    // indigo
+        Color.FromRgb(240, 80, 120),   // rose
+        Color.FromRgb(160, 80, 20),    // brown
+        Color.FromRgb(70, 160, 255),   // sky
+        Color.FromRgb(10, 100, 50),    // forest
     };
+
+    /// <summary>The channel index of the combined polarization (a receiver's C, an antenna's C): the strongest.</summary>
+    public const int CombinedChannelIndex = 2;
 
     /// <summary>
     /// Colours every series, in order: the left-axis metrics share one colour per stream (by its stream order, the
@@ -49,13 +70,27 @@ public static class PlotColors
                 }
                 int n = FrameSyncLock.Count;
                 s.Color = Shade(FrameSyncLock[idx % n], idx / n);
+                s.Dotted = false;
+                s.Strong = false;
                 continue;
             }
-            int primaries = Snr.Count;
-            int receiver = Math.Max(0, s.ReceiverIndex - 1);
-            s.Color = Shade(Snr[receiver % primaries], receiver / primaries + s.ChannelIndex);
+            int hues = StreamHues.Count;
+            int stream = Math.Max(0, s.ReceiverIndex - 1);
+            s.Color = Shade(StreamHues[stream % hues], Weakness(s.ChannelIndex));
+            s.Dotted = stream / hues % 2 == 1;
+            s.Strong = s.ChannelIndex == CombinedChannelIndex;
         }
     }
+
+    /// <summary>How many times lighter a channel is than its stream's hue: the combined channel (index 2) none, the first
+    /// (L or H) once and the second (R or V) twice, then one more for each channel beyond them.</summary>
+    public static int Weakness(int channelIndex) => channelIndex switch
+    {
+        CombinedChannelIndex => 0,
+        0 => 1,
+        1 => 2,
+        _ => Math.Max(0, channelIndex),
+    };
 
     /// <summary><paramref name="color"/> made lighter <paramref name="level"/> times: per level the saturation
     /// falls by 60 (not below 40) and the value rises by 20 (not above 255). Level 0 or below is the colour itself.</summary>

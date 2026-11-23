@@ -579,9 +579,11 @@ public sealed class ManualFiguresTests : IDisposable
     [AvaloniaFact]
     public async Task TheReceiverPlotsAndStepCalibration()
     {
-        // Linear: 48 channels, the legend listing them all.
+        // Linear: 48 channels of sixteen receivers, and a plot opens with each receiver's combined channel only, so the legend lists sixteen.
         MainWindowViewModel linear = await StepCalProcessed();
         Assert.Equal(48, linear.Plot.Series.Count);
+        Assert.Equal(16, linear.Plot.LegendEntries().Count);
+        Assert.All(linear.Plot.LegendEntries(), e => Assert.StartsWith("CH26 C_RCVR", e.Label, StringComparison.Ordinal));
         Assert.False(linear.Plot.LeftAxisVisible);   // "no left-hand axis"
         MainWindow w = MainWindowOf(linear);
         SKRectI chart = Bounds(PlotViewOf(w), w);
@@ -634,12 +636,12 @@ public sealed class ManualFiguresTests : IDisposable
         Save("walk-cust-01-lock-tab.png", window);
         window.Close();
 
-        // The Receiver SNR tab: one receiver expanded, two of its three channels shown, so its box is partly set.
+        // The Receiver SNR tab: one receiver expanded, only its combined channel shown (how a plot opens), so its box is partly set.
         MainWindowViewModel snr = await StepCalProcessed();
         var snrView = new CustomizeViewModel(snr.Plot, new NoPlotPrompts());
         ReceiverGroup first = snrView.SelectedSnrStream!.Receivers.First();
         first.IsExpanded = true;
-        first.Channels[2].IsChecked = false;
+        Assert.Equal(new[] { false, false, true }, first.Channels.Select(c => c.IsChecked));
         Assert.Null(first.IsChecked);
         window = new CustomizeViewWindow { DataContext = snrView };
         window.FindControl<TabControl>("Tabs")!.SelectedIndex = 1;

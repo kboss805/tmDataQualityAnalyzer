@@ -1,0 +1,105 @@
+{
+  "suite": "app",
+  "args": ["-stopOnFail"],
+  "mutants": [
+    {
+      "id": "C1",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "s.Dotted = stream / hues % 2 == 1;",
+      "new": "s.Dotted = false;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "no series is ever dotted"
+    },
+    {
+      "id": "C2",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "s.Dotted = stream / hues % 2 == 1;",
+      "new": "s.Dotted = stream / hues % 2 == 0;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "the first 15 are dotted and the second 15 solid"
+    },
+    {
+      "id": "C3",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "s.Strong = s.ChannelIndex == CombinedChannelIndex;",
+      "new": "s.Strong = true;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "every channel is drawn thick"
+    },
+    {
+      "id": "C4",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "CombinedChannelIndex => 0,",
+      "new": "CombinedChannelIndex => 1,",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "the combined channel is as light as the first"
+    },
+    {
+      "id": "C5",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "        0 => 1,\n",
+      "new": "        0 => 0,\n",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "the first channel (L or H) is the full hue, as the combined one is"
+    },
+    {
+      "id": "C6",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "StreamHues[stream % hues]",
+      "new": "StreamHues[0]",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "every stream takes the first hue"
+    },
+    {
+      "id": "C7",
+      "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
+      "old": "double width = draft ? draftLine : s.Strong ? StrongPenWidth : PenWidth;",
+      "new": "double width = draft ? draftLine : PenWidth;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "the combined channel is drawn as thin as the others"
+    },
+    {
+      "id": "C8",
+      "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
+      "old": "ImmutableDashStyle? dots = s.Dotted && !draft ? new ImmutableDashStyle(SeriesDots, 0) : null;",
+      "new": "ImmutableDashStyle? dots = null;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "a dotted series is drawn solid"
+    },
+    {
+      "id": "C9",
+      "file": "src/TmDq.App/Views/Plot/PlotLegend.cs",
+      "old": "if (e.Dotted)\n        {\n            // A dotted series' swatch",
+      "new": "if (e.Dotted && false)\n        {\n            // A dotted series' swatch",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ChartViewTests"],
+      "expect": "caught",
+      "note": "a dotted series has a solid swatch"
+    },
+    {
+      "id": "C10",
+      "file": "src/TmDq.App/Views/Plot/PlotLegend.cs",
+      "old": "double thickness = e.Strong ? StrongSwatchThickness : SwatchThickness;",
+      "new": "double thickness = SwatchThickness;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ChartViewTests"],
+      "expect": "caught",
+      "note": "the strong series' swatch is as thin as the others"
+    },
+    {
+      "id": "C11",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "s.Color, s.Dotted, s.Strong));",
+      "new": "s.Color));",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ChartViewTests"],
+      "expect": "caught",
+      "note": "the legend is never told a series is dotted or strong"
+    }
+  ]
+}

@@ -12,6 +12,43 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Receiver SNR series in 15 hues, solid then dotted, the combined channel the strongest, and only that channel shown at first
+
+Asked for after the US10.0 skeleton's render showed 30 streams' colours running out of difference, and extended by the user to the
+processed receivers, with a second request in the same session: **only the combined channel of each stream shows when a plot opens**, to
+keep it readable. **15 hues, one per stream** (a receiver, or a channel of a phased array antenna), **the first 15 streams solid and
+the next 15 dotted** in the same hues (the 31st starts over); **within a stream the combined channel is the strongest**, the full hue and a
+little thicker (2.25 px against 1.5), and the other two channels two lighter tints of it (the first, L or H, once lighter; the second, R or V, twice).
+The user chose "same hue, three strengths" over a fixed hue family for each polarization.
+
+- **The colours.** `PlotColors.Snr` (red, orange, yellow, then progressively lighter shades by receiver cycle and channel) is
+  `PlotColors.StreamHues`, 15 saturated hues chosen so that every hue's two tints stay different from it and from each other (a test holds that for
+  all 15). `PlotColors.Assign` sets, for a Receiver SNR series, its colour, and two new flags on `PlotSeries`: `Dotted` (stream 16 to 30) and
+  `Strong` (the combined channel). `PlotColors.Weakness` is how many tints lighter a channel is: C none, the first one, the second two, then one
+  more for each channel past them. **This changes how processed receivers look**, not only the antenna: before, a receiver's L was its
+  primary and its C the faintest shade; now C is the strongest. Frame Sync Lock colours are unchanged.
+- **What shows at first.** `PlotViewModel.ShowOnlyTheCombinedChannels`, run on the series of a processed stream (`AddStream`) and of an imported
+  CSV or antenna log (`ShowCsv`), leaves visible only the combined channel (index 2: a receiver's C, an antenna's C) of each (source, stream, receiver)
+  group of Receiver SNR series; **a group with no combined channel keeps all of its series**, so a receiver set up with two channels is not
+  hidden entirely. Frame Sync Lock series are untouched. Customize View shows the rest (a receiver's box is partly set at first). A 16-receiver,
+  48-channel recording opens with 16 lines, not 48. Export Data still writes every series, shown or not; the soak (which compares exports) is unaffected.
+- **The drawing.** `PlotChart` draws a dotted series with a dash pen (`SeriesDots`, a dot and then twice as long a gap, in multiples of the
+  line's width) and a strong one 2.25 px wide. A draft (during a pan or zoom of a heavy plot) keeps its solid hairline, for the speed that exists for.
+  The legend's swatch is a dotted `Line` for a dotted series and 4 px thick for a strong one (`LegendEntry` carries both flags); the band of a
+  decimated series stays solid. The image export draws through the same routine, so PNG, SVG and PDF show the same dots.
+- **Light theme.** Only the gold hue is pale on white (1.8 to 1), and is drawn darker there as the old yellow was. The test that every shade
+  of a hue stays distinct once darkened now covers a stream's first four channels (levels 0 to 3); past them two shades of green and forest can
+  become one after darkening, and those were near-identical already.
+
+How it was checked. App baseline 785 to **789** passed: the colour tests that named the old primaries now name the 15 hues, and new cases hold
+the solid/dotted split at 15 and 16 and 30 and 31, the hue per stream, the tints and the strong flag, the pixels of a dotted line (about a third of a
+plain line's) and of a strong one (thicker), the dotted and thick legend swatches, and the default visibility (a processed recording, a receiver with two
+channels, two streams sharing a receiver number, an imported log). Two existing tests changed meaning: the antenna import now expects 30 of its 90 series shown,
+and the manual's Customize View figure shows the state a plot opens in. Mutation lists `eng/mutants/series-colours.json` (11, all caught) and
+`eng/mutants/combined-only-default.json` (5); the kept `plot-draft.json` A4 was re-anchored to the pen-width line and re-run (caught). The antenna sample was rendered and looked at: the hues are told apart, C is the bold line of each
+stream, and the dotted streams read as dotted. **Manual:** the walkthrough says a plot opens with only the combined channels and its Customize View figure and caption
+show that; its older plot figures (v2.x screenshots with all 48 channels on) are unchanged and now say so. A review of every figure is the deep dive still to come.
+
 #### US10.0, the skeleton: an antenna's SNR log is imported, shown as 90 series, and never exported
 
 The first working version of the story (its text is the user's to fine-tune and is not changed here). Importing a CSV now asks what the file is,
