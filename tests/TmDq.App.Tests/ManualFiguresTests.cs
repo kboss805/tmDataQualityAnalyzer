@@ -536,15 +536,19 @@ public sealed class ManualFiguresTests : IDisposable
     [AvaloniaFact]
     public async Task ConfigureStreamsAndTheSetupDialogs()
     {
-        // Three streams selected, two configured; the fourth off. Each Ready mark in its state.
+        // The walkthrough's own choice, the one every later figure of the PRN recording shows: CH-01 and CH-03, the two
+        // streams that carry data, are on and ready; CH-02 and CH-04 are off. Process is free to run.
         Ch10File prn = StreamsRun.Open(Prn);
         var configure = new ConfigureStreamsViewModel(Prn, prn, new FakeStreamDialogs(), AppServices.Any, Repo.Root, AppServices.Any);
         List<StreamSetup> template = PrnTemplate().Entries.Select(e => e.Config).ToList();
         configure.Rows[0].Setup = template[0] with { Process = true };
-        configure.Rows[1].Process = true;
         configure.Rows[2].Setup = template[2] with { Process = true };
-        Assert.Equal(new[] { Readiness.Ready, Readiness.NeedsConfiguration, Readiness.Ready, Readiness.Idle },
+        Assert.Equal(new[] { Readiness.Ready, Readiness.Idle, Readiness.Ready, Readiness.Idle },
                      configure.Rows.Select(r => StreamRules.ReadinessOf(r.Setup)));
+        Assert.True(configure.CanProcess);
+        // And it is the run the plot figures come from: the streams ticked here are the curves drawn there.
+        Assert.Equal(configure.Rows.Where(r => r.Process).Select(r => r.Label),
+                     PlotFixtures.Locks(await PrnProcessed()).Select(s => s.Name));
         Window window = Shown(new ConfigureStreamsWindow { DataContext = configure });
         Save("Config Streams Dialg.png", window);
         Save("walk-fs-02-configure-streams.png", window);

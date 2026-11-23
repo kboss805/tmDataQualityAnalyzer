@@ -12,6 +12,22 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Manual figures deep dive, part 2: one story across the figures, and alt text that counts right
+
+Findings 4 to 6 of the review. The frame sync walkthrough's figures showed three different stories of one recording: Configure Streams with
+three streams on (one unconfigured, red ✗, Process greyed, the caption silent about it), a run of two, and an error figure of three.
+
+- **The scene is now the walkthrough's choice.** Configure Streams shows CH-01 and CH-03, the two streams of `prn_testfile` that carry data,
+  on and ready (green ✓), CH-02 and CH-04 off (grey ✗), Process available. Its caption says so and says the later figures follow those two
+  streams; the Ready list notes that switching CH-02 on gives the red mark. `ManualFiguresTests` asserts the readiness of the four rows, that
+  `CanProcess` holds, and that the streams ticked there are the curves of the run the plot figures come from.
+- **The error figure's caption** says what it is: the same recording with CH-04 switched on as well, which found no frame sync, so two of
+  its three streams reached the plot (it said "pattern was not found", which the log's "0 bytes processed" does not support).
+- **Alt text said "four streams"** for two-stream plots (the lock plot, in the base manual and the walkthroughs, and the Customize View
+  Frame Sync Lock tab); it now counts what the figure shows.
+- Checked: the full app suite, 797 passed and 34 not run, as before; no mutation check, since nothing the application does changed (the
+  scene's new assertions are the guard). The run-log figures re-rendered with their usual capture noise.
+
 #### Manual figures deep dive, part 1: the names a reader meets, and a menu that ate underscores
 
 The user began the review of the manual's figures with one that "didn't make sense": the Plot File selector listed **flight 1, flight 2,
