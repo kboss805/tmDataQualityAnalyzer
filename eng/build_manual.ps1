@@ -41,13 +41,11 @@ $SrcDir     = Join-Path $ProjectDir 'docs\manual_images'
 $OutDir     = Join-Path $SrcDir 'processed'
 $MaxWidth   = 1200
 
-# One figure shows nothing of the application (a step file open in a text editor), so no test renders it: it is
-# committed beside the rendered ones and kept when they are made again.
-$Kept = @('walk-cal-05-step-toml.png')
+# Every figure is rendered from the application, so making them again starts from an empty folder.
 
 if (-not $NoCapture) {
     Write-Host "Rendering the figures from the application (ManualFiguresTests)..."
-    Get-ChildItem $SrcDir -Filter *.png | Where-Object { $Kept -notcontains $_.Name } | Remove-Item -Force
+    Get-ChildItem $SrcDir -Filter *.png | Remove-Item -Force
     $tests = Join-Path $ProjectDir 'tests\TmDq.App.Tests'
     & dotnet build $tests -c Release -nologo -v q
     if ($LASTEXITCODE -ne 0) { throw "the tests did not build ($LASTEXITCODE)" }
@@ -57,9 +55,6 @@ if (-not $NoCapture) {
     & (Get-TestExePath $ProjectDir 'TmDq.App.Tests' 'Release') -class TmDq.App.Tests.ManualFiguresTests
     if ($LASTEXITCODE -ne 0) { throw "a figure's scene failed ($LASTEXITCODE): its caption no longer holds, or it could not be rendered" }
     Remove-Item Env:TMDQ_MANUAL_FIGURES
-}
-foreach ($name in $Kept) {
-    if (-not (Test-Path (Join-Path $SrcDir $name))) { throw "Missing figure: $name (it is committed, not rendered)" }
 }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null

@@ -152,6 +152,13 @@ public sealed class PlotChart : Control
     /// the title and the headroom kept for the overlays at the top.</summary>
     public Rect PlotArea => AreaFor(Bounds.Size);
 
+    /// <summary>
+    /// Where the legend's right edge may reach in a chart of <paramref name="size"/>: the chart's own right edge, or, while
+    /// the right axis is shown, the plot area's, so that the legend does not cover that axis's labels and title. A hidden
+    /// axis reserves no gutter, so there is nothing to keep clear.
+    /// </summary>
+    public double LegendRightEdge(Size size) => Plot?.RightAxisVisible == true ? AreaFor(size).Right : size.Width;
+
     private Rect AreaFor(Size size)
     {
         PlotViewModel? vm = Plot;

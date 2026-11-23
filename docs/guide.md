@@ -182,7 +182,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can show or hide individual Frame Sync Lock and Receiver SNR series.
 - [x] A movable legend overlay floats inside the chart instead of sitting in a separate panel below it, showing a line-swatch and label for each visible series.
 - [x] The user can click-drag the legend anywhere inside the plot area to keep it clear of data of interest.
-- [x] The legend defaults to the top-right corner and resets there each new session.
+- [x] The legend defaults to the top-right corner and resets there each new session; with the right axis shown (Receiver SNR) its right edge stops a margin short of that axis's labels instead of covering them.
 - [x] The user can show or hide the legend from the context menu's **Show Legend** item (or `L`). The choice persists across sessions, and a hidden legend is excluded from exported images.
 - [x] The legend background is translucent so plot data behind it stays visible.
 - [x] The legend's height is capped with a vertical scrollbar for dense plots, such as a Receiver SNR file with 48+ channels.

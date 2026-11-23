@@ -70,6 +70,33 @@ public sealed class ManualFiguresTests : IDisposable
         TempFiles.DeleteDirectory(_scratch, recursive: true);
     }
 
+    /// <summary>The calibration walkthrough shows the step file as text, not as a picture of an editor: what it shows must
+    /// be lines of the file the application ships (<c>settings\rcvr_cals\TRC.toml</c>), in its order, so the manual cannot
+    /// describe a file that is not there.</summary>
+    [Fact]
+    public void TheStepFileTheWalkthroughShowsIsLinesOfTheOneTheApplicationShips()
+    {
+        string html = File.ReadAllText(Repo.File(@"docs\manual\walkthroughs.html"));
+        const string open = "<pre id=\"step-toml\">";
+        int start = html.IndexOf(open, StringComparison.Ordinal);
+        Assert.True(start >= 0, "the walkthrough has lost its step file excerpt");
+        int end = html.IndexOf("</pre>", start, StringComparison.Ordinal);
+        string shown = System.Net.WebUtility.HtmlDecode(html[(start + open.Length)..end]);
+
+        string[] shipped = File.ReadAllLines(Repo.File(@"settings\rcvr_cals\TRC.toml"));
+        int from = 0, checkedLines = 0;
+        foreach (string line in shown.Split('\n').Select(l => l.TrimEnd('\r')))
+        {
+            if (line == "…" || line.Length == 0) continue;   // the cut, and the blank lines between
+            int at = Array.IndexOf(shipped, line, from);
+            Assert.True(at >= 0, $"the manual shows '{line}', which the shipped TRC.toml does not have there");
+            from = at + 1;
+            checkedLines++;
+        }
+        Assert.True(checkedLines >= 8, $"only {checkedLines} lines were compared");
+        Assert.Contains("db = 60.0", shown, StringComparison.Ordinal);   // the file's last level: an excerpt that stops short says "eleven steps" of a file it cuts
+    }
+
     /// <summary>The folder a dialog shows where the scene's files really are (the checkout, or a scratch folder named
     /// for the run), which would change the figure from one checkout or run to the next and put the user's name in
     /// the manual.</summary>

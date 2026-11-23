@@ -12,6 +12,31 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Manual figures deep dive, part 3: the legend off the right axis, and a step file shown as text
+
+Findings 7 and 8 of the review; 9 and 10 were looked at and left as they are (below).
+
+- **The legend no longer covers the right axis (finding 7, an application defect).** The legend sat a margin inside the chart's right
+  edge, which with Receiver SNR shown is where that axis's labels and title are: the figure of the SNR plot with its legend had `100.0`,
+  `80.0` and the axis title under the legend's rows. `PlotChart.LegendRightEdge` gives the edge the legend may reach (the plot area's,
+  while the right axis is shown; the chart's own, as before, when it is not: lock-only plots are unchanged), `PlotLegend.Show` and
+  `HostResized` take it, and an undragged legend sits against it; a dragged one is still kept only inside the chart. Guarded by
+  `TheLegendSitsLeftOfTheRightAxisLabelsWhileThatAxisIsShown` (no right axis, right axis, resized). Checked with `eng\mutate.ps1` on the
+  chart suite: five mutants (the anchor ignored, the condition inverted, the edge forgotten on a resize, on a new series, and in the
+  placement) all CAUGHT; one first draft of a mutant did not compile (CA1822) and was replaced. The manual's legend bullet and the
+  guide's US4.0 criterion say it.
+- **The step file is text, not a picture of an editor (finding 8).** `walk-cal-05-step-toml.png` was a hand-made Notepad++ screenshot of
+  `D:\Work\TRC.toml`, the one figure no test rendered and `build_manual.ps1` had to keep; the file the dialogs offer is the shipped
+  `settings\rcvr_cals\TRC.toml`. The walkthrough now quotes its start and end in a `<pre>`, with a caption that names it, and
+  `TheStepFileTheWalkthroughShowsIsLinesOfTheOneTheApplicationShips` compares every line shown with the shipped file, in order. The
+  picture and `build_manual.ps1`'s list of committed figures are gone: every figure is rendered now.
+- **Left alone, on purpose.** Finding 9: the Y axis ticks are six evenly spaced values across the axis's range (231, 462, 693... for
+  a maximum of 1155), as v2.x drew them; rounder ticks would be a change to every plot, the user's to decide. Finding 10: the log's clock
+  is frozen on purpose (`FigureClock`, so a re-render does not change the figure), and the dialogs' figures are captures of their
+  content without a title bar, which the manual's captions name.
+- Checked: the full app suite, 800 passed and 34 not run (two more: the two tests above). The Customize View tree figure re-rendered
+  with a pixel of capture noise.
+
 #### Manual figures deep dive, part 2: one story across the figures, and alt text that counts right
 
 Findings 4 to 6 of the review. The frame sync walkthrough's figures showed three different stories of one recording: Configure Streams with
