@@ -56,14 +56,17 @@ internal static class Menus
         return Enumerable.Range(0, menu.ItemCount).Select(i => (object?)menu.ContainerFromIndex(i)).ToList();
     }
 
-    /// <summary>Each entry's header, "-" for a separator.</summary>
-    public static string[] Headers(ItemsControl menu) => Entries(menu).Select(i => i is MenuItem m ? (string)m.Header! : "-").ToArray();
+    /// <summary>Each entry's header as the menu draws it, "-" for a separator: an entry from the data has each underscore doubled
+    /// (<c>MenuChoice.DisplayHeader</c>), which Avalonia draws as one.</summary>
+    public static string[] Headers(ItemsControl menu) => Entries(menu).Select(Drawn).ToArray();
 
-    public static string[] Headers(IEnumerable<object?> items) => items.Select(i => i is MenuItem m ? (string)m.Header! : "-").ToArray();
+    public static string[] Headers(IEnumerable<object?> items) => items.Select(Drawn).ToArray();
+
+    private static string Drawn(object? item) => item is MenuItem m ? ((string)m.Header!).Replace("__", "_", System.StringComparison.Ordinal) : "-";
 
     public static MenuItem Item(ItemsControl menu, string header) =>
-        Entries(menu).OfType<MenuItem>().Single(i => (string?)i.Header == header);
+        Entries(menu).OfType<MenuItem>().Single(i => Drawn(i) == header);
 
     public static MenuItem Item(IEnumerable<object?> items, string header) =>
-        items.OfType<MenuItem>().Single(i => (string?)i.Header == header);
+        items.OfType<MenuItem>().Single(i => Drawn(i) == header);
 }

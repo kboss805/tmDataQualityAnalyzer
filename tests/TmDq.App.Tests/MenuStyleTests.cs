@@ -1,6 +1,7 @@
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -121,6 +122,42 @@ public class MenuStyleTests
             Assert.Equal((28.0, 28.0), (row.Height, Frames.InWindow(shortcut, window).Height));
             // The highlight does not run to the menu's edge: it is inset, as VS Code's is.
             Assert.True(row.Left >= 4 && menu.Right - row.Right >= 4, $"row {row} in menu {menu}");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    /// <summary>How wide the text of a menu item draws, whatever room the menu gives it.</summary>
+    private static double NaturalWidth(MenuItem item)
+    {
+        AccessText text = item.GetVisualDescendants().OfType<AccessText>().Single();
+        text.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return text.DesiredSize.Width;
+    }
+
+    [AvaloniaFact]
+    public void AFileNameInAMenuKeepsItsUnderscores()
+    {
+        // Avalonia reads a lone underscore in a menu item's text as its shortcut's mark and draws none, so Recent Files and
+        // Plot File listed prn_testfile as "prntestfile".
+        var choice = new TmDq.App.ViewModels.MenuChoice("prn_testfile, sample.ch10");
+        Assert.Equal("prn__testfile, sample.ch10", choice.DisplayHeader);
+        Assert.Equal("-", TmDq.App.ViewModels.MenuChoice.Separator().DisplayHeader);   // the separator's header is not text
+        var item = new MenuItem { Theme = (ControlTheme)Application.Current!.FindResource("MenuChoice")!, DataContext = choice };
+        var plain = new MenuItem { Header = choice.Header };   // as it was: the header as it is
+        var presenter = new MenuFlyoutPresenter();
+        presenter.Items.Add(item);
+        presenter.Items.Add(plain);
+        var window = new Window { Content = presenter, SizeToContent = SizeToContent.WidthAndHeight };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            // The text drawn is the one with the underscore in it: wider than the one that lost it, by that underscore.
+            double kept = NaturalWidth(item), lost = NaturalWidth(plain);
+            Assert.True(kept > lost, $"drawn {kept} wide with the underscore, {lost} without it");
         }
         finally
         {

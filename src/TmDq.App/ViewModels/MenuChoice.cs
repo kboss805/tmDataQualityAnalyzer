@@ -28,6 +28,11 @@ public sealed class MenuChoice : ObservableObject
 
     public string Header { get; }
 
+    /// <summary>What a menu item is given to draw: <see cref="Header"/> with each underscore doubled. Avalonia reads a single
+    /// underscore in a menu item's text as the mark of its keyboard shortcut and leaves it out, so a recording called
+    /// <c>prn_testfile</c> was listed as "prntestfile"; a doubled one is drawn as one.</summary>
+    public string DisplayHeader => Header.Replace("_", "__", System.StringComparison.Ordinal);
+
     public ICommand? Command { get; }
 
     public object? Parameter { get; }
