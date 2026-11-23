@@ -22,6 +22,7 @@
 #include "framesetup.h"
 #include "receiverparamsfile.h"
 #include "framesyncfile.h"
+#include "phasedarraylogparser.h"
 #include "templatematcher.h"
 
 namespace {
@@ -284,6 +285,33 @@ int32_t tmdq_csv_parse(const char* path_utf8, tmdq_csv** out)
         if (!csv->result.success)
         {
             tmdq::setError("the file is not a readable series CSV (unreadable, wrong header, or no parseable sample)");
+            return TMDQ_ERR_PREPARE;
+        }
+        *out = csv.release();
+        return TMDQ_OK;
+    });
+}
+
+int32_t tmdq_phased_array_parse(const char* path_utf8, tmdq_csv** out)
+{
+    tmdq::clearError();
+    if (!out)
+    {
+        tmdq::setError("null output");
+        return TMDQ_ERR_BADARG;
+    }
+    *out = nullptr;
+    if (!path_utf8)
+    {
+        tmdq::setError("null path");
+        return TMDQ_ERR_BADARG;
+    }
+    return tmdq::guarded("tmdq_phased_array_parse", [&]() -> int32_t {
+        auto csv = std::make_unique<tmdq_csv>();
+        csv->result = PhasedArrayLogParser::parse(tmdq::pathFromUtf8(path_utf8));
+        if (!csv->result.success)
+        {
+            tmdq::setError("the file is not a readable phased array log (unreadable, wrong header, or no parseable sample)");
             return TMDQ_ERR_PREPARE;
         }
         *out = csv.release();

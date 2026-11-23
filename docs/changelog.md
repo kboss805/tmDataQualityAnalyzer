@@ -10,6 +10,57 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
+### Unreleased
+
+#### US10.0, the skeleton: an antenna's SNR log is imported, shown as 90 series, and never exported
+
+The first working version of the story (its text is the user's to fine-tune and is not changed here). Importing a CSV now asks what the file is,
+and a phased array antenna's log (`tests/data/test files/av_snr_log.csv`) can be opened and plotted. What the story leaves open is decided
+below in the plainest way that works, each as a choice to change, not a rule.
+
+- **The question.** Every way of importing a CSV (Import/Export > Import from CSV..., a drop, Recent Files) opens a choice window first,
+  **Standalone Telemetry Receivers…** or **AV Phased Array Antenna…** (`CsvKind`, `ICsvKindDialog`, `WindowCsvKindDialog` over the existing
+  `ChoiceWindow`); Cancel imports nothing. A host with no dialog reads a CSV as the application's own, which is all it was before. The kind is not
+  guessed from the header, and is not remembered with a Recent Files entry: it is asked each time.
+- **The core.** `PhasedArrayLogParser` reads `Time, Name, Polarity, Stream 1, ...` (spaces after the commas accepted; any case of `HPol`, `VPol`,
+  `Comb`; an ISO 8601 UTC time with or without a fraction) into the same `CsvParseResult` the application's CSV gives, so a host reads either through
+  `tmdq_csv_info_get` / `tmdq_csv_series_get` / `tmdq_csv_free`. New export `tmdq_phased_array_parse`: **ABI revision 4** (additive; the binding now
+  needs 4). Each stream of each unit is three series, H, V and C: `receiver_index` is the stream, `channel_index` the polarization, `stream_order`
+  the unit. The time is placed on the plot's day-of-year clock (a log across midnight or a year's end runs on), a row with too few columns, a time
+  that is not ISO 8601 UTC or a polarization that is none of the three is skipped and counted (the plot's existing "Skipped n malformed row(s)" warning),
+  and an empty cell is no sample. The file reader both parsers use moved out of `csvseriesparser.cpp` into `linesource.h` / `.cpp` unchanged.
+- **The application.** `PlotSeries.IsPhasedArray` marks the series. Customize View groups them under the unit's name, a group to a stream ("Stream n",
+  not "RCVR n") with the boxes H, V and C (not L, R and C); the legend names a series "Stream 1 H" (a log of several units prefixes the unit). `PlotCsv.Columns`
+  leaves them out, so Export Data never writes one, beside a telemetry series or alone (alone there is nothing to write, which the writer already
+  refuses without making a file).
+- **Defaults chosen where the story is silent, to change:** the values are SNR in dB and share the Receiver SNR axis; every one of the 90 series
+  starts visible; series are named "Stream n H|V|C"; a log of several units prefixes each name with its unit; the plot image export still
+  applies; Recent Files keeps the path, not the kind. Seen in a render: with 30 streams the series colours, which cycle through the Receiver SNR
+  palette's shades, run out of difference (the later streams are a similar beige), so 90 lines are hard to tell apart.
+
+How it was checked. Baselines: native 528 to **539** test cases (`test_phasedarraylog.cpp`: the ISO time's leap years and refusals, three series a stream,
+the order of a sample's rows, skipped and empty rows, several units, midnight and a year's end, a mark, the two layouts refusing each other, the
+committed sample's 90 series of 2,479 points; and `Abi: a phased array log ...`); managed 416 to **419** passed (`PhasedArrayLogTests`, and
+`LibraryTests` for revision 4); app 778 to **785** passed (`PhasedArrayImportTests`, and `CompositionRootTests` now opens the kind window over a
+shown main window and cancels it). Mutation lists: `eng/mutants/phased-array-log.json` (11, all caught), `phased-array-binding.json` (2 of 2) and
+`phased-array-import.json` (10 of 10). The kept `byte-order-mark.json` (M4, M5, now in `linesource.cpp`) and `plot-index-binding.json` (M4, revision 4)
+were re-anchored. Rendered headlessly and looked at: the imported plot (90 series, the log's own clock) and the kind window.
+
+#### US10.0: a user story for importing a third-party application's CSV (planned)
+
+`docs/guide.md` has a new story, **US10.0: Import a CSV file written by a third-party application**, marked **Planned**. The
+sample the user supplied, `tests/data/test files/av_snr_log.csv` (1.3 MB), shows the layout: `Time, Name, Polarity, Stream 1 ...
+Stream 30`, an ISO 8601 UTC time to the millisecond, and three rows to a sample (HPol, VPol and Comb, in any order). Each column
+after the polarization is a channel of its own, as each receiver is, so 30 channels of three polarizations give 90 series; they
+keep the file's H, V and C language, not the application's L, R and C. Importing asks first what the file is, in a selection dialog:
+**Standalone Telemetry Receivers…** (this application's own export, US6.3) or **AV Phased Array Antenna…** (this story's layout). A phased
+array log is never exported (the third party's system writes it), so Export Data leaves its series out. The story's eight criteria are open (`[ ]`) and say so; what the values are (metric, unit, axis), the
+series' names, whether 90 series start visible and what several unit names do are listed in it as still to settle. Two
+sentences that said every story was Complete now say US1.0 to US9.0 are, and US6.3's scope notes that US10.0 adds one
+third-party layout to the importer it described as only for this application's own files. `tests/.gitignore` lists the sample
+(it ignores every file under `data/test files/` that is not named there) so that it is committed and CI can read it.
+Documentation and the fixture list only; no code changed and no baseline moved.
+
 ### v3.2.0 — The VS Code look, a much faster scan, and a calmer window
 
 The first release since v3.1.0 (2026-11-08). What a user sees: the application is drawn in VS Code's Dark Modern and Light Modern (flush panes, hairlines, a grey title bar, 13 px text), its menu is four submenus, a status bar is back, every number is a validated text box, Export no longer freezes the window, a heavy plot pans and zooms smoothly, and the frame-sync scan takes about a seventh of the time with byte-identical output. One fix changes numbers: Receiver SNR words were read one bit late in the rare frame where data looked like the sync while locked. The rest is the whole-tree cleanup audit, finished by #348 to #350, which changes no behaviour. The entries below are in the order they landed, newest first.

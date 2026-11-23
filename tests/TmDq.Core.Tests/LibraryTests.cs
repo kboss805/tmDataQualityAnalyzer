@@ -54,7 +54,7 @@ public class LibraryTests
     {
         // Revision 1 has no tmdq_chart_* (revision 2, plan step 4.3a): the chart would fail at its first draw.
         InvalidOperationException e = Assert.Throws<InvalidOperationException>(() => Library.CheckVersion("old.dll", 2, 1));
-        Assert.Contains("revision 3", e.Message);
+        Assert.Contains("revision 4", e.Message);
     }
 
     [Fact]
@@ -63,8 +63,17 @@ public class LibraryTests
         // Revision 2 has no tmdq_series_index_* or tmdq_chart_geometry_indexed (revision 3): the chart would fail at its
         // first draw of a long series.
         InvalidOperationException e = Assert.Throws<InvalidOperationException>(() => Library.CheckVersion("old.dll", 2, 2));
-        Assert.Contains("revision 3", e.Message);
-        Library.CheckVersion("new.dll", 2, 3);
+        Assert.Contains("revision 4", e.Message);
+        Library.CheckVersion("new.dll", 2, 4);
+    }
+
+    [Fact]
+    public void ADllWithoutThePhasedArrayLogIsRefused()
+    {
+        // Revision 3 has no tmdq_phased_array_parse (revision 4, US10.0): importing an antenna's log would fail at its first use.
+        InvalidOperationException e = Assert.Throws<InvalidOperationException>(() => Library.CheckVersion("old.dll", 2, 3));
+        Assert.Contains("revision 4", e.Message);
+        Library.CheckVersion("new.dll", 2, 4);
     }
 
     [Fact]

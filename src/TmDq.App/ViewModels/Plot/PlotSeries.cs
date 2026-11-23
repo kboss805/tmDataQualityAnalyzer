@@ -16,6 +16,10 @@ public sealed class PlotSeries
     public int StreamSequence { get; init; }
     public int SourceId { get; init; }
 
+    /// <summary>Whether the series is a phased array antenna's (US10.0): its channels are the antenna's, its three polarizations are
+    /// H, V and C, and it is never exported (the third party's system writes that log).</summary>
+    public bool IsPhasedArray { get; init; }
+
     /// <summary>Seconds from the shared base; one array per stream, shared by its series, and moved in place when
     /// the base moves.</summary>
     public required double[] X { get; init; }

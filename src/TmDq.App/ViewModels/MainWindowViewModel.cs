@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TmDq.App.Models.Export;
 using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Settings;
@@ -40,6 +41,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     private readonly IStreamConfigurator _configurator;
     private readonly IProcessingDialog? _processingDialog;
     private readonly IDataFilePicker? _files;
+    private readonly ICsvKindDialog? _csvKinds;
     private readonly IExportDialog? _exportDialog;
     private readonly ITemplateFilePicker? _templateFiles;
     private readonly ITemplateDialogs? _templateDialogs;
@@ -65,6 +67,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         _configurator = services.Configurator ?? new FirstChannelRun();
         _processingDialog = services.ProcessingDialog;
         _files = services.Files;
+        _csvKinds = services.CsvKinds;
         _exportDialog = services.ExportDialog;
         _templateFiles = services.TemplateFiles;
         _templateDialogs = services.TemplateDialogs;
@@ -262,6 +265,9 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     private static readonly CompositeFormat NotAnExportedCsv = CompositeFormat.Parse(
         "ERROR: '{0}' is not a recognized exported CSV (expected a 'Time (DOY:HH:MM:SS.mmm)' column with data rows). Nothing was imported.");
 
+    private static readonly CompositeFormat NotAPhasedArrayLog = CompositeFormat.Parse(
+        "ERROR: '{0}' is not a recognized AV Phased Array Antenna log (expected the header 'Time, Name, Polarity, Stream 1, ...' with data rows). Nothing was imported.");
+
     private async Task OpenAsync()
     {
         string? path = await _picker!.PickRecordingAsync();
@@ -279,10 +285,18 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     /// read off the UI thread with "Loading..." over the chart, then titled with its name. A file that is not an
     /// exported CSV is an error, and nothing is shown. Ignored while busy.
     /// </summary>
-    public async Task ImportCsvAsync(string path)
+    public async Task ImportCsvAsync(string path, CsvKind? kind = null)
     {
         if (IsBusy) return;
         string name = Path.GetFileName(path);
+        // Every way in asks what the file is (US10.0), each time: the menu, a drop, Recent Files. Cancel imports nothing. A host with no
+        // dialog reads it as the application's own export, which is all a CSV was before.
+        if (kind is null && _csvKinds is not null)
+        {
+            kind = await _csvKinds.ChooseAsync(name);
+            if (kind is null || IsBusy) return;
+        }
+        CsvKind chosen = kind ?? CsvKind.TelemetryReceivers;
         LastFolder = Path.GetDirectoryName(Path.GetFullPath(path));
         IsBusy = true;
         try
@@ -290,7 +304,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
             Log.Add("Importing CSV: " + name);
             ClearRun();
             NativeCore.EnsureLoaded();
-            if (await Plot.LoadCsvAsync(path) == CsvLoad.Loaded)
+            if (await Plot.LoadCsvAsync(path, chosen) == CsvLoad.Loaded)
             {
                 _shell.AddRecentFile(path);
                 Plot.Title = BaseName(name);
@@ -299,7 +313,8 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
             }
             else
             {
-                string error = string.Format(CultureInfo.InvariantCulture, NotAnExportedCsv, name);
+                string error = string.Format(CultureInfo.InvariantCulture,
+                    chosen == CsvKind.PhasedArrayAntenna ? NotAPhasedArrayLog : NotAnExportedCsv, name);
                 Report(error, LogLevel.Error);
                 Log.Error(error);
             }

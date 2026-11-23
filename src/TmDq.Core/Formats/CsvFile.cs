@@ -53,6 +53,29 @@ public static unsafe class CsvFile
 
         using var arena = new Arena();
         Library.Check(Native.tmdq_csv_parse(arena.Utf8(path), out IntPtr csv));
+        return Read(csv);
+    }
+
+    /// <summary>
+    /// Parses a phased array antenna's SNR log (US10.0): <c>Time, Name, Polarity, Stream 1, ...</c>, an ISO 8601 UTC time and three
+    /// rows a sample. Each stream of each unit is three series, H, V and C: <see cref="CsvSeries.ReceiverIndex"/> is the 1-based
+    /// stream (the array's channel), <see cref="CsvSeries.ChannelIndex"/> the polarization (0 H, 1 V, 2 C) and
+    /// <see cref="CsvSeries.StreamOrder"/> the 1-based unit, all as metric <see cref="MetricType.Snr"/>.
+    /// </summary>
+    /// <exception cref="TmdqException"><see cref="Status.Prepare"/> when the file is unreadable, is not such a log or holds no parseable sample.</exception>
+    public static CsvData ParsePhasedArrayLog(string path)
+    {
+        Library.RequireLoaded();
+        ArgumentNullException.ThrowIfNull(path);
+
+        using var arena = new Arena();
+        Library.Check(Native.tmdq_phased_array_parse(arena.Utf8(path), out IntPtr csv));
+        return Read(csv);
+    }
+
+    /// <summary>A parsed result copied out of the core's handle, which is freed.</summary>
+    private static CsvData Read(IntPtr csv)
+    {
         try
         {
             CsvInfoNative info = default;

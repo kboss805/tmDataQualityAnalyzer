@@ -65,7 +65,8 @@ extern "C" {
 ///   1  the receiver-parameters file (read and save) and the words in a minor frame (plan step 4.1a).
 ///   2  the chart's geometry: transforms, a series' line and band, ticks (plan step 4.3a).
 ///   3  a series' index, and a series' geometry built with it (tmdq_series_index_*, tmdq_chart_geometry_indexed).
-#define TMDQ_ABI_REVISION 3
+///   4  a phased array antenna's SNR log, read into the same series a CSV is (tmdq_phased_array_parse).
+#define TMDQ_ABI_REVISION 4
 
 typedef enum tmdq_status
 {
@@ -608,6 +609,12 @@ typedef struct tmdq_csv tmdq_csv;
 /// Parses the application's CSV export. @return TMDQ_OK with *@p out set; TMDQ_ERR_BADARG for a NULL;
 /// TMDQ_ERR_PREPARE when the file is unreadable, has the wrong header or holds no parseable sample.
 TMDQ_API int32_t tmdq_csv_parse(const char* path_utf8, tmdq_csv** out);
+/// Parses a phased array antenna's SNR log (revision 4, US10.0): "Time, Name, Polarity, Stream 1, ..." with an ISO 8601 UTC time,
+/// three rows a sample (HPol, VPol, Comb). Each stream of each unit is three series, H, V and C: `receiver_index` is the 1-based
+/// stream, `channel_index` the polarization (0, 1, 2) and `stream_order` the 1-based unit. The result is read with the same
+/// tmdq_csv_info_get, tmdq_csv_series_get and tmdq_csv_free as tmdq_csv_parse's, and `skipped_rows` counts the rows left out.
+/// @return as tmdq_csv_parse.
+TMDQ_API int32_t tmdq_phased_array_parse(const char* path_utf8, tmdq_csv** out);
 TMDQ_API int32_t tmdq_csv_info_get(const tmdq_csv* csv, tmdq_csv_info* out);
 TMDQ_API int32_t tmdq_csv_series_get(const tmdq_csv* csv, int32_t index, tmdq_csv_series_info* out);
 TMDQ_API void    tmdq_csv_free(tmdq_csv* csv);   ///< Safe on NULL.

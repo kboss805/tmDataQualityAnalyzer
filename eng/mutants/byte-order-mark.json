@@ -30,7 +30,7 @@
     },
     {
       "id": "M4",
-      "file": "src/core/src/csvseriesparser.cpp",
+      "file": "src/core/src/linesource.cpp",
       "old": "else if (mark == textfile::ByteOrderMark::Utf8)",
       "new": "else if (false)",
       "expect": "caught",
@@ -38,7 +38,7 @@
     },
     {
       "id": "M5",
-      "file": "src/core/src/csvseriesparser.cpp",
+      "file": "src/core/src/linesource.cpp",
       "old": "if (mark == textfile::ByteOrderMark::Utf16LittleEndian || mark == textfile::ByteOrderMark::Utf16BigEndian)",
       "new": "if (mark == textfile::ByteOrderMark::Utf16LittleEndian)",
       "expect": "caught",

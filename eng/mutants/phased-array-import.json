@@ -1,0 +1,87 @@
+{
+  "suite": "app",
+  "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests"],
+  "mutants": [
+    {
+      "id": "I1",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCsv.cs",
+      "old": "if (s.IsPhasedArray) continue;",
+      "new": "if (s.IsPhasedArray && false) continue;",
+      "expect": "caught",
+      "note": "an antenna's series are exported"
+    },
+    {
+      "id": "I2",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCsv.cs",
+      "old": "IsPhasedArray = phasedArray,",
+      "new": "IsPhasedArray = false,",
+      "expect": "caught",
+      "note": "an imported antenna log is not marked as one"
+    },
+    {
+      "id": "I3",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "if (kind is null || IsBusy) return;",
+      "new": "if (IsBusy) return;",
+      "expect": "caught",
+      "note": "Cancel on the kind question imports the file as the application's own"
+    },
+    {
+      "id": "I4",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "chosen == CsvKind.PhasedArrayAntenna ? NotAPhasedArrayLog : NotAnExportedCsv, name);",
+      "new": "NotAnExportedCsv, name);",
+      "expect": "caught",
+      "note": "a refused antenna log is reported as a refused export"
+    },
+    {
+      "id": "I5",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "Label = s.IsPhasedArray ? PlotViewModel.PolarizationLabel(s.ChannelIndex) : PlotViewModel.ChannelLabel(s.ChannelIndex);",
+      "new": "Label = PlotViewModel.ChannelLabel(s.ChannelIndex);",
+      "expect": "caught",
+      "note": "an antenna's polarizations read L, R and C"
+    },
+    {
+      "id": "I6",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "{(_phasedArray ? \"Stream\" : \"RCVR\")} {Index}",
+      "new": "{(_phasedArray ? \"RCVR\" : \"RCVR\")} {Index}",
+      "expect": "caught",
+      "note": "an antenna's streams read as receivers"
+    },
+    {
+      "id": "I7",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "if (s.Metric != MetricType.Snr || s.IsPhasedArray) return s.Name;",
+      "new": "if (s.Metric != MetricType.Snr) return s.Name;",
+      "expect": "caught",
+      "note": "the legend names an antenna's series as a receiver's"
+    },
+    {
+      "id": "I8",
+      "file": "src/TmDq.App/Models/Export/CsvKind.cs",
+      "old": "\"AV Phased Array Antenna\\u2026\"",
+      "new": "\"AV Phased Array Antenna\"",
+      "expect": "caught",
+      "note": "the choice loses its ellipsis"
+    },
+    {
+      "id": "I9",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "_csvKinds = services.CsvKinds;",
+      "new": "_csvKinds = null;",
+      "expect": "caught",
+      "note": "the host's kind question is never asked"
+    },
+    {
+      "id": "I10",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "CsvKinds = new WindowCsvKindDialog(window),",
+      "new": "",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.CompositionRootTests"],
+      "expect": "caught",
+      "note": "the application does not hand the view model the kind question"
+    }
+  ]
+}

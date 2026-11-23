@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TmDq.App.Models.Export;
 using TmDq.Core;
 
 namespace TmDq.App.ViewModels.Plot;
@@ -17,6 +18,7 @@ internal static class PlotCsv
         foreach (PlotSeries s in series)
         {
             if (sourceId >= 0 && s.SourceId != sourceId) continue;
+            if (s.IsPhasedArray) continue;   // the antenna's own system writes that log: nothing of it is handed back (US10.0)
             columns.Add(new CsvColumn(s.Metric, s.Name, s.SourceId, s.X, s.Y));
         }
         return columns;
@@ -37,12 +39,12 @@ internal static class PlotCsv
         }
     }
 
-    /// <summary>The file parsed, or null for one that is not an exported CSV (or cannot be read).</summary>
-    public static CsvData? Parse(string path)
+    /// <summary>The file parsed as <paramref name="kind"/> says it is, or null for one that is not that kind (or cannot be read).</summary>
+    public static CsvData? Parse(string path, CsvKind kind = CsvKind.TelemetryReceivers)
     {
         try
         {
-            return CsvFile.Parse(path);
+            return kind == CsvKind.PhasedArrayAntenna ? CsvFile.ParsePhasedArrayLog(path) : CsvFile.Parse(path);
         }
         catch (TmdqException)
         {
@@ -55,8 +57,9 @@ internal static class PlotCsv
     /// the core's stream order (<c>assignImportedStreamOrders</c>), so its two metrics share a colour and each stream
     /// has its own; shown as <paramref name="view"/> shows a run's.
     /// </summary>
-    public static List<PlotSeries> Series(CsvData data, LockAxisView view, ref int nextId)
+    public static List<PlotSeries> Series(CsvData data, LockAxisView view, ref int nextId, CsvKind kind = CsvKind.TelemetryReceivers)
     {
+        bool phasedArray = kind == CsvKind.PhasedArrayAntenna;
         IReadOnlyList<int> orders = ImportedStreams.AssignOrders(data.Series);
         var series = new List<PlotSeries>(data.Series.Count);
         for (int i = 0; i < data.Series.Count; i++)
@@ -72,6 +75,7 @@ internal static class PlotCsv
                 ChannelIndex = c.ChannelIndex,
                 StreamOrder = orders[i],   // an SNR series keeps its own; the core gives the others theirs
                 SourceId = c.SourceId,
+                IsPhasedArray = phasedArray,
                 X = c.X,
                 Y = c.Y,
                 YMin = c.YMin,

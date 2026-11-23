@@ -50,14 +50,18 @@ public sealed class CustomizeViewModel : ObservableObject
 
         foreach (IGrouping<int, PlotSeries> stream in plot.Series.Where(s => s.Metric == MetricType.Snr).GroupBy(s => s.StreamOrder).OrderBy(g => g.Key))
         {
+            // A phased array antenna's series (US10.0) are grouped the same way, a group to a channel of the antenna, but read
+            // as the antenna's: "Stream n" with H, V and C, and the unit's name for the group, not CH, RCVR, L, R and C.
+            bool phasedArray = stream.First().IsPhasedArray;
             List<ReceiverGroup> receivers = stream.GroupBy(s => s.ReceiverIndex).OrderBy(g => g.Key)
-                .Select(r => new ReceiverGroup(r.Key, r.OrderBy(s => s.ChannelIndex).Select(s => new ChannelItem(this, s)).ToList()))
+                .Select(r => new ReceiverGroup(r.Key, r.OrderBy(s => s.ChannelIndex).Select(s => new ChannelItem(this, s)).ToList(), phasedArray))
                 .ToList();
             // The receivers in two columns, the first taking the odd one.
             int split = (receivers.Count + 1) / 2;
-            SnrStreams.Add(new SnrStreamGroup(
-                string.Create(CultureInfo.InvariantCulture, $"CH {stream.Key} — {labels.GetValueOrDefault(stream.Key, "")}"),
-                receivers.Take(split).ToList(), receivers.Skip(split).ToList()));
+            string streamLabel = phasedArray
+                ? labels.GetValueOrDefault(stream.Key, "") is { Length: > 0 } unit ? unit : "Phased array antenna"
+                : string.Create(CultureInfo.InvariantCulture, $"CH {stream.Key} — {labels.GetValueOrDefault(stream.Key, "")}");
+            SnrStreams.Add(new SnrStreamGroup(streamLabel, receivers.Take(split).ToList(), receivers.Skip(split).ToList()));
         }
         _selectedSnrStream = SnrStreams.FirstOrDefault();
     }
@@ -226,16 +230,20 @@ public sealed class ReceiverGroup : ObservableObject
 {
     private bool _isExpanded;
 
-    public ReceiverGroup(int index, IReadOnlyList<ChannelItem> channels)
+    private readonly bool _phasedArray;
+
+    public ReceiverGroup(int index, IReadOnlyList<ChannelItem> channels, bool phasedArray = false)
     {
         Index = index;
         Channels = channels;
+        _phasedArray = phasedArray;
         foreach (ChannelItem ch in channels) ch.Group = this;
     }
 
     public int Index { get; }
 
-    public string Label => string.Create(CultureInfo.InvariantCulture, $"RCVR {Index}");
+    /// <summary>"RCVR n" for a receiver, "Stream n" for a channel of a phased array antenna (US10.0).</summary>
+    public string Label => string.Create(CultureInfo.InvariantCulture, $"{(_phasedArray ? "Stream" : "RCVR")} {Index}");
 
     public IReadOnlyList<ChannelItem> Channels { get; }
 
@@ -282,7 +290,7 @@ public sealed class ChannelItem : ObservableObject
     {
         Owner = owner;
         SeriesId = s.Id;
-        Label = PlotViewModel.ChannelLabel(s.ChannelIndex);
+        Label = s.IsPhasedArray ? PlotViewModel.PolarizationLabel(s.ChannelIndex) : PlotViewModel.ChannelLabel(s.ChannelIndex);
         _isChecked = s.Visible;
         _color = s.Color;
         RenameCommand = new AsyncRelayCommand(RenameAsync);

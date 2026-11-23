@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using TmDq.App.Models.Export;
 using TmDq.Core;
 
 namespace TmDq.App.ViewModels.Plot;
@@ -223,11 +224,11 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
 
     /// <summary>Reads an exported CSV and shows it in place of whatever was shown (US6.3); false,
     /// with nothing changed, for a file that is not one.</summary>
-    public bool LoadCsv(string path)
+    public bool LoadCsv(string path, CsvKind kind = CsvKind.TelemetryReceivers)
     {
-        CsvData? data = PlotCsv.Parse(path);
+        CsvData? data = PlotCsv.Parse(path, kind);
         if (data is null) return false;
-        ShowCsv(data);
+        ShowCsv(data, kind);
         return true;
     }
 
@@ -235,15 +236,15 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// <see cref="LoadCsv"/> with the file read off the UI thread and <see cref="IsLoading"/> set meanwhile. A
     /// request while one is being read is dropped, as v2.x dropped it.
     /// </summary>
-    public async Task<CsvLoad> LoadCsvAsync(string path)
+    public async Task<CsvLoad> LoadCsvAsync(string path, CsvKind kind = CsvKind.TelemetryReceivers)
     {
         if (IsLoading) return CsvLoad.Dropped;
         IsLoading = true;
         try
         {
-            CsvData? data = await Task.Run(() => PlotCsv.Parse(path));
+            CsvData? data = await Task.Run(() => PlotCsv.Parse(path, kind));
             if (data is null) return CsvLoad.Failed;
-            ShowCsv(data);
+            ShowCsv(data, kind);
             return CsvLoad.Loaded;
         }
         finally
@@ -256,12 +257,12 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// Shows a parsed CSV as a run's series would be shown (<see cref="PlotCsv.Series"/>), with the clock from the
     /// file; then a warning for any rows skipped, since a partly loaded file must not pass for a whole one.
     /// </summary>
-    private void ShowCsv(CsvData data)
+    private void ShowCsv(CsvData data, CsvKind kind)
     {
         _series.Clear();
         _window.ClearHistory();
         _readoutSeriesId = null;
-        _series.AddRange(PlotCsv.Series(data, _lockAxisView, ref _nextId));
+        _series.AddRange(PlotCsv.Series(data, _lockAxisView, ref _nextId, kind));
         _timeBase ??= new TimeBase();
         _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);
         _window.ShowSpan(data.XMax);
@@ -623,9 +624,19 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// series' own numbers rather than parsed out of its name.</summary>
     public static string LegendLabel(PlotSeries s)
     {
-        if (s.Metric != MetricType.Snr) return s.Name;
+        if (s.Metric != MetricType.Snr || s.IsPhasedArray) return s.Name;   // an antenna's series are named for their stream and polarization
         return string.Create(CultureInfo.InvariantCulture, $"CH{s.StreamOrder} {ChannelLabel(s.ChannelIndex)}_RCVR{s.ReceiverIndex}");
     }
+
+    /// <summary>A phased array antenna's polarization letter as Customize View shows it: H, V or C (US10.0), the file's own
+    /// language and not a receiver's L, R and C.</summary>
+    public static string PolarizationLabel(int channelIndex) => channelIndex switch
+    {
+        0 => "H",
+        1 => "V",
+        2 => "C",
+        _ => (channelIndex + 1).ToString(CultureInfo.InvariantCulture),
+    };
 
     /// <summary>A channel's letter as Customize View shows it: L, R or C, else its number from 1.</summary>
     public static string ChannelLabel(int channelIndex) =>

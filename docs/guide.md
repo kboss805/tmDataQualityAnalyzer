@@ -15,9 +15,9 @@ This file provides context and guidelines for AI assistants working on the tmDat
 
 ## User Stories
 
-The stories below follow the workflow a first-time user takes through the application: open a file and choose what to process (US1), define the per-stream parameters (US2), view the resulting data-quality metrics (US3), customize the plot (US4), manage configuration files and calibration (US5), export and re-import results (US6), and the cross-cutting concerns of input validation (US7), installation (US8), and theming (US9).
+The stories below follow the workflow a first-time user takes through the application: open a file and choose what to process (US1), define the per-stream parameters (US2), view the resulting data-quality metrics (US3), customize the plot (US4), manage configuration files and calibration (US5), export and re-import results (US6), and the cross-cutting concerns of input validation (US7), installation (US8), and theming (US9); US10 imports another application's CSV.
 
-**Status: all user stories are Complete** — implemented, tested and shipped. Every acceptance criterion below is delivered functionality (`[x]`), each held by a test or a recorded manual check (`docs/records/parity.md` maps those of v3.0.0; the criteria added since have no row in it), and each story carries a **Complete** marker in its heading. New work is tracked as new stories appended after US9.0.
+**Status: US1.0 to US9.0 are Complete** — implemented, tested and shipped. Every acceptance criterion of those is delivered functionality (`[x]`), each held by a test or a recorded manual check (`docs/records/parity.md` maps those of v3.0.0; the criteria added since have no row in it), and each of those stories carries a **Complete** marker in its heading. New work is tracked as new stories appended after US9.0: **US10.0** (a third-party CSV import) is **Planned**, its criteria open (`[ ]`) until it is built and tested.
 
 ### US1.0: Open a Ch10 file and configure which streams to process — Complete
 
@@ -355,7 +355,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Imported data can be re-exported (CSV/image) and the recent-files list records the imported CSV.
 - [x] A CSV that is not in the application's export format (e.g. the legacy `Day,Time,…` layout, a wrong/missing header, or a file with no parseable data rows) is rejected with a clear error in the log rather than producing garbage series.
 - [x] Malformed or short data rows are skipped, and the user is informed how many rows were skipped.
-  - **Scope:** The import is the core's CSV parser (`CsvSeriesParser`, through `PlotCsv.Parse`) behind `PlotViewModel.LoadCsv` / `LoadCsvAsync`, the matched partner of the export (`PlotViewModel.ExportCsv` / `ExportCsvAsync`, the core's `CsvSeriesWriter`; the app writes it off the UI thread, with the window busy and the columns taken before the first await); the app adds the entry points (the menu, drag and drop, Recent Files) and the error reporting. It does not add a CSV import dialog with column mapping, and it does not attempt to import arbitrary third-party CSVs — only files this application produced.
+  - **Scope:** The import is the core's CSV parser (`CsvSeriesParser`, through `PlotCsv.Parse`) behind `PlotViewModel.LoadCsv` / `LoadCsvAsync`, the matched partner of the export (`PlotViewModel.ExportCsv` / `ExportCsvAsync`, the core's `CsvSeriesWriter`; the app writes it off the UI thread, with the window busy and the columns taken before the first await); the app adds the entry points (the menu, drag and drop, Recent Files) and the error reporting. It does not add a CSV import dialog with column mapping, and it does not attempt to import arbitrary third-party CSVs — only files this application produced (US10.0 adds one third-party layout).
 
 ### US7.0: Error Checking — Complete
 
@@ -411,6 +411,28 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] A status bar sits under the log and the chart, in the chrome's colour under a hairline, and says in one short sentence the last thing that happened, so there is an answer with the log hidden: what is under way ("Processing x.ch10..."), what finished ("Finished processing x.ch10: 3 streams.", "Imported x.csv.", "Saved template t.json.", "Exported data, plot image and log file.", "Batch complete: 2 processed, 1 skipped."), what was cancelled, or what went wrong. A success, a warning (finished with something left out) or an error is marked (a tick, a warning sign, a cross) in Fluent's status colour; what is under way, and the first prompt, is not. The sentence is the bar's alone: every path, stream and reason is in the log, and where an action failed the bar says so and points there ("Could not read the template. See the log."). The version is the log's first line and in Help > About, not in the bar. A sentence longer than the bar is cut with an ellipsis and whole in its tooltip.
 - [x] A status is painted by what it means, in Fluent's status colours for the theme: success, caution (a warning), critical, or neutral (pending). The log's lines, Configure Streams' ready marks, the setup dialog's problems and calibration label, the batch confirmation's glyphs and Extract Calibration's two status lines all take them (`SystemFillColorSuccess`, `Caution`, `Critical`, `Neutral`), and follow a change of theme; none has a colour of its own.
 - [x] A series that is too pale to read on the light theme's white is drawn darker there, and only there: a colour whose contrast against the chart's background is below 2.0 (WCAG's ratio) is drawn with its channels scaled down by the least that reaches 2.0 (`ChartPalette.SeriesColor`), in the plot's line and band and in the legend's swatch, so the Receiver SNR yellow and the paler shades beyond the primaries are legible and the other five primaries are unchanged. The dark theme draws every series in its own colour. The colour a series is given, saves in a template and shows in Customize View is always its own.
+
+### US10.0: Import a CSV file written by a third-party application — Planned
+
+**As a** telemetry engineer or data analyst
+**I want to** open a CSV log written by another application: one row per measurement, with an ISO 8601 time, the name of the unit that logged it, a polarization (H, V or combined) and one value for each of its channels
+**So that** I can plot another system's data with the same tools as the data this application measures, and compare the two, without converting the file by hand.
+
+**Acceptance Criteria:**
+
+- [ ] The user opens such a file through the entry points US6.3 has: **Import/Export > Import from CSV…**, drag-and-drop of a `.csv` file, and the Recent Files list. Every one of them then asks what the file is, in a selection dialog with two choices, **Standalone Telemetry Receivers…** (a CSV this application exported, US6.3) and **AV Phased Array Antenna…** (a log of this story's layout). The choice decides how the file is read; there is no column-mapping dialog. Standalone Telemetry Receivers reads the file exactly as US6.3 does, and Cancel imports nothing.
+- [ ] The header is `Time`, `Name`, `Polarity`, then one column per stream, `Stream 1` to `Stream N` (the sample has 30). The spaces after the commas are part of the format and are accepted.
+- [ ] The time is ISO 8601, UTC, to the millisecond (`2026-11-13T19:15:35.513Z`), and is placed on the plot's time axis the way the application's own `Time (DOY:HH:MM:SS.mmm)` column is, so an imported log and a processed recording line up by clock time.
+- [ ] A sample is three rows with the same time, one for each polarization (`HPol`, `VPol` and `Comb` in the file, H, V and C in the application), in any order; each row holds one value for every channel. The order the three rows come in does not change what is plotted.
+- [ ] Each column after the polarization is a channel of its own, as each receiver is in a processed recording (the file calls them `Stream 1` to `Stream 30`), and each polarization of it is one series: 30 channels of three give 90 series. The polarizations keep the file's own language, **H** (horizontal), **V** (vertical) and **C** (combined), not the application's L, R and C names for a receiver's channels. Each series is named so that its channel and its polarization are plain in the legend, in Customize View and in the exported CSV; the unit's name (`SCU1`) is part of the name when a file holds more than one.
+- [ ] Imported series populate the plot, the on-plot legend and Customize View as processed data does (axis auto-ranging, time window, visibility toggles, colours), and the file is recorded in the Recent Files list.
+- [ ] A phased array log is never exported: the third party's system writes it, so there is nothing for this application to hand back. Export Data (CSV) does not include its series, even with them on the plot beside series of a telemetry receiver, which US6.1 still exports in full.
+- [ ] A file that does not fit the kind the user chose (a wrong or missing header, a time that is not ISO 8601, or no parseable data rows) is rejected with a clear error in the log that names the kind, not turned into garbage series.
+- [ ] A malformed or short row, or one whose polarization is none of the three, is skipped, and the user is told how many were.
+  - **Scope:** like US6.3's import it is the core's CSV parser behind `PlotViewModel.LoadCsv` / `LoadCsvAsync`; it adds one recognised layout, not a general CSV importer. It replaces US6.3's rule that only files this application produced are imported, for this one layout.
+  - **Where the file comes from:** a phased array antenna, which has many channels, each measured in H, V and combined. The application's own receivers are the other shape: one receiver for each channel, with its own L, R and C. So the 30 columns are the array's channels, and an imported log is not turned into receivers.
+  - **The sample** is `tests/data/test files/av_snr_log.csv` (1.3 MB, CR LF): 7,437 data rows in 2,479 samples of three, from 19:15:35.513Z to 19:56:53.474Z on 2026-11-13 (about 41 minutes, a sample a second), one unit (`SCU1`), 30 streams, values from -1.9 to 19.0 with one decimal, every cell filled, times never going backwards. It is the reference the tests read.
+  - **Still to settle:** what the values are, which sets their metric, unit and axis (the file's name, `av_snr_log`, and its range suggest an SNR in dB, but whether it shares the Receiver SNR axis or has its own is not decided); the series' exact names built from the channel, H, V or C, and the unit; whether the plot image export (US6.0) still applies to a plot of these series, since only their data export is ruled out; whether 90 series should all start visible; what a file with several unit names does (the sample has one); and whether a file reopened from the Recent Files list asks again or remembers its kind, and whether the choice is remembered between imports.
 
 ## Tech Stack
 
@@ -564,7 +586,9 @@ profile, so a batch processes with the linear calibration.
 - **Export and import** (`ExportViewModel`, `PlotImageExport`; `Models/Export`: `ImageFiles`, an image export's format
   from its file name, and `ExportKind`): the CSV through the core's writer (every series), the
   image through one Skia renderer for PNG, SVG and PDF (exactly what the chart shows), the log as text; Import CSV
-  through the core's parser.
+  through the core's parser. Every import asks what the file is (`ICsvKindDialog`, `CsvKind` in `Models/Export`: standalone
+  telemetry receivers, or an AV phased array antenna, US10.0); a `PlotSeries` read from an antenna log is `IsPhasedArray`, which
+  Customize View reads as "Stream n" with H, V and C and which `PlotCsv.Columns` never exports.
 - **Templates** (`Models/Templates`): `TemplateFile` (the JSON), `TemplateBatch` (matching, a file's run), and
   beside the plot `PlotTemplates` (`ViewModels/Plot`: building a template from a recording's series, putting its looks
   back); the batch confirmation (`BatchApplyViewModel` and its window).
@@ -579,7 +603,7 @@ profile, so a batch processes with the linear calibration.
 The binding of every ABI function: `Ch10File` (a recording's channels), `ProcessingRun` and `StreamResult` (a run and
 what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile`, the file formats (`FrameSyncFile`,
 `ReceiverParamsFile`, `CsvFile`, `TemplateMatcher`, `ClockTime`), series construction (`SeriesSet`, `TimeBase`,
-`ImportedStreams`) and `ChartGeometry` with `SeriesIndex` (a series' envelope index, revision 3). The public types are in
+`ImportedStreams`) and `ChartGeometry` with `SeriesIndex` (a series' envelope index, revision 3; `CsvFile.ParsePhasedArrayLog`, revision 4). The public types are in
 the folder's root and the file formats in `Formats/` (a type to a file); what touches the DLL is in `Interop/`: `Native`
 (the C ABI's P/Invoke declarations) and `NativeStructs` (its structs and the struct ids), `Arena` the native memory for one
 call's arguments (strings, a copy of a list, an array of pointers, a boxed struct), `Text` the strings that cross, `ObserverBridge` the callbacks a native run calls back into (an exception
@@ -647,7 +671,11 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
     order, arrays of tables (`[[Name]]`) read only; `FrameSyncFile` (`framesyncfile`) is the pattern file over it.
 13. **CsvSeriesParser / CsvSeriesWriter** (`csvseriesparser`, `csvserieswriter`, `clocktime`) - the two directions of
     the application's CSV, matched inverses, with the `DDD:HH:MM:SS.mmm` stamp; **SeriesColumnSchema**
-    (`seriescolumnschema`) is the single source of the column headers both use.
+    (`seriescolumnschema`) is the single source of the column headers both use. **PhasedArrayLogParser**
+    (`phasedarraylogparser`, US10.0) reads a third party's phased array antenna SNR log (ISO 8601 UTC time, a unit name, HPol / VPol /
+    Comb, one column a stream) into the same `CsvParseResult`, each stream three series H, V and C; both parsers read a
+    file through `csvlines::LineSource` (`linesource`: UTF-8 or UTF-16 with a mark, any line end) and reach a host through one set of accessors
+    (`tmdq_csv_*`; `tmdq_phased_array_parse`, ABI revision 4).
 14. **SeriesBuilder** (`seriesbuilder`, `seriesrange.h`) - a processed stream's plot series, the shared time base
     across sources, imported streams' order, and stream identity; **ChartGeometry** (`chartgeometry`) - the plot's
     envelope, culling, min-max band, transforms and time ticks; and `SeriesIndex`, a pyramid of each 32-sample block's
@@ -1048,6 +1076,9 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 - **FrameSyncFile** (`test_framesyncfile`) - the pattern file both ways, Randomized only when the file has the key.
 - **CsvSeries and SeriesColumnSchema** (`test_csvseries`, `test_seriescolumnschema`) - the CSV both ways and its clock
   stamp; every column header formatted and parsed back, source qualifiers, edge cases, and 40,000 generated headers.
+- **PhasedArrayLog** (`test_phasedarraylog`) - an antenna's SNR log: the ISO 8601 UTC time (leap years, a month's and a day's ends,
+  what is refused), three series a stream, skipped and empty rows, several units, midnight and a year's end, a mark, the two kinds of CSV
+  told apart by their headers, and the committed 30-stream sample (`av_snr_log.csv`).
 - **SeriesBuild** (`test_seriesbuild`) - a stream's series, the shared time base across sources, imported streams'
   order.
 - **ChartGeometry** (`test_chartgeometry`) - the envelope, band, transforms and ticks, against the code they replaced
@@ -1075,7 +1106,7 @@ every kept mutant in `eng/mutants` still naming text that is in its file exactly
 script's root still resolving from where they are); the recordings' channels (`FileTests`); runs of
 the committed recordings against numbers v2.14.2 produced, every setting reaching the job, failures, observers, cancel
 and lifetimes (`RunTests`); calibration against the core's extractor (`CalibrationTests`, an extraction disposed from its own callback included); the file formats byte for
-byte against the core (`FormatsTests`); loading the DLL (`LibraryTests`, `IsolatedLoadTests` in a child process, the
+byte against the core (`FormatsTests`, `PhasedArrayLogTests` for an antenna's log); loading the DLL (`LibraryTests`, `IsolatedLoadTests` in a child process, the
 suite's one skip); `ChartGeometryTests`, `ReceiverParamsTests`, `SeriesTests`, `ArenaTests`, `HandleTests` (a handle released once, when it is disposed and the last call using it has
 returned; a Dispose while another thread waits on a run, and a run disposed from its own callback, which still reports its end and is
 released afterwards), `ObserverBridgeTests` (which thread is inside a callback, nested and after a throw); and `TempFilesTests`, the
@@ -1105,7 +1136,8 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   rebuilds it, the zoom rule, chips, menu, keys, read from the controls and from rendered frames) and
   `ChartPromptWindowTests` (each prompt's window: OK answers, Cancel does not).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
-  CSV), `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing).
+  CSV), `PhasedArrayImportTests` (the kind question every import asks, an antenna's log as 90 series read H, V and C, and none of it exported),
+  `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `StatusBarTests` (the bar's place, colour and hairline, its marks, its trimming), `MenuStyleTests` (no icons, the accent row and white text, the dimmed shortcut, the row height and inset), `DialogAnatomyTests`
   (every window kind's footer band, padding, button widths and spacing, accent and cancel, in both themes; a status text following the theme), `PreferencesTests`
   (the preferences file, and v2.x's INI file left unread), `MainWindowStartupTests`.

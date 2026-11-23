@@ -1,0 +1,105 @@
+{
+  "suite": "native",
+  "args": [],
+  "mutants": [
+    {
+      "id": "P1",
+      "file": "src/core/src/phasedarraylogparser.cpp",
+      "old": "hour > 23 || minute > 59 || second > 59",
+      "new": "hour > 24 || minute > 59 || second > 59",
+      "args": ["-tc=PhasedArrayLog*"],
+      "expect": "caught",
+      "note": "an hour of 24 is a time"
+    },
+    {
+      "id": "P2",
+      "file": "src/core/src/phasedarraylogparser.cpp",
+      "old": "return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;",
+      "new": "return year % 4 == 0;",
+      "args": ["-tc=PhasedArrayLog*"],
+      "expect": "caught",
+      "note": "2100 is a leap year"
+    },
+    {
+      "id": "P3",
+      "file": "src/core/src/phasedarraylogparser.cpp",
+      "old": "if (lower == \"vpol\") { return 1; }",
+      "new": "if (lower == \"vpol\") { return 2; }",
+      "args": ["-tc=PhasedArrayLog*"],
+      "expect": "caught",
+      "note": "a VPol row is read as combined"
+    },
+    {
+      "id": "P4",
+      "file": "src/core/src/phasedarraylogparser.cpp",
+      "old": "static_cast<double>(day - first_day) * TimeConstants::kSecondsPerDay",
+      "new": "static_cast<double>(day - first_day) * 0.0",
+      "args": ["-tc=PhasedArrayLog*"],
+      "expect": "caught",
+      "note": "time does not run on across midnight"
+    },
+    {
+      "id": "P5",
+      "file": "src/core/src/phasedarraylogparser.cpp",
+      "old": "result.baseDay = day_of_year;",
+      "new": "result.baseDay = 1;",
+      "args": ["-tc=PhasedArrayLog*"],
+      "expect": "caught",
+      "note": "the log is placed on day 1 of the clock, not its own day"
+    },
+    {
+      "id": "P6",
+      "file": "src/core/src/phasedarraylogparser.cpp",
+      "old": "s.channelIndex = p;",
+      "new": "s.channelIndex = 0;",
+      "args": ["-tc=PhasedArrayLog*"],
+      "expect": "caught",
+      "note": "every polarization of a stream is its first"
+    },
+    {
+      "id": "P7",
+      "file": "src/core/src/phasedarraylogparser.cpp",
+      "old": "(several_units ? unit_names[u] + \" \" : std::string())",
+      "new": "(several_units ? std::string() : std::string())",
+      "args": ["-tc=PhasedArrayLog*"],
+      "expect": "caught",
+      "note": "a log of several units names their series alike"
+    },
+    {
+      "id": "P8",
+      "file": "src/core/src/phasedarraylogparser.cpp",
+      "old": "textparse::trimmed(std::string(columns[1])) != \"Name\" ||",
+      "new": "false ||",
+      "args": ["-tc=PhasedArrayLog*"],
+      "expect": "caught",
+      "note": "the second header column is not checked"
+    },
+    {
+      "id": "P9",
+      "file": "src/core/src/phasedarraylogparser.cpp",
+      "old": "continue;   // an empty cell is no sample of that series",
+      "new": "value = 0.0;",
+      "args": ["-tc=PhasedArrayLog*"],
+      "expect": "caught",
+      "note": "an empty cell is a sample of zero"
+    },
+    {
+      "id": "P10",
+      "file": "src/core/src/phasedarraylogparser.cpp",
+      "old": "s.streamOrder = static_cast<int>(unit_index) + 1;",
+      "new": "s.streamOrder = 1;",
+      "args": ["-tc=PhasedArrayLog*"],
+      "expect": "caught",
+      "note": "every unit is the first"
+    },
+    {
+      "id": "A1",
+      "file": "src/core/abi/abi_formats.cpp",
+      "old": "csv->result = PhasedArrayLogParser::parse(tmdq::pathFromUtf8(path_utf8));",
+      "new": "csv->result = CsvSeriesParser::parse(tmdq::pathFromUtf8(path_utf8));",
+      "args": ["-tc=Abi: a phased array*"],
+      "expect": "caught",
+      "note": "the export reads the application's own CSV"
+    }
+  ]
+}

@@ -4,8 +4,8 @@
 # release benchmark and the soak. "data/test files/" is the canonical fixture
 # folder - everything else directly under data/ (stray exports, scratch csv/png,
 # one-off recordings) is ignored outright, and within test files/ itself only the
-# five small fixtures below are tracked; the multi-GB "full" siblings next to them
-# stay local-only on purpose.
+# five small recordings below are tracked, with the third-party CSV log (a 1.3 MB text file, not a recording);
+# the multi-GB "full" siblings next to them stay local-only on purpose.
 data/*
 !data/test files/
 data/test files/*
@@ -16,6 +16,9 @@ data/test files/*
 # Real step-calibration recording (6.8 MB) with receivers far out of alignment -
 # pins the calibration-import resilience fixes against the file that exposed them.
 !data/test files/step_cal, example.ch10
+# A log written by another application, the reference for US10.0 (importing a third-party CSV): ISO 8601 times, one row
+# a polarization, 30 streams. Small enough to commit, and CI reads it.
+!data/test files/av_snr_log.csv
 
 # Output of the test runner v2.x used (results*.txt): nothing writes here any more, so a leftover folder is
 # not a change to commit.

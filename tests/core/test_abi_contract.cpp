@@ -311,7 +311,7 @@ TEST_CASE("Abi: the struct layouts are pinned")
 TEST_CASE("Abi: the version and revision are reported")
 {
     CHECK(tmdq_abi_version() == 2);
-    CHECK(tmdq_abi_revision() == 3);   // 1: the receiver-parameters file (4.1a); 2: the chart's geometry (4.3a); 3: a series' index
+    CHECK(tmdq_abi_revision() == 4);   // 1: the receiver-parameters file (4.1a); 2: the chart's geometry (4.3a); 3: a series' index; 4: a phased array log
     CHECK(int(TMDQ_ABI_VERSION) == tmdq_abi_version());
     CHECK(int(TMDQ_ABI_REVISION) == tmdq_abi_revision());
     REQUIRE(tmdq_last_error() != nullptr);

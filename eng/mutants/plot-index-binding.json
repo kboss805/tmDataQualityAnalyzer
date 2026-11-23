@@ -12,7 +12,7 @@
       "old": "public int Count => Native.tmdq_series_index_count(Handle);", "new": "public int Count => Native.tmdq_series_index_count(Handle) - 1;",
       "expect": "caught", "note": "the index's count misreported, so it is never used" },
     { "id": "M4", "file": "src/TmDq.Core/Library.cs",
-      "old": "public const int MinimumRevision = 3;", "new": "public const int MinimumRevision = 2;",
+      "old": "public const int MinimumRevision = 4;", "new": "public const int MinimumRevision = 2;",
       "args": ["-class", "TmDq.Core.Tests.LibraryTests"],
       "expect": "caught", "note": "a DLL without the series index accepted" }
   ]
