@@ -283,7 +283,8 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     /// <summary>
     /// Shows an exported CSV in place of whatever was shown (US6.3): the plot cleared, the file
     /// read off the UI thread with "Loading..." over the chart, then titled with its name. A file that is not an
-    /// exported CSV is an error, and nothing is shown. Ignored while busy.
+    /// exported CSV is an error, and nothing is shown. An antenna's log (US10.0) is added to the plot instead, as a recording of
+    /// its own named for the file, the title and the rest left as they were. Ignored while busy.
     /// </summary>
     public async Task ImportCsvAsync(string path, CsvKind? kind = null)
     {
@@ -302,12 +303,14 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         try
         {
             Log.Add("Importing CSV: " + name);
-            ClearRun();
+            // An antenna's log joins what the plot shows, so that the two can be compared (US10.0); any other CSV replaces it.
+            bool joins = chosen == CsvKind.PhasedArrayAntenna && Plot.HasData;
+            if (!joins) ClearRun();
             NativeCore.EnsureLoaded();
-            if (await Plot.LoadCsvAsync(path, chosen) == CsvLoad.Loaded)
+            if (await Plot.LoadCsvAsync(path, chosen, joins ? BaseName(name) : null) == CsvLoad.Loaded)
             {
                 _shell.AddRecentFile(path);
-                Plot.Title = BaseName(name);
+                if (!joins) Plot.Title = BaseName(name);
                 Report("Imported " + name + ".", LogLevel.Success);
                 Log.Success("Imported CSV: " + name);
             }
