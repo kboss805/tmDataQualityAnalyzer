@@ -212,12 +212,31 @@ after('      sessions, and a hidden legend is also left out of exported images.<
           'The same plot with the legend hidden - right-click the chart and use <strong>Show Legend</strong>, or press <kbd>L</kbd>. A hidden legend is also left out of exported images.',
           'The same plot with the legend overlay hidden'))
 
-# Placed immediately before the next heading, so it lands at the end of the
-# Import & export section regardless of how that section's prose is written. The
-# previous version keyed on the section ending with '</ul>', and rewriting the
-# prose broke it - a figure's position should depend on the heading it precedes,
-# not on the shape of the paragraph before it.
-before('<h2 id="interface">',
+# The antenna log's figures (US10.0): the question every import asks sits before the section on the log, the log
+# itself and Customize View's tree for it before the paragraph on joining a plot. Anchored on the heading and the
+# paragraph they precede, as every figure here is.
+before('<h3 id="import-antenna">',
+       fig('walk-csv-01-kind.png',
+           'The question every CSV import asks first, whether it comes from the menu, a dropped file or Recent Files: '
+           'what kind of file this is, Standalone Telemetry Receivers or AV Phased Array Antenna, the latter chosen here. '
+           'The choice decides how the file is read; Cancel imports nothing.',
+           'Import CSV dialog asking what kind of file av_snr_log.csv is, with AV Phased Array Antenna chosen'))
+
+before('<p><strong>A log joins the plot instead of replacing it.</strong>',
+       fig('walk-csv-02-antenna-plot.png',
+           'An antenna log of 30 streams imported into an empty plot, here the whole of its 41 minutes: the 30 combined (C) '
+           'series, one hue per stream, streams 16 to 30 dotted, on the Receiver SNR scale. The legend is hidden so that the '
+           'scale shows; with it, each row reads Stream n C.',
+           'Plot of 30 phased array antenna SNR series with the Receiver SNR scale on the right')
+     + fig('walk-csv-03-customize.png',
+           'Customize View on the log, on the Receiver SNR tab: the antenna\'s SCU, then its streams, one expanded to '
+           'its H, V and C series. Only C is shown at first, so the stream\'s box is part-set.',
+           'Customize Plot Series dialog on the Receiver SNR tab showing the SCU1 group with Stream 1 expanded to H, V and C'))
+
+# Placed immediately before the heading of the section's first subsection, which is where the dialog is described:
+# "Each of the three outputs has its own switch and its own filename" is the paragraph above it. (It was once placed at
+# the end of the section, and the antenna log's text now ends that.)
+before('<h3>What each output contains</h3>',
        fig('Export Dialog.png',
            'The export dialog. Each output has its own switch and filename, so you can produce '
            'any combination — image, data, log — in a single action.',

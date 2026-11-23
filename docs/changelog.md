@@ -28,6 +28,25 @@ three streams on (one unconfigured, red ✗, Process greyed, the caption silent 
 - Checked: the full app suite, 797 passed and 34 not run, as before; no mutation check, since nothing the application does changed (the
   scene's new assertions are the guard). The run-log figures re-rendered with their usual capture noise.
 
+#### US10.0 is Complete, and the manual describes it
+
+The user called the story done, and the manual said nothing of it (no mention of the question every import asks, the antenna's log or what
+it does to the plot).
+
+- **`docs/guide.md`:** US10.0's heading reads Complete, its eleven criteria are `[x]`, and the status paragraph says US1.0 to US10.0 are Complete.
+- **The manual** (`assets/usermanual.html`, section 6): "Importing a CSV" now says every way in (menu, drop, Recent Files) asks what kind of
+  file it is, the two choices, that Cancel imports nothing and that a wrong kind is an error naming it. A new subsection, "Importing an AV
+  phased array antenna's log", gives the layout (real rows from the sample), one series per stream and polarization named `Stream n H|V|C`,
+  only C shown at first, the colour scheme, the SNR axis, the clock-based time axis, that a log **joins** the plot (Plot File, overlap
+  warning, recording first and log second) and that it is never exported as data. The Plot File and Data (CSV) bullets and the "inverses" note
+  say so too; the manual gained a `pre` style for the layout. The Export dialog figure moved to the head of "What each output contains" (it
+  was placed at the section's end, which the new subsection now occupies).
+- **Three figures**, rendered by a new `ManualFiguresTests` scene from the committed sample: the question, the log on an empty plot (the
+  legend hidden: thirty rows cover the Receiver SNR scale), and Customize View's tree for it. The scene asserts 90 series, 30 shown, the
+  legend's `Stream 1 C` and the tree's H, V and C.
+- Checked: the full app suite, 798 passed and 34 not run (one more than before: the scene); no mutation check, since nothing the application
+  does changed. The run-log figures re-rendered with their usual capture noise.
+
 #### Manual figures deep dive, part 1: the names a reader meets, and a menu that ate underscores
 
 The user began the review of the manual's figures with one that "didn't make sense": the Plot File selector listed **flight 1, flight 2,
