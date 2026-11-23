@@ -1,0 +1,47 @@
+{
+  "suite": "app",
+  "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+  "mutants": [
+    {
+      "id": "V1",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "if (!group.Any(s => s.ChannelIndex == PlotColors.CombinedChannelIndex)) continue;",
+      "new": "if (!group.Any(s => s.ChannelIndex == PlotColors.CombinedChannelIndex) && false) continue;",
+      "expect": "caught",
+      "note": "a receiver with no combined channel has all of its series hidden"
+    },
+    {
+      "id": "V2",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "foreach (PlotSeries s in group) s.Visible = s.ChannelIndex == PlotColors.CombinedChannelIndex;",
+      "new": "foreach (PlotSeries s in group) s.Visible = true;",
+      "expect": "caught",
+      "note": "every channel shows, as before"
+    },
+    {
+      "id": "V3",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "ShowOnlyTheCombinedChannels(added);",
+      "new": "_ = added;",
+      "expect": "caught",
+      "note": "a processed recording shows every channel"
+    },
+    {
+      "id": "V4",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "ShowOnlyTheCombinedChannels(imported);",
+      "new": "_ = imported;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests"],
+      "expect": "caught",
+      "note": "an imported log shows every channel"
+    },
+    {
+      "id": "V5",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "GroupBy(s => (s.SourceId, s.StreamOrder, s.ReceiverIndex))",
+      "new": "GroupBy(s => (0, 0, s.ReceiverIndex))",
+      "expect": "caught",
+      "note": "receivers of different streams with the same number are one group"
+    }
+  ]
+}

@@ -22,7 +22,7 @@ namespace TmDq.App.Views.Plot;
 /// </summary>
 public sealed class PlotLegend : Border
 {
-    public const double EdgeMargin = 8, ContentMargin = 6, RowSpacing = 3, SwatchLength = 22, SwatchThickness = 3;
+    public const double EdgeMargin = 8, ContentMargin = 6, RowSpacing = 3, SwatchLength = 22, SwatchThickness = 3, StrongSwatchThickness = 4;
     public const double CornerRadiusPx = 8, MaxWidthFraction = 0.45, MaxHeightFraction = 0.60, MinCapWidth = 80, MinCapHeight = 60;
     public const byte BackgroundAlpha = 185;
 
@@ -104,22 +104,45 @@ public sealed class PlotLegend : Border
             foreach (TextBlock label in ((Panel)row).Children.OfType<TextBlock>())
                 label.Foreground = new ImmutableSolidColorBrush(p.LegendText);
             foreach (Border swatch in ((Panel)row).Children.OfType<Border>())
-                swatch.Background = new ImmutableSolidColorBrush(p.SeriesColor((Color)swatch.Tag!));
+            {
+                IBrush brush = new ImmutableSolidColorBrush(p.SeriesColor((Color)swatch.Tag!));
+                if (swatch.Child is Avalonia.Controls.Shapes.Line dots) dots.Stroke = brush;   // a dotted series' swatch is its dots
+                else swatch.Background = brush;
+            }
         }
     }
 
     private StackPanel Row(LegendEntry e)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Background = Brushes.Transparent };
-        row.Children.Add(new Border
+        // As thick as the line it stands for: the combined polarization is a little thicker.
+        double thickness = e.Strong ? StrongSwatchThickness : SwatchThickness;
+        var swatch = new Border
         {
             Width = SwatchLength,
-            Height = SwatchThickness,
+            Height = thickness,
             CornerRadius = new CornerRadius(1),
             Tag = e.Color,   // the series' own colour; the swatch is drawn in the theme's version of it
-            Background = new ImmutableSolidColorBrush(Palette.SeriesColor(e.Color)),
             VerticalAlignment = VerticalAlignment.Center,
-        });
+        };
+        IBrush colour = new ImmutableSolidColorBrush(Palette.SeriesColor(e.Color));
+        if (e.Dotted)
+        {
+            // A dotted series' swatch is dotted, with the same dots as its line (PlotChart.SeriesDots).
+            swatch.Child = new Avalonia.Controls.Shapes.Line
+            {
+                StartPoint = new Point(0, thickness / 2),
+                EndPoint = new Point(SwatchLength, thickness / 2),
+                Stroke = colour,
+                StrokeThickness = thickness,
+                StrokeDashArray = new Avalonia.Collections.AvaloniaList<double>(PlotChart.SeriesDots),
+            };
+        }
+        else
+        {
+            swatch.Background = colour;
+        }
+        row.Children.Add(swatch);
         row.Children.Add(new TextBlock
         {
             Text = e.Label,

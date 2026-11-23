@@ -12,7 +12,7 @@
       "old": "IBrush? fill = draft ? null :", "new": "IBrush? fill = false ? null :",
       "expect": "caught", "note": "a draft keeps the band's fill" },
     { "id": "A4", "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
-      "old": "draft ? draftLine : PenWidth", "new": "PenWidth",
+      "old": "double width = draft ? draftLine : s.Strong ? StrongPenWidth : PenWidth;", "new": "double width = s.Strong ? StrongPenWidth : PenWidth;",
       "expect": "caught", "note": "a draft's line at the full 1.5 px" },
     { "id": "A5", "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
       "old": "                                        draft ? draftLine : 1);", "new": "                                        1);",

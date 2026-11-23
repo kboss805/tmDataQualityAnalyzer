@@ -130,10 +130,11 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         {
             double[] elapsed = set.ElapsedSeconds.ToArray();
             bool sorted = ChartGeometry.IsSortedX(elapsed);
+            var added = new List<PlotSeries>(set.Count);
             for (int i = 0; i < set.Count; i++)
             {
                 SeriesSpec spec = set.Specs[i];
-                _series.Add(new PlotSeries
+                var series = new PlotSeries
                 {
                     Id = _nextId++,
                     Name = spec.Name,
@@ -150,8 +151,11 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
                     YMax = spec.YMax,
                     SortedX = sorted,
                     Visible = ShownInView(spec.Metric, _lockAxisView),
-                });
+                };
+                added.Add(series);
+                _series.Add(series);
             }
+            ShowOnlyTheCombinedChannels(added);
         }
 
         // A stable sort by job, so streams keep the order they were configured in whichever finished first.
@@ -262,7 +266,9 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         _series.Clear();
         _window.ClearHistory();
         _readoutSeriesId = null;
-        _series.AddRange(PlotCsv.Series(data, _lockAxisView, ref _nextId, kind));
+        List<PlotSeries> imported = PlotCsv.Series(data, _lockAxisView, ref _nextId, kind);
+        ShowOnlyTheCombinedChannels(imported);   // as a run's are: the rest are a click away in Customize View
+        _series.AddRange(imported);
         _timeBase ??= new TimeBase();
         _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);
         _window.ShowSpan(data.XMax);
@@ -345,6 +351,21 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(VisibleSource));
         SeriesChanged?.Invoke(this, EventArgs.Empty);
         RangesChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// What shows when Receiver SNR series arrive: of each stream's channels (a receiver's L, R and C, an antenna's H, V and C)
+    /// only the combined one, which keeps a plot of many receivers readable; Customize View shows the others. A group with no
+    /// combined channel (a receiver set up with fewer than three) keeps all of its series, so nothing arrives hidden entirely.
+    /// </summary>
+    public static void ShowOnlyTheCombinedChannels(IEnumerable<PlotSeries> series)
+    {
+        foreach (IGrouping<(int Source, int Stream, int Receiver), PlotSeries> group in
+                 series.Where(s => s.Metric == MetricType.Snr).GroupBy(s => (s.SourceId, s.StreamOrder, s.ReceiverIndex)))
+        {
+            if (!group.Any(s => s.ChannelIndex == PlotColors.CombinedChannelIndex)) continue;
+            foreach (PlotSeries s in group) s.Visible = s.ChannelIndex == PlotColors.CombinedChannelIndex;
+        }
     }
 
     /// <summary>Whether a series of <paramref name="metric"/> is shown when it arrives: the left-axis metrics are shown
@@ -614,7 +635,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
             if (!EffectiveVisible(s)) continue;
             if (s.Metric == MetricType.FrameSyncLock && _lockAxisView != LockAxisView.LockPercent) continue;
             if (s.Metric == MetricType.AccumulatedMissedFrames && _lockAxisView != LockAxisView.MissedFrames) continue;
-            entries.Add(new LegendEntry(s.Id, LegendLabel(s), s.Name, s.Color));
+            entries.Add(new LegendEntry(s.Id, LegendLabel(s), s.Name, s.Color, s.Dotted, s.Strong));
         }
         return entries;
     }
@@ -706,4 +727,4 @@ public enum CsvLoad
 }
 
 /// <summary>One legend row: the series it stands for, its label, its full name (the row's tooltip) and its colour.</summary>
-public sealed record LegendEntry(int Id, string Label, string FullName, Color Color);
+public sealed record LegendEntry(int Id, string Label, string FullName, Color Color, bool Dotted = false, bool Strong = false);

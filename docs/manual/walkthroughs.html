@@ -253,13 +253,13 @@ will be wrong.</p>
 
 <h3>Step 4 &mdash; Read the plot</h3>
 
-{{FIG:Uncalibrated SNR Plot with Legend.png|Receiver SNR over time, converted linearly. This recording is a calibration sweep, so the trace climbs in deliberate steps; ordinary flight data is far less tidy. The legend lists every channel that was processed - all forty-eight of them.|Receiver SNR staircase plot with a legend listing forty-eight receiver channels}}
+{{FIG:Uncalibrated SNR Plot with Legend.png|Receiver SNR over time, converted linearly. This recording is a calibration sweep, so the trace climbs in deliberate steps; ordinary flight data is far less tidy. The legend lists the sixteen receivers' combined channels, which is all a plot shows at first; the recording carries forty-eight channels in all, three to a receiver (see Step 5).|Receiver SNR staircase plot with a legend listing sixteen receivers' combined channels}}
 
 <p>SNR is plotted against the <strong>right-hand</strong> axis, in decibels. There is no
 left-hand axis here because this recording carries no frame sync streams &mdash; an axis
 appears only when something is plotted against it, so which axes you see tells you what kind
 of data is loaded. In the figure above the legend covers the right-hand scale, which is the
-first sign that forty-eight channels is more than one plot can usefully carry.</p>
+first sign that even sixteen lines are a lot for one plot; a plot opens with only the combined channel of each receiver for that reason.</p>
 
 <p>The recording shown is a calibration sweep, which is why it climbs in neat steps. On real
 flight data you are looking for the shape instead: sustained levels, the depth and duration of
@@ -271,7 +271,9 @@ fades, and whether channels that should track each other actually do.</p>
 be read at once. Right-click the chart and choose <strong>Customize View&hellip;</strong> to
 show only what you care about.</p>
 
-{{FIG:walk-cust-02-snr-tree.png|The Receiver SNR tab groups channels by receiver, so a whole receiver can be shown or hidden in one click. Here one receiver is expanded with two of its three channels selected.|Customize Plot Series dialog showing the receiver tree with one group partially checked}}
+{{FIG:walk-cust-02-snr-tree.png|The Receiver SNR tab groups channels by receiver, so a whole receiver can be shown or hidden in one click. Here one receiver is expanded with only its combined channel (C) selected, which is how a plot opens.|Customize Plot Series dialog showing the receiver tree with one group partially checked}}
+
+<p>A plot opens with only each receiver's <strong>combined</strong> channel shown, which keeps a recording of many receivers readable; tick a receiver's other channels, or the receiver itself, to bring them in.</p>
 
 <p>Channels are grouped by receiver, and a group's checkbox reflects its children: ticked when
 all are shown, empty when none are, and <strong>filled</strong> when only some are. That third

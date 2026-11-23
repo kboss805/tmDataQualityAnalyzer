@@ -352,7 +352,7 @@ public sealed class ChartViewTests
     [AvaloniaFact]
     public void ALegendSwatchIsInTheColourTheLineIsDrawnInAndFollowsAChangeOfTheme()
     {
-        Color yellow = PlotColors.Snr[2];
+        Color yellow = PlotColors.StreamHues[9];   // the gold: pale on the light theme
         var plot = new PlotViewModel();
         plot.SetSeries(new[] { PlotFixtures.Snr(0, "yellow", 1, 0, 1, 0, new[] { 0.0, 2.0 }, new[] { 50.0, 50.0 }) });
         plot.RecolorSeries(0, yellow);
@@ -377,6 +377,39 @@ public sealed class ChartViewTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(ChartPalette.Light.SeriesColor(yellow), Swatch());
         s.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void ADottedSeriesHasADottedSwatchAndAStrongOneAThickerOne()
+    {
+        var plot = new PlotViewModel();
+        plot.SetSeries(new[]
+        {
+            PlotFixtures.Snr(0, "plain", 1, 0, 1, 0, new[] { 0.0, 2.0 }, new[] { 50.0, 50.0 }),
+            PlotFixtures.Snr(1, "dotted", 1, 0, 16, 0, new[] { 0.0, 2.0 }, new[] { 60.0, 60.0 }),
+            PlotFixtures.Snr(2, "dotted and strong", 1, 0, 16, 2, new[] { 0.0, 2.0 }, new[] { 70.0, 70.0 }),
+        });
+        Shown s = Show(plot);
+        Dispatcher.UIThread.RunJobs();
+        Border Swatch(int row) => Assert.IsType<Border>(((StackPanel)s.View.Legend.Rows[row]).Children[0]);
+
+        // The plain series: a bar in its colour, as it always was.
+        Assert.IsType<ImmutableSolidColorBrush>(Swatch(0).Background);
+        Assert.Null(Swatch(0).Child);
+        Assert.Equal(PlotLegend.SwatchThickness, Swatch(0).Height);
+
+        // A dotted series: dots with the line's own dots, in its colour; and the strong one thicker, as its line is.
+        var dots = Assert.IsType<Avalonia.Controls.Shapes.Line>(Swatch(1).Child);
+        Assert.Equal(PlotChart.SeriesDots, dots.StrokeDashArray!);
+        Assert.Equal(PlotLegend.SwatchThickness, dots.StrokeThickness);
+        Assert.Equal(PlotLegend.SwatchLength, dots.EndPoint.X - dots.StartPoint.X);
+        Assert.Null(Swatch(1).Background);
+        Assert.Equal(PlotLegend.StrongSwatchThickness, Swatch(2).Height);
+        Assert.Equal(PlotLegend.StrongSwatchThickness, Assert.IsType<Avalonia.Controls.Shapes.Line>(Swatch(2).Child).StrokeThickness);
+
+        // The dots follow the theme as a bar does: a pale colour is drawn darker in the light theme.
+        Color own = plot.Series[1].Color;
+        Assert.Equal(ChartPalette.Light.SeriesColor(own), ((ISolidColorBrush)dots.Stroke!).Color);
     }
 
     [AvaloniaFact]
