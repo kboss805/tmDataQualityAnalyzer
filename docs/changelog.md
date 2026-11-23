@@ -37,6 +37,18 @@ reading the story against the code after the user edited it.
   not a log, a telemetry CSV that still replaces, and a processed recording of the PRN sample under the log, each sample keeping its clock time
   on the one axis. `eng/mutants/antenna-overlay.json`, 14 mutants, all CAUGHT. Baseline: app 796 passed (was 789).
 
+#### US10.0's story, made consistent and its open questions settled
+
+The user edited US10.0 to name the source (AV Inc. Phased Array Antenna Systems, a system control unit, Horizontal / Vertical / Combined), and
+asked for every inconsistency in it to be put to them one by one; twelve answers, all of them what the skeleton already does. The story
+now says **stream** for the 30 columns (the array's receive channels), spells the polarizations out once and uses H, V and C after that, writes
+the vendor as "AV Inc." (the import dialog's button stays "AV Phased Array Antenna…"), defines **SCU** once, and no longer says the series are
+named in the exported CSV, which criterion 8 rules out. **"Still to settle" is gone**: the values are SNR in dB on the Receiver SNR axis, the
+plot image export applies, only each stream's combined series shows at first, the kind is asked every time and never remembered, and a file
+with several SCUs names its series with the SCU's. Three criteria are new, each describing what is built: the default visibility and the colours
+(US4.0's), and **a log joining the plot** instead of replacing it (the code for that is PR #354, "An antenna's log
+joins the plot"). The scope note says the kind dialog changes US6.3's flow. Documentation only; no baseline moved.
+
 #### Receiver SNR series in 15 hues, solid then dotted, the combined channel the strongest, and only that channel shown at first
 
 Asked for after the US10.0 skeleton's render showed 30 streams' colours running out of difference, and extended by the user to the
