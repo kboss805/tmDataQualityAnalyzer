@@ -12,6 +12,31 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### An antenna's log joins the plot, placed by the clock, instead of replacing it
+
+US10.0 says the point of importing a phased array antenna's log is to compare it with what this application measures, and says an
+imported log and a processed recording "line up by clock time", and that its series can be on the plot "beside series of a telemetry
+receiver". The skeleton could not do any of that: every import cleared the plot first (`MainWindowViewModel.ImportCsvAsync` called
+`ClearRun`, then `PlotViewModel.ShowCsv` cleared the series), so the log could never share a plot with a processed recording. Found by
+reading the story against the code after the user edited it.
+
+- **Adding.** An antenna's log imported while the plot shows anything is **added** to it; a telemetry CSV still replaces it (US6.3 is
+  unchanged), and so does a log imported into an empty plot. The plot is not cleared, the title and the processed sources stay, and the log is a
+  recording of its own for the Plot File selector, named for its file (`PlotViewModel.ShowCsv`, with a source number one past every one
+  shown). A file that is not a log leaves the plot as it was: it used to be cleared before the file was read.
+- **By the clock.** The log's first sample is placed by day of year and time of day against the plot's clock (`TimeBase.Info`), the way the
+  axis labels time, not by the recordings' absolute seconds, whose year differs from a log's. A log that starts earlier than everything shown
+  moves what is shown to the right and moves the clock to its own start (`SetClock`, bumping each series' `Version` so the chart redraws); one
+  that starts later is shifted right (`PlotCsv.Series`' `shift`). The year is not compared, as the axis does not.
+- **No overlap is said.** A log that starts after everything shown ends, or ends before it starts, raises the plot's warning, and is added
+  anyway: "The log's recording time does not overlap the data already shown. They will share one time axis with a large gap between them."
+- **Not done, on purpose.** Processing a recording, or opening one, still starts a plot of its own, so the order that compares is a
+  recording first and then the log. Stream *n* of the log is the same hue as receiver *n* of a recording (the hue is by stream number, as
+  the 15-hue scheme says), so the user recolours one of them in Customize View when they sit together.
+- **Checked.** Seven app tests (`PhasedArrayImportTests`): a later log, an earlier one, one a day off in each direction, a file that is
+  not a log, a telemetry CSV that still replaces, and a processed recording of the PRN sample under the log, each sample keeping its clock time
+  on the one axis. `eng/mutants/antenna-overlay.json`, 14 mutants, all CAUGHT. Baseline: app 796 passed (was 789).
+
 #### Receiver SNR series in 15 hues, solid then dotted, the combined channel the strongest, and only that channel shown at first
 
 Asked for after the US10.0 skeleton's render showed 30 streams' colours running out of difference, and extended by the user to the

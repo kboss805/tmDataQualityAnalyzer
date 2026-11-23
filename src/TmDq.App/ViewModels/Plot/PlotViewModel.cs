@@ -228,11 +228,11 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
 
     /// <summary>Reads an exported CSV and shows it in place of whatever was shown (US6.3); false,
     /// with nothing changed, for a file that is not one.</summary>
-    public bool LoadCsv(string path, CsvKind kind = CsvKind.TelemetryReceivers)
+    public bool LoadCsv(string path, CsvKind kind = CsvKind.TelemetryReceivers, string? sourceLabel = null)
     {
         CsvData? data = PlotCsv.Parse(path, kind);
         if (data is null) return false;
-        ShowCsv(data, kind);
+        ShowCsv(data, kind, sourceLabel);
         return true;
     }
 
@@ -240,7 +240,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// <see cref="LoadCsv"/> with the file read off the UI thread and <see cref="IsLoading"/> set meanwhile. A
     /// request while one is being read is dropped, as v2.x dropped it.
     /// </summary>
-    public async Task<CsvLoad> LoadCsvAsync(string path, CsvKind kind = CsvKind.TelemetryReceivers)
+    public async Task<CsvLoad> LoadCsvAsync(string path, CsvKind kind = CsvKind.TelemetryReceivers, string? sourceLabel = null)
     {
         if (IsLoading) return CsvLoad.Dropped;
         IsLoading = true;
@@ -248,7 +248,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         {
             CsvData? data = await Task.Run(() => PlotCsv.Parse(path, kind));
             if (data is null) return CsvLoad.Failed;
-            ShowCsv(data, kind);
+            ShowCsv(data, kind, sourceLabel);
             return CsvLoad.Loaded;
         }
         finally
@@ -261,17 +261,48 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// Shows a parsed CSV as a run's series would be shown (<see cref="PlotCsv.Series"/>), with the clock from the
     /// file; then a warning for any rows skipped, since a partly loaded file must not pass for a whole one.
     /// </summary>
-    private void ShowCsv(CsvData data, CsvKind kind)
+    private void ShowCsv(CsvData data, CsvKind kind, string? sourceLabel)
     {
-        _series.Clear();
+        // An antenna's log is added to what the plot shows, to be compared with it (US10.0); every other CSV replaces it.
+        bool added = kind == CsvKind.PhasedArrayAntenna && _series.Count > 0;
+        _timeBase ??= new TimeBase();
+        int? sourceId = null;
+        double shift = 0.0;
+        if (added)
+        {
+            // By the clock, as the axis labels it (day of year and time of day): the log's first sample comes this many
+            // seconds after elapsed zero, which is before it when the log starts earlier than everything shown.
+            TimeBaseInfo clock = _timeBase.Info;
+            double start = (data.BaseDay - clock.BaseDay) * 86400.0 + (data.BaseTimeOffset - clock.BaseTimeOffset);
+            double end = SpanOf(_series);
+            if (start > end || start + data.XMax < 0.0)
+            {
+                Warning?.Invoke(this, "The log's recording time does not overlap the data already shown. " +
+                                      "They will share one time axis with a large gap between them.");
+            }
+            if (start < 0.0)
+            {
+                foreach (double[] xs in _series.Select(s => s.X).Distinct())
+                    for (int i = 0; i < xs.Length; i++) xs[i] -= start;
+                foreach (PlotSeries s in _series) s.Version++;
+                _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);
+                start = 0.0;
+            }
+            shift = start;
+            sourceId = _series.Max(s => s.SourceId) + 1;
+            if (sourceLabel is not null) SetSourceLabel(sourceId.Value, sourceLabel);
+        }
+        else
+        {
+            _series.Clear();
+            _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);
+        }
         _window.ClearHistory();
         _readoutSeriesId = null;
-        List<PlotSeries> imported = PlotCsv.Series(data, _lockAxisView, ref _nextId, kind);
+        List<PlotSeries> imported = PlotCsv.Series(data, _lockAxisView, ref _nextId, kind, sourceId, shift);
         ShowOnlyTheCombinedChannels(imported);   // as a run's are: the rest are a click away in Customize View
         _series.AddRange(imported);
-        _timeBase ??= new TimeBase();
-        _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);
-        _window.ShowSpan(data.XMax);
+        _window.ShowSpan(added ? SpanOf(_series) : data.XMax);
         PlotColors.Assign(_series);
         ComputeSnrRange();
         SeriesChanged?.Invoke(this, EventArgs.Empty);

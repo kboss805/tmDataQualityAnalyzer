@@ -1,0 +1,118 @@
+{
+  "suite": "app",
+  "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests"],
+  "mutants": [
+    {
+      "id": "O1",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "bool joins = chosen == CsvKind.PhasedArrayAntenna && Plot.HasData;",
+      "new": "bool joins = false;",
+      "expect": "caught",
+      "note": "an antenna's log clears the plot first, as every import did"
+    },
+    {
+      "id": "O2",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "if (!joins) Plot.Title = BaseName(name);",
+      "new": "Plot.Title = BaseName(name);",
+      "expect": "caught",
+      "note": "the log retitles the plot it joined"
+    },
+    {
+      "id": "O3",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "bool added = kind == CsvKind.PhasedArrayAntenna && _series.Count > 0;",
+      "new": "bool added = false;",
+      "expect": "caught",
+      "note": "the plot replaces what was shown, whatever the kind"
+    },
+    {
+      "id": "O4",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "double start = (data.BaseDay - clock.BaseDay) * 86400.0 + (data.BaseTimeOffset - clock.BaseTimeOffset);",
+      "new": "double start = data.BaseTimeOffset - clock.BaseTimeOffset;",
+      "expect": "caught",
+      "note": "the day is left out of where the log starts, so a log of another day lands on top"
+    },
+    {
+      "id": "O5",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "if (start > end || start + data.XMax < 0.0)",
+      "new": "if (start > end)",
+      "expect": "caught",
+      "note": "a log that ends before everything shown starts is not said to miss it"
+    },
+    {
+      "id": "O6",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "if (start > end || start + data.XMax < 0.0)",
+      "new": "if (start + data.XMax < 0.0)",
+      "expect": "caught",
+      "note": "a log that starts after everything shown ends is not said to miss it"
+    },
+    {
+      "id": "O7",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "for (int i = 0; i < xs.Length; i++) xs[i] -= start;",
+      "new": "for (int i = 0; i < xs.Length; i++) xs[i] += start;",
+      "expect": "caught",
+      "note": "what was shown moves the wrong way for a log that starts earlier"
+    },
+    {
+      "id": "O8",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "foreach (PlotSeries s in _series) s.Version++;\n                _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);\n                start = 0.0;",
+      "new": "_timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);\n                start = 0.0;",
+      "expect": "caught",
+      "note": "the samples moved and the chart is not told, so it draws its cached geometry"
+    },
+    {
+      "id": "O9",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "foreach (PlotSeries s in _series) s.Version++;\n                _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);\n                start = 0.0;",
+      "new": "foreach (PlotSeries s in _series) s.Version++;\n                start = 0.0;",
+      "expect": "caught",
+      "note": "the clock stays at the first log's, so the axis reads the wrong time"
+    },
+    {
+      "id": "O10",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "sourceId = _series.Max(s => s.SourceId) + 1;",
+      "new": "sourceId = 0;",
+      "expect": "caught",
+      "note": "the log is the first recording's, so the Plot File selector cannot tell them apart"
+    },
+    {
+      "id": "O11",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "if (sourceLabel is not null) SetSourceLabel(sourceId.Value, sourceLabel);",
+      "new": "_ = sourceLabel;",
+      "expect": "caught",
+      "note": "the log is listed as \"Source 1\", not by its file"
+    },
+    {
+      "id": "O12",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "_window.ShowSpan(added ? SpanOf(_series) : data.XMax);",
+      "new": "_window.ShowSpan(data.XMax);",
+      "expect": "caught",
+      "note": "the view takes in the log alone, not what it joined"
+    },
+    {
+      "id": "O13",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCsv.cs",
+      "old": "for (int i = 0; i < xs.Length; i++) xs[i] += shift;",
+      "new": "for (int i = 0; i < xs.Length; i++) xs[i] += 0.0;",
+      "expect": "caught",
+      "note": "a later log is drawn from the plot's start, not from its own"
+    },
+    {
+      "id": "O14",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCsv.cs",
+      "old": "SourceId = sourceId ?? c.SourceId,",
+      "new": "SourceId = c.SourceId,",
+      "expect": "caught",
+      "note": "the log's series keep the file's source number"
+    }
+  ]
+}

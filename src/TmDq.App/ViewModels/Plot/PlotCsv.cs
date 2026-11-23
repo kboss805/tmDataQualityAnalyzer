@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using TmDq.App.Models.Export;
 using TmDq.Core;
 
@@ -55,12 +56,20 @@ internal static class PlotCsv
     /// <summary>
     /// A parsed file's series, numbered from <paramref name="nextId"/>: each Frame Sync Lock stream's series given
     /// the core's stream order (<c>assignImportedStreamOrders</c>), so its two metrics share a colour and each stream
-    /// has its own; shown as <paramref name="view"/> shows a run's.
+    /// has its own; shown as <paramref name="view"/> shows a run's. A file added to a plot that already shows data
+    /// (<paramref name="sourceId"/> its own recording, <paramref name="shift"/> the seconds its first sample comes after the
+    /// plot's elapsed zero) has its times moved there, once for each array the series share.
     /// </summary>
-    public static List<PlotSeries> Series(CsvData data, LockAxisView view, ref int nextId, CsvKind kind = CsvKind.TelemetryReceivers)
+    public static List<PlotSeries> Series(CsvData data, LockAxisView view, ref int nextId, CsvKind kind = CsvKind.TelemetryReceivers,
+                                          int? sourceId = null, double shift = 0.0)
     {
         bool phasedArray = kind == CsvKind.PhasedArrayAntenna;
         IReadOnlyList<int> orders = ImportedStreams.AssignOrders(data.Series);
+        if (shift != 0.0)
+        {
+            foreach (double[] xs in data.Series.Select(s => s.X).Distinct())
+                for (int i = 0; i < xs.Length; i++) xs[i] += shift;
+        }
         var series = new List<PlotSeries>(data.Series.Count);
         for (int i = 0; i < data.Series.Count; i++)
         {
@@ -74,7 +83,7 @@ internal static class PlotCsv
                 ReceiverIndex = c.ReceiverIndex,
                 ChannelIndex = c.ChannelIndex,
                 StreamOrder = orders[i],   // an SNR series keeps its own; the core gives the others theirs
-                SourceId = c.SourceId,
+                SourceId = sourceId ?? c.SourceId,
                 IsPhasedArray = phasedArray,
                 X = c.X,
                 Y = c.Y,
