@@ -67,9 +67,11 @@ These reach users but nothing in CI exercises them, so they rot silently:
 
 - **The manuals** — `assets/usermanual.html` (Help > User Manual, compiled into the app) and
   `UserManual.html` (the full manual, shipped beside it). Their subtitle and footer carry the version from
-  `AppVersion`, stamped by `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1 -NoCapture`
-  after the bump (drop `-NoCapture` to re-render the figures when the UI changed). The manual read
-  "Version 2.7.0" at v2.9.0; the consistency check below is why that cannot recur.
+  `AppVersion`, stamped by a full `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1` after the bump.
+  **Never `-NoCapture` after a bump**: four figures show the log's version line, so they must be re-rendered, and
+  `docs\manual_images\rendered-version.txt` must name the release's version or the consistency check fails (v3.3.0
+  shipped four figures that said v3.2.0 for this reason). `-NoCapture` is for a prose-only change between releases.
+  The manual read "Version 2.7.0" at v2.9.0; the consistency check below is why that cannot recur.
 - **`README.md`** — the system requirements, the build commands and the repo tree.
 - **`.claude/CLAUDE.md`** — the "Current version" line in the opening paragraph. It sat at 2.7.0
   through two releases, because nothing points at it.

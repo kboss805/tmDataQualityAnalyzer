@@ -1,7 +1,7 @@
 # Future plans
 
 Scratch space for work that is scoped but not yet started, before it graduates into
-a user story in `docs/claude.md` (the improvement plan it once fed is finished, and kept
+a user story in `docs/guide.md` (the improvement plan it once fed is finished, and kept
 in `docs/records/IMPROVEMENT_PLAN.md`). Anything substantial
 gets its own file here plus a paragraph in this index; smaller items can live as a
 section below until they earn one.
