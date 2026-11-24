@@ -10,7 +10,18 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
-### Unreleased
+### v3.3.1 — The manual's figures show the right version
+
+A patch release, the first change since v3.3.0 (2026-11-23): four figures of the user manual named v3.2.0 in their log pane, because v3.3.0's manuals were stamped with `-NoCapture` after the bump. They are re-rendered (here, by v3.3.1, which is also the first release whose figures are guarded: `docs\manual_images\rendered-version.txt` must name the release's version or the consistency check fails). No application code changed, so the soak and the throughput guard were not re-run; the three suites were.
+
+#### The export tests read a new file through the retrying helper
+
+Running this release's suites, the app suite failed twice in a row, each time on a different test (`EveryRecordingExportsTheCsvV214ExportedByteForByte`
+"rasa", then `EveryExportReadsBackAsItsSeriesAndExportsAgainByteForByte` "safran") with "The process cannot access the file ... because it is being
+used by another process" at `File.ReadAllBytes` on a CSV the export had just finished writing: the same outside-the-code-under-test refusal as the
+20 MB case below (a scanner holding a new file), not a wrong byte. Every `File.ReadAllBytes` in `ExportImportTests` now goes through
+`TempFiles.ReadAllBytes`, which retries for three seconds on an `IOException` and then fails, and `HeaderOf` through `TempFiles.ReadAllText`. Test code only.
+After it the suite passed in two runs out of two (838 total, 34 not run). No mutation check: nothing it guards is behaviour.
 
 #### Four manual figures named v3.2.0 in the v3.3.0 manual: re-rendered, and the release check now refuses it
 

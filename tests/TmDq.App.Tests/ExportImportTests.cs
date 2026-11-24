@@ -121,7 +121,7 @@ public sealed class ExportImportTests
         try
         {
             Assert.True(plot.ExportCsv(path));
-            byte[] bytes = File.ReadAllBytes(path);
+            byte[] bytes = TempFiles.ReadAllBytes(path);
             Assert.Equal(length, bytes.Length);
             Assert.Equal(sha256, Sha256(bytes));
         }
@@ -312,14 +312,14 @@ public sealed class ExportImportTests
             Assert.Equal(("600", "400"), ((string?)root.Attribute("width"), (string?)root.Attribute("height")));
 
             Assert.Equal((pdf, ImageFormat.Pdf), await PlotImageExport.ExportAsync(view, pdf));
-            string text = Encoding.Latin1.GetString(File.ReadAllBytes(pdf));
+            string text = Encoding.Latin1.GetString(TempFiles.ReadAllBytes(pdf));
             Assert.StartsWith("%PDF-", text);
             Assert.Contains("/MediaBox [0 0 600 400]", text);   // the chart's size, in points
             Assert.Contains("/Title (Pass 3)", text);            // the plot's title, as the document's
             Assert.Contains("/Creator (tmDataQualityAnalyzer)", text);
 
             Assert.Equal((other + ".pdf", ImageFormat.Pdf), await PlotImageExport.ExportAsync(view, other));
-            Assert.StartsWith("%PDF-", Encoding.Latin1.GetString(File.ReadAllBytes(other + ".pdf")));
+            Assert.StartsWith("%PDF-", Encoding.Latin1.GetString(TempFiles.ReadAllBytes(other + ".pdf")));
             Assert.False(File.Exists(other));
         }
         finally
@@ -357,7 +357,7 @@ public sealed class ExportImportTests
         return path;
     }
 
-    private static string HeaderOf(string path) => File.ReadAllLines(path)[0];
+    private static string HeaderOf(string path) => TempFiles.ReadAllText(path).Split('\n')[0].TrimEnd('\r');
 
     [Fact]
     public void AnExportHoldsEverySeriesShownOrNotAndNothingToWriteWritesNoFile()
@@ -371,7 +371,7 @@ public sealed class ExportImportTests
         {
             Assert.True(plot.ExportCsv(path));
             Assert.Equal("Time (DOY:HH:MM:SS.mmm),Ch32 Lock (%),Ch32 Accumulated Missed Frames", HeaderOf(path));
-            byte[] everything = File.ReadAllBytes(path);
+            byte[] everything = TempFiles.ReadAllBytes(path);
 
             // The CSV is the data, not the view (US6.1): the other metric in view, every series hidden, zoomed in,
             // it is the same file.
@@ -380,7 +380,7 @@ public sealed class ExportImportTests
             plot.SetSeriesVisibleQuiet(1, false); plot.CommitAppearance();
             plot.SetXViewByUser(0.2, 0.4);
             Assert.True(plot.ExportCsv(path));
-            Assert.Equal(everything, File.ReadAllBytes(path));
+            Assert.Equal(everything, TempFiles.ReadAllBytes(path));
 
             Assert.False(new PlotViewModel().ExportCsv(none));
             Assert.False(File.Exists(none));
@@ -420,7 +420,7 @@ public sealed class ExportImportTests
             Assert.True(imported.LoadCsv(all));
             Assert.Equal(new[] { 0, 2 }, imported.Series.Select(s => s.SourceId));
             Assert.True(imported.ExportCsv(one));
-            Assert.Equal(File.ReadAllBytes(all), File.ReadAllBytes(one));
+            Assert.Equal(TempFiles.ReadAllBytes(all), TempFiles.ReadAllBytes(one));
         }
         finally
         {
@@ -447,7 +447,7 @@ public sealed class ExportImportTests
             Assert.Equal(processed.XMax, imported.XMax, 3);
             Assert.Equal(processed.FormatTime(0), imported.FormatTime(0));
             Assert.True(imported.ExportCsv(second));
-            Assert.Equal(File.ReadAllBytes(first), File.ReadAllBytes(second));
+            Assert.Equal(TempFiles.ReadAllBytes(first), TempFiles.ReadAllBytes(second));
         }
         finally
         {
@@ -975,12 +975,12 @@ public sealed class ExportImportTests
             // The data is the plot's own export.
             string again = TempPath(".csv");
             Assert.True(vm.Plot.ExportCsv(again));
-            Assert.Equal(File.ReadAllBytes(again), File.ReadAllBytes(data));
+            Assert.Equal(TempFiles.ReadAllBytes(again), TempFiles.ReadAllBytes(data));
             TempFiles.Delete(again);
 
             // The log is the sidebar's lines, CR LF, UTF-8 with no byte-order mark, a line end last; it says where the
             // data and the image went, since it is written after them.
-            byte[] bytes = File.ReadAllBytes(log);
+            byte[] bytes = TempFiles.ReadAllBytes(log);
             Assert.NotEqual(0xEF, bytes[0]);
             string text = Encoding.UTF8.GetString(bytes);
             string[] lines = vm.Log.Entries.Take(vm.Log.Entries.Count - 1).Select(e => e.Line).ToArray();

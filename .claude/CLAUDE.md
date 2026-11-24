@@ -3,7 +3,7 @@
 Windows desktop app for analyzing data quality of IRIG 106 Chapter 10 PCM telemetry: per-stream **Frame Sync
 Lock** stats and **Receiver AGC/SNR**, plotted vs. time. **Avalonia 12 on .NET 10** (`src/TmDq.App`, MVVM) over a
 C++20 single-reader / parallel-worker processing core built as `tmdq_core.dll` (`src/core/`: `include/`, `src/` and the C ABI in `abi/`).
-v3.0.0 replaced the v2.x application; `docs/changelog.md` records the move. **Current version: 3.3.0.**
+v3.0.0 replaced the v2.x application; `docs/changelog.md` records the move. **Current version: 3.3.1.**
 
 > **Full reference:** `docs/guide.md` is the canonical, detailed guide (user stories, architecture,
 > conventions, test catalog); `docs/changelog.md` is the history (every release, every step of the move
