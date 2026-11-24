@@ -99,6 +99,13 @@ $checks = @(
     @{ File = 'UserManual.html'
        Pattern = 'This manual describes\s+version ([0-9]+\.[0-9]+\.[0-9]+)\.'
        What = 'full manual footer' }
+
+    # Four figures show the log, whose first line names the version, so the figures must have been rendered by THIS
+    # version: ManualFiguresTests writes the version beside them when build_manual.ps1 renders them, and -NoCapture
+    # leaves it as it was. (v3.3.0 shipped four figures reading v3.2.0: -NoCapture was used after the bump.)
+    @{ File = 'docs\manual_images\rendered-version.txt'
+       Pattern = '^\s*([0-9]+\.[0-9]+\.[0-9]+)\s*$'
+       What = 'figures rendered by' }
 )
 
 foreach ($c in $checks) {

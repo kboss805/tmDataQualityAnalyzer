@@ -59,8 +59,9 @@ themselves). Use the **PowerShell** tool.
   `portable` file sits there; v3.0.x imported v2.x's INI there on its first run, 3.1.0 does not): to run a dev build
   without touching yours, put a `portable` file beside it. Its manuals are `assets\usermanual.html` (compiled in) and
   `UserManual.html` (the full one, with `docs\manual\walkthroughs.html`), their figures rendered from the app by
-  `ManualFiguresTests` into `docs\manual_images`: after a change to what a figure shows, rebuild with
-  `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1` (`-NoCapture` reuses the figures). CI runs the
+  `ManualFiguresTests` into `docs\manual_images`: after a change to what a figure shows, and after every version bump (four figures show the log's version line;
+  `docs\manual_images\rendered-version.txt` names the version that rendered them and the consistency check refuses another), rebuild with
+  `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1` (`-NoCapture` reuses the figures: prose changes only). CI runs the
   app suite. Green baseline **804 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
   **The side-by-side soak:** `powershell -ExecutionPolicy Bypass -File eng\run_soak.ps1 [-NoBuild]
   [-Only <run>,...]` runs every run in `tests\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a

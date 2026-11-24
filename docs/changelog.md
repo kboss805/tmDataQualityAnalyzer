@@ -10,6 +10,25 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
+### Unreleased
+
+#### Four manual figures named v3.2.0 in the v3.3.0 manual: re-rendered, and the release check now refuses it
+
+The pre-release figure review (every one of the 30 figures read next to its caption, on a fresh render) found one defect:
+the log in `walk-csv-02-antenna-plot`, `walk-err-01-log-error`, `walk-fs-04-processing` and `walk-theme-01-light-plot` starts
+"tmDataQualityAnalyzer v3.2.0" in the v3.3.0 manuals, because the release stamped the manuals with `build_manual.ps1
+-NoCapture` after the version bump, which reuses the figures rendered before it. (`walk-csv-03-customize` and
+`walk-cust-02-snr-tree` differ from a render by 3 to 8 pixels, the known checkbox-corner noise, and are left as they were.)
+
+- The four figures are re-rendered. `ManualFiguresTests` now writes `docs\manual_images\rendered-version.txt` (the
+  application's version) when it keeps the figures, and `eng\check_release_consistency.ps1` (CI, every PR, and the release's
+  `-ReleaseMode`) fails when it is not `AppVersion` or is missing: a version bump now needs a full `build_manual.ps1`.
+  `build_manual.ps1`'s header, `.claude/CLAUDE.md` and `docs/guide.md` say so.
+- The Export dialog's caption, alt text and the paragraph above it said each output has its own "switch"; the dialog uses
+  check boxes. (Wording only.)
+- **Checked by:** running the consistency check with the sidecar at 3.2.0 (FAILED, exit 1), with it deleted (FAILED, exit 1) and
+  as committed (OK). The check is a script, outside the mutation harness's three suites.
+
 ### v3.3.0 — An antenna's SNR log joins the plot, Receiver SNR in 15 hues, and a manual that tells one story
 
 The first release since v3.2.0 (2026-11-22). What a user sees: **US10.0**, a phased array antenna's SNR log (AV Inc.) is imported through a kind dialog, shown as one series per stream and polarization (H, V, C), placed on the plot's time axis by its clock so it can sit beside a processed recording, and never exported; Receiver SNR is drawn in 15 hues, solid then dotted, the combined channel the strongest and the only one shown at first; the Y axes are ticked at round values; the legend no longer covers the right axis. The manual's figures were reviewed one by one (findings 1 to 9 fixed, 10 left on purpose) and the manual covers the antenna log. One real application bug was found by that review: a lone `_` in a menu item's header is Avalonia's access-key mark, so `prn_testfile` was listed as "prntestfile". Checked for the release: native 540 test cases (1 skipped), managed 420 passed / 1 skipped, app 804 passed / 34 not run, the soak (all 34 runs exported what v2.14.2 exported, byte for byte) and the throughput guard (4-stream parallel 1.02x the slowest solo, 0.61x all-sequential). The entries are in the order they landed, newest first.

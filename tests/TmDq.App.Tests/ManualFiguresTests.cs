@@ -50,6 +50,9 @@ public sealed class ManualFiguresTests : IDisposable
 {
     public const string OutputVariable = "TMDQ_MANUAL_FIGURES";
 
+    /// <summary>Written beside the figures when they are kept: the version of the application that rendered them.</summary>
+    public const string RenderedVersionFile = "rendered-version.txt";
+
     private readonly string _out;
     private readonly bool _keep;
     private readonly string _scratch = TempFiles.NewPath("figscratch");
@@ -60,6 +63,9 @@ public sealed class ManualFiguresTests : IDisposable
         _keep = !string.IsNullOrEmpty(folder);
         _out = _keep ? folder! : TempFiles.NewPath("figures");
         Directory.CreateDirectory(_out);
+        // Four figures show the log, whose first line names the version: the figures say which version rendered them, and
+        // eng\check_release_consistency.ps1 refuses a release whose figures were rendered by another one.
+        if (_keep) File.WriteAllText(Path.Combine(_out, RenderedVersionFile), AppInfo.Version + "\n");
         Directory.CreateDirectory(_scratch);
         NativeCore.EnsureLoaded();
     }
