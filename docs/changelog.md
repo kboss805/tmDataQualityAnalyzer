@@ -12,6 +12,28 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The pinned scan tests no longer depend on the order the compiler evaluates their draws in
+
+"FrameProcessor: the scan's output on random synthetic streams" and "...on long synthetic streams" failed in every Debug build (58 of
+their 120 scenario hashes, two test cases) while Release passed; the precompiled-header change's entry below records them as
+failing in Debug before it. The cause was in the tests, not the scan. `scenarioHash` drew its clock with
+`rng.chance(50) ? 1e7 : double(rng.between(1, 50)) * 1e5 + 0.5 * double(rng.between(0, 1))`: two draws as the operands of one sum,
+and C++ leaves their order to the compiler. MSVC's Release took the second operand first, Debug the first, so the two builds
+walked different random sequences from that point on and built different streams. It was also fragile in Release: adding an
+unrelated statement to the function (a diagnostic dump, while chasing this) made Release take the other order and fail the same
+58 scenarios, which is how it was found. The two draws are now statements of their own, in the order Release took, so **no pinned
+hash moved**: both test cases pass with the original pins in Debug and Release.
+
+The scan itself is unchanged and was never wrong. `.claude/skills/write-test` now says to draw a seeded generator one statement at a
+time. No other test file has two draws in one expression (every other line with two `rng.` calls is a ternary, whose condition is
+sequenced first).
+
+**Checked:** native tests 540 passed / 0 failed / 1 skipped in **Release and Debug** (Debug was 538 passed / 2 failed). By
+experiment, in both directions: with the draws in the other order, Release fails the same 58 scenarios Debug always did, and with
+the Release order Debug passes. A build of the v3.3.1 commit confirmed Release passed there and Debug failed there. CI builds and
+tests Release only, so it never saw it; a Debug run of the native tests in CI would catch this class of defect. No mutation list: only a test file moved,
+and the two orders above are the mutation.
+
 #### A crash leaves a report, and each release keeps its symbols
 
 An exception nobody handled used to end the process with nothing: no message, no file, and the session log went with it. And a release could not have read a crash dump anyway: it was published with `DebugType=none`, and the native `tmdq_core.pdb` sat in `out\Release` only until the next build overwrote it.

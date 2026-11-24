@@ -1740,7 +1740,15 @@ uint64_t scenarioHash(uint64_t seed, bool* produced_frames = nullptr, std::size_
 
     // The clock: bit period, window, and where each packet says it starts.
     const bool   rate_clock = rng.chance(50);
-    const double delta      = rng.chance(50) ? 1e7 : static_cast<double>(rng.between(1, 50)) * 1e5 + 0.5 * static_cast<double>(rng.between(0, 1)); // 100 ns units
+    // 100 ns units. The two draws are statements of their own: as operands of one sum, which of them the compiler took
+    // first was its choice, and Debug and Release (or any unrelated edit nearby) chose differently.
+    double delta = 1e7;
+    if (!rng.chance(50))
+    {
+        const double half       = static_cast<double>(rng.between(0, 1));
+        const double hundred_us = static_cast<double>(rng.between(1, 50));
+        delta                   = hundred_us * 1e5 + 0.5 * half;
+    }
     const double bit_s      = delta * PCMConstants::k100NsToSeconds;
     // A window is often a whole number of bit periods, so that a bit's time lands on the window's end to the last
     // digit - or one off it, from rounding: the bit that closes the window is then a matter of the arithmetic.

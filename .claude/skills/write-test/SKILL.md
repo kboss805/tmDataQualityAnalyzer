@@ -36,6 +36,12 @@ each suite has its house style and helpers. Build and run with the **build-and-t
   skip: the recordings are in the repository.
 - **The ABI** is compiled into the test executable (the `test_abi_*.cpp` files call `tmdq_*` as a host would),
   so a new ABI function gets its native case there, and its struct layout a pin.
+- **A seeded generator is drawn from one statement at a time.** C++ does not say which operand of `a() * x + b()` or
+  which argument of `f(a(), b())` is evaluated first, so two draws in one expression give a sequence the compiler
+  picks: Debug and Release differed, and an edit elsewhere in the function flipped Release, and a pinned hash then
+  failed in one build only (`scenarioHash`, fixed in the entry "The pinned scan tests no longer depend on the order the
+  compiler evaluates their draws in"). Draw into a named local, then combine. A draw in a ternary's branch is fine:
+  the condition is sequenced before it.
 - **Reimplementing or moving code:** keep the old implementation, restated over std types, as an
   oracle in the test, and compare the two over generated input (`docs/guide.md`, Working Method). Most suites here do;
   `test_chartgeometry.cpp` and `test_streamjob.cpp` are worked examples.
