@@ -337,7 +337,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     private async Task ExportAsync()
     {
         (string image, string data, string log) = ExportViewModel.DefaultPaths(LastFolder ?? _appRoot, Plot.Title);
-        var choice = new ExportViewModel(image, data, log, _files);
+        var choice = new ExportViewModel(image, data, log, _files, Plot.HasExportableData);
         await _exportDialog!.ShowAsync(choice);
         if (choice.Accepted) await ExportAsync(choice);
     }

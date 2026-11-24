@@ -85,6 +85,9 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
 
     public bool HasData => _series.Count > 0;
 
+    /// <summary>Whether Export Data has anything to write: a plot of an antenna's log alone has not (US10.0).</summary>
+    public bool HasExportableData => _series.Any(PlotCsv.IsExported);
+
     public string Title
     {
         get => _title;

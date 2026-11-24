@@ -11,6 +11,10 @@ namespace TmDq.App.ViewModels.Plot;
 /// </summary>
 internal static class PlotCsv
 {
+    /// <summary>Whether <paramref name="series"/> is written by Export Data: the antenna's own system writes that log, so
+    /// nothing of it is handed back (US10.0).</summary>
+    public static bool IsExported(PlotSeries series) => !series.IsPhasedArray;
+
     /// <summary>Every series' column, shown or not; a <paramref name="sourceId"/> of 0 or more keeps that source's
     /// only (per-file batch export).</summary>
     public static List<CsvColumn> Columns(IEnumerable<PlotSeries> series, int sourceId)
@@ -19,7 +23,7 @@ internal static class PlotCsv
         foreach (PlotSeries s in series)
         {
             if (sourceId >= 0 && s.SourceId != sourceId) continue;
-            if (s.IsPhasedArray) continue;   // the antenna's own system writes that log: nothing of it is handed back (US10.0)
+            if (!IsExported(s)) continue;
             columns.Add(new CsvColumn(s.Metric, s.Name, s.SourceId, s.X, s.Y));
         }
         return columns;

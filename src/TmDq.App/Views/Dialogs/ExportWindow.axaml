@@ -31,11 +31,14 @@
     </HeaderedContentControl>
     <HeaderedContentControl Classes="group" Header="Export Data (CSV)">
       <StackPanel Spacing="4">
-        <CheckBox x:Name="DataBox" Content="Export Data" IsChecked="{Binding ExportData}" />
+        <CheckBox x:Name="DataBox" Content="Export Data" IsChecked="{Binding ExportData}" IsEnabled="{Binding DataAvailable}" />
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
           <TextBox x:Name="DataPathBox" Text="{Binding DataPath}" IsEnabled="{Binding ExportData}" />
           <Button x:Name="DataBrowse" Grid.Column="1" Content="Browse..." Command="{Binding BrowseDataCommand}" />
         </Grid>
+        <!-- An antenna's log alone: its own system writes it, so there is nothing to export (US10.0). -->
+        <TextBlock x:Name="DataUnavailableNote" IsVisible="{Binding !DataAvailable}" Opacity="0.7" TextWrapping="Wrap"
+                   Text="Nothing to export: a phased array antenna's log is never exported." />
       </StackPanel>
     </HeaderedContentControl>
     <HeaderedContentControl Classes="group" Header="Export Log (Text)">
