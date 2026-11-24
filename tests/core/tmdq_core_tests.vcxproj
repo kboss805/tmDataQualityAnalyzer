@@ -75,7 +75,16 @@
            corrupted indirect call harder to turn into a jump to code of the attacker's choice. -->
       <SDLCheck>true</SDLCheck>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <ProgramDataBaseFileName>$(IntDir)tmdq_core_tests.pdb</ProgramDataBaseFileName>
+      <!-- Precompiled header: off by default, on for the test files only (below). -->
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <PrecompiledHeaderFile>test_pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>$(IntDir)tmdq_core_tests.pch</PrecompiledHeaderOutputFile>
+      <!-- Debug information goes into each object file (/Z7, DebugInformationFormat OldStyle), not into one shared
+           compile-time .pdb: with the precompiled header, parallel compiles (/MP) sharing a .pdb failed intermittently
+           in an incremental build with C1041 ("cannot open program database ... use /FS"), where the same project
+           without it never did (measured: five edit-and-build cycles, twice, with and without). The linker still
+           writes tmdq_core_tests.pdb for the executable. -->
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\third_party\doctest;$(MSBuildThisFileDirectory)..\..\src\core\include;$(MSBuildThisFileDirectory)..\..\third_party\irig106\include;$(MSBuildThisFileDirectory)..\..\src\core\abi;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <!-- DOCTEST_CONFIG_USE_STD_HEADERS: doctest's documented switch to include <tuple> and friends instead of
            forward-declaring them in namespace std. MSVC 14.51 (Visual Studio 2026, which windows-latest carries; CI pins windows-2022) rejects the
@@ -86,7 +95,7 @@
            TMDQ_API is empty. -->
       <PreprocessorDefinitions>UNICODE;_UNICODE;WIN32;WIN64;DOCTEST_CONFIG_USE_STD_HEADERS;TMDQ_ABI_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <!-- As the DLL: level 4, every warning an error, the irig106 headers external. -->
-      <AdditionalOptions>/FS /utf-8 /Zc:__cplusplus /Zc:throwingNew %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /Zc:__cplusplus /Zc:throwingNew %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -104,7 +113,6 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)' != 'Debug'">
@@ -114,7 +122,6 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
@@ -162,6 +169,22 @@
     <ClCompile Include="test_textformat.cpp" />
     <ClCompile Include="test_tomldocument.cpp" />
     <ClCompile Include="test_tmatswalk.cpp" />
+  </ItemGroup>
+
+  <!-- The precompiled header (test_pch.h): test_pch.cpp creates it; every test_*.cpp uses it, with the header forced in as
+       the first include. main.cpp does not match test_*.cpp and is left out (it defines DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+       before doctest.h); neither are the core's sources or irig106's C files below. Order matters: an Update applies to the
+       items declared before it, and the last one wins. -->
+  <ItemGroup>
+    <ClCompile Include="test_pch.cpp" />
+    <ClCompile Update="test_*.cpp">
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <ForcedIncludeFiles>test_pch.h</ForcedIncludeFiles>
+    </ClCompile>
+    <ClCompile Update="test_pch.cpp">
+      <PrecompiledHeader>Create</PrecompiledHeader>
+      <ForcedIncludeFiles />
+    </ClCompile>
   </ItemGroup>
 
   <!-- The core the ported suites exercise: src\core\src\<name>.cpp, each also built by tmdq_core.vcxproj. -->

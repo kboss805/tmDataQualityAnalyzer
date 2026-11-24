@@ -1010,7 +1010,12 @@ more checks run by hand:
   re-anchored in that change.
 
 A new native test file goes in `tests/core/tmdq_core_tests.vcxproj` (`NativeProjectTests` fails until it
-is); a new .NET test needs nothing but its class.
+is); a new .NET test needs nothing but its class. A native test file named `test_*.cpp` uses the project's **precompiled
+header** (`tests/core/test_pch.h`: doctest and the standard headers most test files include, forced in as the first
+include; `main.cpp`, the core's sources and irig106's C files do not use it), which cut a full rebuild of the test project
+by about 12 % on four cores. Such a file must still include everything it uses, because clangd does not see the forced
+include; and the project compiles with `/Z7`, since parallel compiles sharing one `.pdb` failed intermittently with
+`C1041` once the header was in (the header's own comment has the measurements).
 
 In each .NET test project the test classes (`*Tests.cs`) are at the root, and what they share is in `Support/`: the
 library tests' `Env`, `RepoPaths`, `TempFiles`, `Collector` and the digests the recordings' expected numbers are in
