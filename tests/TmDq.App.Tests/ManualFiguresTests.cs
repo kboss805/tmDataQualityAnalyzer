@@ -74,8 +74,9 @@ public sealed class ManualFiguresTests : IDisposable
     {
         // This fixture renders figures and asserts nothing about a handle being released, so a scratch folder that will
         // not go is no failure: on CI the three copies of the 81 MB recording have been held past the retry window
-        // (three failures, the last two on the same file; never traced to a holder; the core closes a recording before it reports a run finished). TemplateBatchTests
-        // runs the same copy and batch under the strict delete, so a leak in that path still fails there.
+        // (three failures, the last two on the same file; never traced to a holder, and the core closes a recording
+        // before it reports a run finished). TemplateBatchTests runs the same copy and batch under the strict delete,
+        // so a leak in that path still fails there.
         if (!_keep) TempFiles.TryDeleteDirectory(_out);
         TempFiles.TryDeleteDirectory(_scratch);
     }
