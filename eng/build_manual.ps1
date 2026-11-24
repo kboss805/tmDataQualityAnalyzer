@@ -20,8 +20,10 @@
 #   full - UserManual.html (the base plus docs\manual\walkthroughs.html), packaged by
 #          deploy\build_package.ps1
 #
-# Run it after a change to what a figure shows (-NoCapture reuses the figures
-# already rendered, for a change to the prose or the version):
+# Run it after a change to what a figure shows, and after every version bump (the log in four figures names the
+# version; docs\manual_images\rendered-version.txt records which version rendered them, and
+# check_release_consistency.ps1 fails when it is not the current one). -NoCapture reuses the figures already
+# rendered, for a change to the prose alone:
 #
 #   powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1 [-NoCapture]
 #

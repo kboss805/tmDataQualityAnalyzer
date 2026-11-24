@@ -823,6 +823,9 @@ Everything builds from `tmdq.sln`, which VS Code opens by default; `.claude/CLAU
   the documentation file (not published) and a malformed doc comment is a warning. A suppression carries its reason
   (`SuppressMessage` with `Justification`).
 - **The manuals**: `eng\build_manual.ps1` renders the figures from the app (`ManualFiguresTests`) and embeds them.
+  `ManualFiguresTests` writes `docs\manual_images\rendered-version.txt` (the rendering application's version) beside the
+  figures, because the log in four of them names the version, and `eng\check_release_consistency.ps1` fails when it is not
+  `AppVersion`: a version bump needs a full render, never `-NoCapture`.
 - **The release**: `deploy\build_package.ps1` (single-file publish, signing, the portable ZIP and the
   Inno installer); `.claude/skills/cut-release` is the procedure.
 - **A recording that finds no sync**: `py eng\ch10_triage.py <file.ch10>` walks the packets with no build and no

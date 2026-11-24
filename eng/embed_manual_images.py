@@ -234,13 +234,13 @@ before('<p><strong>A log joins the plot instead of replacing it.</strong>',
            'Customize Plot Series dialog on the Receiver SNR tab showing the SCU1 group with Stream 1 expanded to H, V and C'))
 
 # Placed immediately before the heading of the section's first subsection, which is where the dialog is described:
-# "Each of the three outputs has its own switch and its own filename" is the paragraph above it. (It was once placed at
+# "Each of the three outputs has its own check box and its own filename" is the paragraph above it. (It was once placed at
 # the end of the section, and the antenna log's text now ends that.)
 before('<h3>What each output contains</h3>',
        fig('Export Dialog.png',
-           'The export dialog. Each output has its own switch and filename, so you can produce '
+           'The export dialog. Each output has its own check box and filename, so you can produce '
            'any combination — image, data, log — in a single action.',
-           'Export Data dialog with separate toggles and filename fields for image, CSV and log output'))
+           'Export Data dialog with separate check boxes and filename fields for image, CSV and log output'))
 
 io.open(BASE, 'w', encoding='utf-8', newline='\n').write(s)
 print('base manual : %-24s %5.0f KB, %d figures'
