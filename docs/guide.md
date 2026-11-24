@@ -851,7 +851,10 @@ Everything builds from `tmdq.sln`, which VS Code opens by default; `.claude/CLAU
   sync word and frame length that actually recur. Its transforms mirror `FrameProcessor`'s; keep them in step.
 - **Markdown lint**: `.pymarkdown` (pymarkdown auto-discovers that name, not `.pymarkdown.json`) configures `python -m pymarkdown
   scan <files>` for this project's docs (front matter, pipe tables, long lines and bold lead-ins allowed). Nothing runs it
-  automatically.
+  automatically, on purpose: the rules that are objectively right are held in CI by `RepoFilesTests` (links that go nowhere, open
+  fences, tabs, skipped heading levels), which needs no second toolchain (audit T11), and this lint's other findings sit in
+  `docs/changelog.md` and `docs/records/` (125 of 132 on 2026-11-24: lists with no blank line, inline `<file>`), which are kept as written.
+  Every other `.md` is clean of it today; run it over what you touch.
 
 ### clangd / IntelliSense (`compile_flags.txt`)
 
@@ -877,6 +880,7 @@ refactoring self-tests, a "tweak", fails: that line is not a problem in the code
 
 **`.clang-format` and `.clang-tidy`** at the root (with `tests/core/` overriding both, and `third_party/` left
 unformatted) are tuned to the code as it is, not the other way round.
+
 - `.clang-format` holds the code's structure (Allman braces, 4 spaces, 120 columns, the pointer with the type, the
   operator that breaks a line at the head of the next, no sorting of includes: the irig106 ones are in dependency
   order). The code was written by hand, so what it does not hold exactly is the alignment of declarations and

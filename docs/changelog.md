@@ -12,6 +12,10 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The linters are kept as local tools, and the docs say why
+
+The 2026-11-24 list asked whether `.clang-tidy`, `.clang-format` and `.pymarkdown`, which nothing enforces, should be enforced or deleted. Neither: clang-tidy needs the LLVM of Visual Studio 2026 (the hosted runner has only 2022's, whose clang static-asserts on the MSVC STL), clang-format would reflow a quarter to a third of every file it touched, and the markdown lint's objective rules are already held in CI by `RepoFilesTests` (audit T11: no second toolchain). `pymarkdown scan` over every `.md` file but the changelog and `docs/records/` finds nothing now, and over those two finds 125 and 7 of its 132, which are kept as written. `docs/guide.md` says all that where it described the lint ("Nothing runs it automatically, on purpose"), and gets the blank line before a list that was its one finding. Documentation only: no code, no baseline moved.
+
 #### The readout of a series whose times are out of order names the nearest sample
 
 The crosshair readout found the sample under the cursor with a binary search on the series' times, which only works when they are
