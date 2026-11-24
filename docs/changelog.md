@@ -25,7 +25,8 @@ it saying why, whenever the plot has nothing `Export Data` writes.
   beside the antenna's brings the box back.
 - **Checked by:** the mutation check, 7 of 7 CAUGHT (the dialog told "true" always, the plot counting an antenna's series,
   the guard in the setter, the box's `IsEnabled`, the note's visibility, the one rule, and the constructor ignoring its argument).
-  App baseline 801 -> 804 (three new tests).
+  App baseline 801 -> 804 (three new tests). The kept mutant `phased-array-import.json` I1 was re-anchored to the
+  rule's new line (`RepoFilesTests` caught the move) and is CAUGHT.
 
 #### Manual figures deep dive, part 3: the legend off the right axis, round Y ticks, and a step file shown as text
 

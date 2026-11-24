@@ -5,8 +5,8 @@
     {
       "id": "I1",
       "file": "src/TmDq.App/ViewModels/Plot/PlotCsv.cs",
-      "old": "if (s.IsPhasedArray) continue;",
-      "new": "if (s.IsPhasedArray && false) continue;",
+      "old": "if (!IsExported(s)) continue;",
+      "new": "if (!IsExported(s) && false) continue;",
       "expect": "caught",
       "note": "an antenna's series are exported"
     },
