@@ -18,7 +18,8 @@
 #
 #   base - assets\usermanual.html, compiled into the application
 #   full - UserManual.html (the base plus docs\manual\walkthroughs.html), packaged by
-#          deploy\build_package.ps1
+#          deploy\build_package.ps1, which generates it itself (-NoCapture) and so does not
+#          keep it in the repository: it is untracked and ignored
 #
 # Run it after a change to what a figure shows, and after every version bump (the log in four figures names the
 # version; docs\manual_images\rendered-version.txt records which version rendered them, and

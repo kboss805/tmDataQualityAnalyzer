@@ -66,7 +66,8 @@ update it only if install/run instructions changed.)
 These reach users but nothing in CI exercises them, so they rot silently:
 
 - **The manuals** — `assets/usermanual.html` (Help > User Manual, compiled into the app) and
-  `UserManual.html` (the full manual, shipped beside it). Their subtitle and footer carry the version from
+  `UserManual.html` (the full manual, shipped beside it: generated and untracked, `deploy\build_package.ps1` makes it from the
+  base manual and the committed figures and stops if that changes the base). Their subtitle and footer carry the version from
   `AppVersion`, stamped by a full `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1` after the bump.
   **Never `-NoCapture` after a bump**: four figures show the log's version line, so they must be re-rendered, and
   `docs\manual_images\rendered-version.txt` must name the release's version or the consistency check fails (v3.3.0
