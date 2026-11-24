@@ -6,6 +6,8 @@
 # Produces, beside this script:
 #   tmDataQualityAnalyzer-vX.Y.Z_portable.zip
 #   tmDataQualityAnalyzer-vX.Y.Z_setup.exe   (replaces a v2.x install: tmDataQualityAnalyzer.iss)
+#   tmDataQualityAnalyzer-vX.Y.Z_symbols.zip  (the debug symbols of those two binaries. NOT shipped to users: kept with
+#                                              the release, so a crash dump or stack trace of that version can be read)
 #
 # THE LAYOUT IS A SINGLE-FILE PUBLISH, and that is what keeps signing honest. A
 # self-contained folder publish ships 27 unsigned PE files: 22 Avalonia assemblies,
@@ -54,6 +56,7 @@ $AppDir   = Join-Path $Stage 'app'
 $Exe      = Join-Path $AppDir 'tmDataQualityAnalyzer.exe'
 $ZipPath  = Join-Path $Here "tmDataQualityAnalyzer-v${version}_portable.zip"
 $SetupExe = Join-Path $Here "tmDataQualityAnalyzer-v${version}_setup.exe"
+$SymbolsZip = Join-Path $Here "tmDataQualityAnalyzer-v${version}_symbols.zip"
 
 Write-Host '============================================'
 Write-Host " tmDataQualityAnalyzer v$version"
@@ -91,7 +94,7 @@ if ($LASTEXITCODE -ne 0) { throw 'the core just built is not a Release build (se
 Write-Host '[2/8] Publishing the application (self-contained, single-file)...'
 if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
 & dotnet publish (Join-Path $Root 'src\TmDq.App') -c Release -r win-x64 --self-contained true `
-    -p:PublishSingleFile=true -p:DebugType=none -o $Publish -nologo -v minimal
+    -p:PublishSingleFile=true -p:DebugType=portable -o $Publish -nologo -v minimal
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
 
 # --- 3. The manifest and the icon must have reached the bundled host (the manifest once did not; TmDq.App.csproj says why). ---
@@ -153,8 +156,8 @@ Write-Host '  OK: the application icon'
 # --- 4. Stage the application folder. ---
 Write-Host '[4/8] Staging...'
 New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
-# Everything the publish produced except debug symbols: the native packages ship their .pdb files (100 MB) even
-# with DebugType=none.
+# Everything the publish produced except debug symbols: the native packages ship their .pdb files (100 MB), and our
+# own are kept apart in the symbols ZIP (step 8), not shipped.
 Get-ChildItem $Publish -File | Where-Object { $_.Extension -ne '.pdb' } | Copy-Item -Destination $AppDir
 # The same files, never signed: the clean-machine test's negative control (Smart App Control must block these, or a
 # pass there proves nothing). deploy\sandbox\run_sandbox_test.ps1 -Payload takes this folder.
@@ -266,7 +269,28 @@ foreach ($attempt in 1..5) {
     catch { if ($attempt -eq 5) { throw }; Start-Sleep -Seconds 3 }
 }
 
-$iscc = @((Get-Command iscc -ErrorAction SilentlyContinue).Source,
+# The debug symbols of our own binaries, kept per release and not shipped: a user has no use for them, but with them a
+# crash dump or a stack trace of exactly this version can be read down to source lines. A symbol file matches its binary
+# by an id the build wrote into both, so signing the binary afterwards does not unmatch it. Attach this ZIP to the GitHub
+# release; the application's crash report (src\TmDq.App\CrashHandling.cs) is read with these.
+$Symbols = Join-Path $Stage 'symbols'
+New-Item -ItemType Directory -Force -Path $Symbols | Out-Null
+foreach ($pdb in @((Join-Path $Publish 'tmDataQualityAnalyzer.pdb'), (Join-Path $Publish 'TmDq.Core.pdb'), [System.IO.Path]::ChangeExtension($CoreDll, '.pdb'))) {
+    if (Test-Path $pdb) { Copy-Item $pdb $Symbols } else { $Failures.Add("the symbols ZIP is missing $(Split-Path $pdb -Leaf)") }
+}
+Set-Content -Path (Join-Path $Symbols 'README.txt') -Encoding ASCII -Value @(
+    "tmDataQualityAnalyzer v$version - debug symbols",
+    '',
+    'Not part of the installer or the portable ZIP. They match that version''s binaries:',
+    '  tmDataQualityAnalyzer.pdb, TmDq.Core.pdb   the managed code inside tmDataQualityAnalyzer.exe',
+    '  tmdq_core.pdb                              tmdq_core.dll, the native core',
+    '',
+    'Keep them with the release. Load them in WinDbg or Visual Studio to read a crash dump, or a stack trace from a crash report, of this version.'
+)
+if (Test-Path $SymbolsZip) { Remove-Item $SymbolsZip -Force }
+Compress-Archive -Path (Join-Path $Symbols '*') -DestinationPath $SymbolsZip -Force
+
+$iscc =@((Get-Command iscc -ErrorAction SilentlyContinue).Source,
           "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
           "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe") | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 if (-not $iscc) {
@@ -283,7 +307,8 @@ if (-not $iscc) {
 }
 
 # --- Verify what this run actually produced. ---
-foreach ($a in @(@{ Path = $ZipPath; Label = 'portable ZIP'; Signed = $false }, @{ Path = $SetupExe; Label = 'installer'; Signed = [bool]$SignCertSha1 })) {
+foreach ($a in @(@{ Path = $ZipPath; Label = 'portable ZIP'; Signed = $false }, @{ Path = $SetupExe; Label = 'installer'; Signed = [bool]$SignCertSha1 },
+                 @{ Path = $SymbolsZip; Label = 'symbols ZIP'; Signed = $false })) {
     if (-not (Test-Path $a.Path)) { $Failures.Add("$($a.Label) was not produced"); continue }
     if ((Get-Item $a.Path).LastWriteTime -lt $RunStart) { $Failures.Add("$($a.Label) is left over from an earlier run"); continue }
     if ($a.Signed -and (Get-AuthenticodeSignature $a.Path).Status -ne 'Valid') { $Failures.Add("$($a.Label) is not signed") }
@@ -295,7 +320,7 @@ Write-Host $(if ($Failures.Count) { " INCOMPLETE - $($Failures.Count) problem(s)
 Write-Host '============================================'
 Write-Host " Version:   $version"
 Write-Host " Signing:   $(if (-not $SignCertSha1) { 'UNSIGNED (requested)' } elseif ($Failures.Count) { 'see problems' } else { 'every PE file verified' })"
-foreach ($a in $ZipPath, $SetupExe) {
+foreach ($a in $ZipPath, $SetupExe, $SymbolsZip) {
     if (Test-Path $a) { Write-Host (' {0}  ({1:N1} MB)' -f $a, ((Get-Item $a).Length / 1MB)) }
 }
 if ($Failures.Count) {

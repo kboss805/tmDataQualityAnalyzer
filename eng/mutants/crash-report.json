@@ -1,0 +1,193 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.CrashReportTests"
+  ],
+  "mutants": [
+    {
+      "id": "K1",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "            if (ReferenceEquals(_last, error)) return false;\n",
+      "new": "",
+      "expect": "caught",
+      "note": "the same exception reaches the dispatcher hook and then the process hook: two reports for one crash"
+    },
+    {
+      "id": "K2",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "            _last = error;\n",
+      "new": "            _last = null;\n",
+      "expect": "caught",
+      "note": "the exception is never remembered, so the duplicate check never fires (not removed outright: an unassigned field is a compile error here)"
+    },
+    {
+      "id": "K3",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": ".OrderDescending(StringComparer.Ordinal).Skip(KeptReports))",
+      "new": ".OrderDescending(StringComparer.Ordinal).Skip(KeptReports + 1))",
+      "expect": "caught",
+      "note": "eleven reports stay instead of ten"
+    },
+    {
+      "id": "K4",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": ".OrderDescending(StringComparer.Ordinal)",
+      "new": ".Order(StringComparer.Ordinal)",
+      "expect": "caught",
+      "note": "the NEWEST reports are deleted and the oldest kept"
+    },
+    {
+      "id": "K5",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "Prefix + \"*\" + Extension)",
+      "new": "\"*\")",
+      "expect": "caught",
+      "note": "tidying reaches every file in the folder, not only the reports"
+    },
+    {
+      "id": "K6",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "lines.Skip(Math.Max(0, lines.Length - LogLinesKept))",
+      "new": "lines.Skip(Math.Max(0, lines.Length - LogLinesKept - 1))",
+      "expect": "caught",
+      "note": "the report carries 201 lines of the log"
+    },
+    {
+      "id": "K7",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "return \"(the session log could not be read: \" + e.GetType().Name + \")\";",
+      "new": "return \"(the session log could not be read: \" + e.Message + \")\";",
+      "expect": "caught",
+      "note": "the report no longer names the kind of failure"
+    },
+    {
+      "id": "K8",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "                return true;\n            }\n            Prune();",
+      "new": "                return false;\n            }\n            Prune();",
+      "expect": "caught",
+      "note": "a folder that cannot be written reads as 'already reported', so the user is never told it failed"
+    },
+    {
+      "id": "K9",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "\"yyyyMMdd-HHmmss-fff\"",
+      "new": "\"yyyyMMdd-HHmmss\"",
+      "expect": "caught",
+      "note": "two reports in one second share a name, and the name loses its milliseconds"
+    },
+    {
+      "id": "K10",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "File.Exists(file); n++)",
+      "new": "file.Length < 0; n++)",
+      "expect": "caught",
+      "note": "a second report in the same millisecond overwrites the first"
+    },
+    {
+      "id": "K11",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "return text.ToString().Replace(\"\\n\", \"\\r\\n\", StringComparison.Ordinal);",
+      "new": "return text.ToString();",
+      "expect": "caught",
+      "note": "bare line feeds: Notepad of the day showed one long line"
+    },
+    {
+      "id": "K12",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": ".Append(_version)",
+      "new": ".Append(\"unknown\")",
+      "expect": "caught",
+      "note": "the report does not say which version crashed"
+    },
+    {
+      "id": "K13",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "\"crash-reports\")",
+      "new": "\"reports\")",
+      "expect": "caught",
+      "note": "the folder has another name than the README and the manual say"
+    },
+    {
+      "id": "K14",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "offset.ToString(\"x4\", CultureInfo.InvariantCulture)",
+      "new": "offset.ToString(\"d\", CultureInfo.InvariantCulture)",
+      "expect": "caught",
+      "note": "the offset is decimal, not the IL_xxxx a disassembler and the symbols tools use"
+    },
+    {
+      "id": "K15",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "e = e.InnerException)",
+      "new": "e = null)",
+      "expect": "caught",
+      "note": "only the outermost exception's frames are listed"
+    },
+    {
+      "id": "K16",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "return frames.Length == 0 ? \"\" :",
+      "new": "return false ? \"\" :",
+      "expect": "caught",
+      "note": "an object that is not an exception still gets an offsets heading with nothing under it"
+    },
+    {
+      "id": "H1",
+      "file": "src/TmDq.App/CrashHandling.cs",
+      "old": "if (_tell is null || Interlocked.Exchange(ref _told, 1) != 0) return;",
+      "new": "if (_tell is null || Interlocked.Exchange(ref _told, 0) != 0) return;",
+      "expect": "caught",
+      "note": "the once-per-process flag is never set, so a second exception on the way out opens a second message box"
+    },
+    {
+      "id": "H2",
+      "file": "src/TmDq.App/CrashHandling.cs",
+      "old": "if (!_reporter.TryWrite(source, error, out string? path)) return;",
+      "new": "_reporter.TryWrite(source, error, out string? path);",
+      "expect": "survived",
+      "note": "equivalent: a duplicate means an earlier Raised already told the user, and the once-per-process guard on the next line returns anyway. The early return says why, and is the first thing a reader looks for"
+    },
+    {
+      "id": "H3",
+      "file": "src/TmDq.App/CrashHandling.cs",
+      "old": "\"A report was saved to:\\n\" + reportPath + \"\\n\\n\"",
+      "new": "\"A report was saved to:\\n\\n\"",
+      "expect": "caught",
+      "note": "the message says a report was saved and not where"
+    },
+    {
+      "id": "H4",
+      "file": "src/TmDq.App/CrashHandling.cs",
+      "old": "catch (Exception)\n        {\n            // Nothing more",
+      "new": "catch (InvalidCastException)\n        {\n            // Nothing more",
+      "expect": "caught",
+      "note": "a message box that cannot be shown replaces the crash it reports"
+    },
+    {
+      "id": "A1",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "        (crash ?? CrashHandling.Current)?.AttachLog(() => vm.Log.PlainText);   // what the user was doing, in a crash report\n",
+      "new": "",
+      "args": [
+        "-class",
+        "TmDq.App.Tests.CompositionRootTests"
+      ],
+      "expect": "caught",
+      "note": "the session log is never given to the crash report"
+    },
+    {
+      "id": "A2",
+      "file": "src/TmDq.App/App.axaml.cs",
+      "old": "(crash ?? CrashHandling.Current)?.AttachLog",
+      "new": "CrashHandling.Current?.AttachLog",
+      "args": [
+        "-class",
+        "TmDq.App.Tests.CompositionRootTests"
+      ],
+      "expect": "caught",
+      "note": "the handling Compose is given is ignored in favour of the process-wide one"
+    }
+  ]
+}

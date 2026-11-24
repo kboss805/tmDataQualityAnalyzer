@@ -52,7 +52,8 @@ public sealed class App : Application
     /// <param name="appRoot">The folder of the executable: where the settings folder is, and where a "portable" file says the
     /// preferences are kept.</param>
     /// <param name="appData">The folder the preferences go in when the copy is not portable (<c>%APPDATA%</c>).</param>
-    public MainWindowViewModel Compose(MainWindow window, string? smokeReport, string appRoot, string appData)
+    /// <param name="crash">The crash handling to give the session's log to, or null for the one <c>Main</c> installed (none in a test).</param>
+    public MainWindowViewModel Compose(MainWindow window, string? smokeReport, string appRoot, string appData, CrashHandling? crash = null)
     {
         window.PlotView.Prompts = new WindowPlotPrompts(window.PlotView);
         // What is remembered between sessions (plan step 4.8).
@@ -84,6 +85,7 @@ public sealed class App : Application
             if (e.PropertyName == nameof(MainWindowViewModel.IsDarkTheme)) ApplyTheme(vm.IsDarkTheme);
         };
         window.DataContext = vm;
+        (crash ?? CrashHandling.Current)?.AttachLog(() => vm.Log.PlainText);   // what the user was doing, in a crash report
         return vm;
     }
 
