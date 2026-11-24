@@ -131,16 +131,17 @@ foreach ($c in $checks) {
 # --- the changelog (docs/changelog.md) must have a section for THIS version -
 $devlog = Read-Tracked 'docs\changelog.md'
 if ($devlog) {
-    if ($devlog -notmatch "###\s+v$([regex]::Escape($Version))\b") {
+    if ($devlog -notmatch "(?m)^###\s+v$([regex]::Escape($Version))\b") {
         $Problems.Add("docs/changelog.md : no '### v$Version' section")
     } else {
         Write-Host ("  OK  {0,-28} {1}" -f 'changelog section', "### v$Version")
     }
+    # (Both patterns are anchored to a line: a sentence in an entry that names the heading, as one once did, is not the heading.)
     # An "Unreleased" heading at release time means work was never filed under the
     # version that is about to ship it - exactly how two cosmetic changes ended up
     # attributed to a build that did not contain them.
     if ($ReleaseMode) {
-        if ($devlog -match '###\s+Unreleased') {
+        if ($devlog -match '(?m)^###\s+Unreleased\s*$') {
             $Problems.Add("docs/changelog.md : an 'Unreleased' section still exists - fold it into ### v$Version before releasing")
         } else {
             Write-Host ("  OK  {0,-28} {1}" -f 'no Unreleased section', 'clean')

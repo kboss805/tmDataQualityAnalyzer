@@ -79,8 +79,8 @@ themselves). Use the **PowerShell** tool.
   script's `$Reviewed` table, so read it before adding it. That script runs under Windows PowerShell 5.1 inside builds
   started from PowerShell 7, which inherits 7's `PSModulePath`: avoid cmdlets from script modules (`Get-FileHash` fails).
 - **The release package:** `powershell -ExecutionPolicy Bypass -File
-  deploy\build_package.ps1 [-SignCertSha1 '']` publishes **single-file** (every managed assembly
-  inside our exe, so the certificate signs only our own code: the exe and `tmdq_core.dll`; it refuses to sign any other
+  deploy\build_package.ps1 [-SignCertSha1 '']` publishes **single-file** and **ReadyToRun** (every managed assembly
+  inside our exe, precompiled: half the start-up time, so the certificate signs only our own code: the exe and `tmdq_core.dll`; it refuses to sign any other
   unsigned file), adds the VC++ runtime DLLs `tmdq_core.dll` imports, generates `THIRD-PARTY-NOTICES.txt`
   (`eng\gen_third_party_notices.ps1`, from the publish's deps file), and builds the portable ZIP and the Inno
   installer (`deploy\tmDataQualityAnalyzer.iss`: v2.x's AppId and folder, so it upgrades a v2.x

@@ -912,7 +912,8 @@ that worktrees also need.
 ### Deployment & Packaging
 
 - **Build automation**: `deploy/build_package.ps1` — the consistency check, a signing pre-flight,
-  the core in Release, a self-contained single-file publish, staging (settings, the VC++ runtime the core imports, the
+  the core in Release, a self-contained, single-file, ReadyToRun publish (the code ships compiled: the window is up in about
+  half the time, for an exe 45 MB bigger), staging (settings, the VC++ runtime the core imports, the
   licence, `THIRD-PARTY-NOTICES.txt`), signing our two binaries only, a smoke run on the PRN sample, the ZIP, the
   symbols ZIP and the installer.
 - **Inno Setup installer**: `deploy/tmDataQualityAnalyzer.iss` — v2.x's AppId and folder, so it upgrades a

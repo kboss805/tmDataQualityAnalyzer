@@ -107,11 +107,15 @@ $CoreDll = Join-Path $Root 'out\Release\tmdq_core.dll'
 & powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'eng\check_release_core.ps1') -Dll $CoreDll
 if ($LASTEXITCODE -ne 0) { throw 'the core just built is not a Release build (see above)' }
 
-# --- 2. Single-file, self-contained publish. ---
-Write-Host '[2/8] Publishing the application (self-contained, single-file)...'
+# --- 2. Single-file, self-contained, ReadyToRun publish. ---
+# ReadyToRun: the managed code is shipped already compiled, so a launch does not compile it first. Measured (2026-11-24, this
+# machine, 15 launches each): the window is up in 370 ms instead of 742 ms, and a run of the PRN sample takes 835 ms instead of
+# 1299 ms; the exe is 132 MB instead of 87 MB (the ZIP about 16 MB bigger). The results of a run are the same, and so are the
+# IL offsets of a crash report. It needs the Crossgen2 package for win-x64, which NuGet fetches into the package cache.
+Write-Host '[2/8] Publishing the application (self-contained, single-file, ReadyToRun)...'
 if (Test-Path $Stage) { Remove-Item $Stage -Recurse -Force }
 & dotnet publish (Join-Path $Root 'src\TmDq.App') -c Release -r win-x64 --self-contained true `
-    -p:PublishSingleFile=true -p:DebugType=portable -o $Publish -nologo -v minimal
+    -p:PublishSingleFile=true -p:PublishReadyToRun=true -p:DebugType=portable -o $Publish -nologo -v minimal
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
 
 # --- 3. The manifest and the icon must have reached the bundled host (the manifest once did not; TmDq.App.csproj says why). ---
