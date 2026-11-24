@@ -248,6 +248,12 @@ int32_t tmdq_chart_ticks(double lower, double upper, int32_t count, double* tick
     return tickCall("tmdq_chart_ticks", count, ticks, capacity, [&] { return chart::tickValues(lower, upper, count); });
 }
 
+int32_t tmdq_chart_round_ticks(double lower, double upper, int32_t count, double* ticks, int32_t capacity)
+{
+    return tickCall("tmdq_chart_round_ticks", count, ticks, capacity,
+                    [&] { return chart::roundTickValues(lower, upper, count); });
+}
+
 int32_t tmdq_chart_time_ticks(double lower, double upper, int32_t count, double origin, double* ticks,
                               int32_t capacity)
 {

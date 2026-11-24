@@ -17,7 +17,7 @@ namespace TmDq.App.Views.Plot;
 /// The legend that floats over the chart (plan step 4.4, US4.0): a translucent rounded box of
 /// rows, each a line swatch in the series' colour and its label, that scrolls once it reaches its cap (a fraction of the
 /// chart, so a dense plot cannot bury the data) and can be dragged anywhere inside the chart. It sits at the top right
-/// until it is dragged, and is kept inside the chart afterwards. What it lists is the plot's business
+/// until it is dragged (left of the right axis's labels, when that axis is shown), and is kept inside the chart afterwards. What it lists is the plot's business
 /// (<see cref="PlotViewModel.LegendEntries"/>); this only lays it out.
 /// </summary>
 public sealed class PlotLegend : Border
@@ -33,6 +33,7 @@ public sealed class PlotLegend : Border
     private readonly StackPanel _rows = new() { Spacing = RowSpacing, Margin = new Thickness(0, 0, ScrollGutter, 0) };
     private readonly ScrollViewer _scroll;
     private Size _host;
+    private double _rightEdge;   // where its right edge may reach until it is dragged: the chart's, less the right axis's labels
     private bool _dragging, _userMoved;
     private Point _dragStart, _startPos;
 
@@ -69,9 +70,10 @@ public sealed class PlotLegend : Border
     /// <summary>Lists <paramref name="entries"/>, sized and placed in a chart of <paramref name="host"/>. Shown only when
     /// <paramref name="wanted"/> and there is a row: the user's choice outranks having rows, and an empty legend is
     /// never drawn.</summary>
-    public void Show(IReadOnlyList<LegendEntry> entries, bool wanted, Size host)
+    public void Show(IReadOnlyList<LegendEntry> entries, bool wanted, Size host, double rightEdge)
     {
         _host = host;
+        _rightEdge = rightEdge;
         _rows.Children.Clear();
         foreach (LegendEntry e in entries) _rows.Children.Add(Row(e));
         if (entries.Count == 0)
@@ -85,9 +87,10 @@ public sealed class PlotLegend : Border
 
     /// <summary>The chart was resized: the cap follows it, and so does the place (the top right until dragged, inside
     /// the chart after).</summary>
-    public void HostResized(Size host)
+    public void HostResized(Size host, double rightEdge)
     {
         _host = host;
+        _rightEdge = rightEdge;
         if (RowCount > 0) Fit();
     }
 
@@ -166,7 +169,7 @@ public sealed class PlotLegend : Border
         Width = Math.Min(Math.Ceiling(content.Width) + frame, maxW);
         Height = Math.Min(Math.Ceiling(content.Height) + frame, maxH);
         if (_userMoved) MoveTo(Position);
-        else Canvas.SetLeft(this, Math.Max(EdgeMargin, _host.Width - Width - EdgeMargin));
+        else Canvas.SetLeft(this, Math.Max(EdgeMargin, _rightEdge - Width - EdgeMargin));
         if (!_userMoved) Canvas.SetTop(this, EdgeMargin);
     }
 

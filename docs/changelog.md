@@ -12,6 +12,41 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Manual figures deep dive, part 3: the legend off the right axis, round Y ticks, and a step file shown as text
+
+Findings 7, 8 and 9 of the review; 10 was looked at and left as it is (below).
+
+- **The legend no longer covers the right axis (finding 7, an application defect).** The legend sat a margin inside the chart's right
+  edge, which with Receiver SNR shown is where that axis's labels and title are: the figure of the SNR plot with its legend had `100.0`,
+  `80.0` and the axis title under the legend's rows. `PlotChart.LegendRightEdge` gives the edge the legend may reach (the plot area's,
+  while the right axis is shown; the chart's own, as before, when it is not: lock-only plots are unchanged), `PlotLegend.Show` and
+  `HostResized` take it, and an undragged legend sits against it; a dragged one is still kept only inside the chart. Guarded by
+  `TheLegendSitsLeftOfTheRightAxisLabelsWhileThatAxisIsShown` (no right axis, right axis, resized). Checked with `eng\mutate.ps1` on the
+  chart suite: five mutants (the anchor ignored, the condition inverted, the edge forgotten on a resize, on a new series, and in the
+  placement) all CAUGHT; one first draft of a mutant did not compile (CA1822) and was replaced. The manual's legend bullet and the
+  guide's US4.0 criterion say it.
+- **The step file is text, not a picture of an editor (finding 8).** `walk-cal-05-step-toml.png` was a hand-made Notepad++ screenshot of
+  `D:\Work\TRC.toml`, the one figure no test rendered and `build_manual.ps1` had to keep; the file the dialogs offer is the shipped
+  `settings\rcvr_cals\TRC.toml`. The walkthrough now quotes its start and end in a `<pre>`, with a caption that names it, and
+  `TheStepFileTheWalkthroughShowsIsLinesOfTheOneTheApplicationShips` compares every line shown with the shipped file, in order. The
+  picture and `build_manual.ps1`'s list of committed figures are gone: every figure is rendered now.
+- **Round Y ticks (finding 9, at the user's request).** The Y axes were ticked at six evenly spaced values from the axis's lower end to
+  its upper (v2.x's rule), which is round only when the range is: the accumulation axis, ending at its data's maximum, read 231.0,
+  462.0, 693.0, 924.0, 1155.0. New core function `chart::roundTickValues` (ABI: `tmdq_chart_round_ticks`, added to the still
+  unreleased **revision 4**; managed `ChartGeometry.RoundTicks`) gives the multiples inside the range of the step of 1, 2 or 5
+  times a power of ten nearest the even division (231 gives 200, 25 gives 20), about as many as asked for; the axis's ends are ticks
+  only when they are such multiples (a percentage or decibels, 0 to 100, are ticked as before: 0, 20 ... 100). The even `tickValues`
+  stays: the time axis's below-a-second case and the empty chart's own ticks use it. `PlotChart.LeftTicks` and `RightTicks` are what
+  the chart draws and a test reads. Checked with `eng\mutate.ps1`: eight mutants on the native algorithm (the three cut-offs, the two
+  rounding guards, the negative zero, the last tick, the ABI's choice of function) and two on the chart's use of it, all CAUGHT; two of
+  them first SURVIVED, which found a test that did not exercise what it claimed (a division that misses a round end only for certain
+  literals: 0.07 / 0.01 and 0.3 / 0.1) and a filter that did not include the ABI's test. The Y tick figures re-rendered.
+- **Left alone, on purpose (finding 10).** The log's clock is frozen on purpose (`FigureClock`, so a re-render does not change the
+  figure), and the dialogs' figures are captures of their content without a title bar, which the manual's captions name.
+- Checked: the native suite (540 test cases), the managed suite (420 passed; in this worktree the Debug core was not built, so its
+  second probe was skipped) and the full app suite (801 passed, 34 not run). The Customize View tree figure re-rendered with a pixel of
+  capture noise.
+
 #### Manual figures deep dive, part 2: one story across the figures, and alt text that counts right
 
 Findings 4 to 6 of the review. The frame sync walkthrough's figures showed three different stories of one recording: Configure Streams with

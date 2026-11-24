@@ -169,9 +169,21 @@ public sealed class ChartGeometryTests
     }
 
     [Fact]
-    public void ATickCountThatIsNotAnAxisIsABadArgumentForBothKindsOfTick()
+    public void RoundTicksAreMultiplesOfARoundStepInsideTheRange()
+    {
+        Assert.Equal(new[] { 0.0, 20, 40, 60, 80, 100 }, ChartGeometry.RoundTicks(0, 100, 6));
+        // A data maximum of 1155 gave ticks of 231, 462, 693...: now 200, 400..., with the axis's top between two of them.
+        Assert.Equal(new[] { 0.0, 200, 400, 600, 800, 1000 }, ChartGeometry.RoundTicks(0, 1155, 6));
+        Assert.Equal(new[] { -40.0, -20, 0, 20, 40 }, ChartGeometry.RoundTicks(-50, 50, 6));
+        Assert.Empty(ChartGeometry.RoundTicks(1, 1, 5));
+        Assert.Empty(ChartGeometry.RoundTicks(0, double.PositiveInfinity, 5));
+    }
+
+    [Fact]
+    public void ATickCountThatIsNotAnAxisIsABadArgumentForEveryKindOfTick()
     {
         // The library answers -1 above 65536 ticks, which the binding must not read as "no ticks".
+        Assert.Equal(Status.BadArgument, Assert.Throws<TmdqException>(() => ChartGeometry.RoundTicks(0, 1, 65537)).Status);
         Assert.Equal(Status.BadArgument, Assert.Throws<TmdqException>(() => ChartGeometry.Ticks(0, 1, 65537)).Status);
         Assert.Equal(Status.BadArgument, Assert.Throws<TmdqException>(() => ChartGeometry.TimeTicks(0, 1, 65537)).Status);
         Assert.Equal(65536, ChartGeometry.Ticks(0, 1, 65536).Length);

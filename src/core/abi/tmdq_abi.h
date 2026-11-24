@@ -858,6 +858,10 @@ TMDQ_API int32_t tmdq_chart_transform(const tmdq_chart_view* view, int32_t kind,
 /// written. -1 for a negative capacity, a NULL buffer with a positive one, or a @p count above 65,536 (more than a chart
 /// has pixels).
 TMDQ_API int32_t tmdq_chart_ticks(double lower, double upper, int32_t count, double* ticks, int32_t capacity);
+/// Round ticks for a value axis (revision 4): the multiples, inside [@p lower, @p upper], of the 1, 2 or 5 times a power
+/// of ten nearest the span divided evenly into @p count (so about @p count of them, and the axis's own ends only when
+/// they are such multiples); none for a range that is not usable. Written and refused as tmdq_chart_ticks is.
+TMDQ_API int32_t tmdq_chart_round_ticks(double lower, double upper, int32_t count, double* ticks, int32_t capacity);
 /// Ticks for a time axis: a round step at least the span divided evenly into @p count, on the round clock times inside
 /// [@p lower, @p upper], @p origin being the clock time of x = 0 (below a second a step, tmdq_chart_ticks). Written
 /// as tmdq_chart_ticks writes.

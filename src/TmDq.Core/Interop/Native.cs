@@ -301,6 +301,10 @@ internal static unsafe partial class Native
 
     [LibraryImport(Dll)]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+    internal static partial int tmdq_chart_round_ticks(double lower, double upper, int count, double* ticks, int capacity);
+
+    [LibraryImport(Dll)]
+    [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
     internal static partial int tmdq_chart_time_ticks(double lower, double upper, int count, double origin, double* ticks, int capacity);
 
     // --- a series' index (revision 3)

@@ -324,7 +324,28 @@ actually produced, and it interpolates between those measured points from then o
   <li>A <strong>step TOML</strong> listing those levels, in the order they occur.</li>
 </ul>
 
-{{FIG:walk-cal-05-step-toml.png|A step configuration file. Each [[Step]] gives one level in dB, in the order the calibration recording steps through them. This one describes eleven steps from 0 to 60 dB in 6 dB increments.|A step configuration TOML open in a text editor showing eleven Step entries from 0 to 60 dB}}
+<figure>
+<pre id="step-toml"># SNR Calibration Step Configuration &mdash; TRC
+# Range: 0 to 60 dB, 6 dB increments
+# 11 steps total
+
+[[Step]]
+db = 0.0
+
+[[Step]]
+db = 6.0
+
+[[Step]]
+db = 12.0
+
+&hellip;
+
+[[Step]]
+db = 60.0</pre>
+  <figcaption>A step configuration file: the start and the end of <code>TRC.toml</code>, the one the application ships in
+  <code>settings\rcvr_cals</code>. Each <code>[[Step]]</code> gives one level in dB, in the order the calibration recording
+  steps through them; this file describes eleven steps from 0 to 60 dB in 6 dB increments. Any text editor will do.</figcaption>
+</figure>
 
 <div class="note">The step file describes <em>what was injected</em>, not how long each level was
 held. Dwell time is not configured anywhere: each plateau is found by looking for a level that

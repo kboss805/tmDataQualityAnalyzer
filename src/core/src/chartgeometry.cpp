@@ -427,6 +427,37 @@ std::vector<double> tickValues(double lower, double upper, int count)
     return ticks;
 }
 
+std::vector<double> roundTickValues(double lower, double upper, int count)
+{
+    if (!usableRange(lower, upper))
+    {
+        return {};
+    }
+    const int n = std::max(2, count);
+    const double raw = (upper - lower) / (n - 1);
+    // The step nearest the even division among 1, 2, 5 and 10 times the power of ten below it (the cut-offs are the
+    // geometric-ish midpoints of the ladder), so 231 gives 200 and 25 gives 20, not 500 and 50.
+    const double magnitude = std::pow(10.0, std::floor(std::log10(raw)));
+    const double f = raw / magnitude;
+    const double step = (f < 1.5 ? 1.0 : f < 3.0 ? 2.0 : f < 7.0 ? 5.0 : 10.0) * magnitude;
+    const double firstIndex = std::ceil(lower / step - 1e-9);
+    const double lastIndex = std::floor(upper / step + 1e-9);
+    // A step that is not a number or does not divide the range into a sane count (a span beyond what a double can
+    // resolve at this step) is no round step: the even division is the honest answer there.
+    if (!(step > 0.0) || !std::isfinite(step) || !std::isfinite(firstIndex) || !std::isfinite(lastIndex) ||
+        lastIndex - firstIndex > 4.0 * n + 8.0)
+    {
+        return tickValues(lower, upper, count);
+    }
+    std::vector<double> ticks;
+    for (double k = firstIndex; k <= lastIndex; k += 1.0)
+    {
+        // A multiple by index, not a running sum, so a tick is the nearest double to its value; and no negative zero.
+        ticks.push_back(k == 0.0 ? 0.0 : k * step);
+    }
+    return ticks;
+}
+
 std::vector<double> timeTickValues(double lower, double upper, int count, double origin)
 {
     std::vector<double> ticks;

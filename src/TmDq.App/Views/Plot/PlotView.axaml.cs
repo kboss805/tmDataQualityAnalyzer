@@ -34,7 +34,7 @@ public sealed partial class PlotView : UserControl
             if (Commands is { } commands) commands.MenuOpening();
             else e.Cancel = true;
         };
-        Overlay.SizeChanged += (_, e) => Legend.HostResized(e.NewSize);
+        Overlay.SizeChanged += (_, e) => Legend.HostResized(e.NewSize, Chart.LegendRightEdge(e.NewSize));
         // Seen however the key's route treats it (something on the way may have handled it already): what matters is
         // that the chart hears of the step before it next paints, which comes after both.
         Root.AddHandler(KeyDownEvent, OnKeyDownSteps, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -138,6 +138,7 @@ public sealed partial class PlotView : UserControl
     {
         PlotViewModel? vm = Plot;
         bool hasData = vm?.HasData == true;
-        Legend.Show(hasData ? vm!.LegendEntries() : Array.Empty<LegendEntry>(), vm?.LegendVisible ?? true, Overlay.Bounds.Size);
+        Size host = Overlay.Bounds.Size;
+        Legend.Show(hasData ? vm!.LegendEntries() : Array.Empty<LegendEntry>(), vm?.LegendVisible ?? true, host, Chart.LegendRightEdge(host));
     }
 }

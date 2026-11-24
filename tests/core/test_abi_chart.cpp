@@ -132,8 +132,15 @@ TEST_CASE("Abi: the ticks and the range check are the core's")
         REQUIRE(tmdq_chart_time_ticks(lower, upper, count, origin, got.data(), int32_t(got.size())) == int(timed.size()));
         CHECK(std::equal(timed.begin(), timed.end(), got.begin()));
         CHECK(got[timed.size()] == -1.0);
+        const std::vector<double> round = chart::roundTickValues(lower, upper, count);
+        std::fill(got.begin(), got.end(), -1.0);
+        REQUIRE(tmdq_chart_round_ticks(lower, upper, count, got.data(), int32_t(got.size())) == int(round.size()));
+        CHECK(std::equal(round.begin(), round.end(), got.begin()));
+        CHECK(got[round.size()] == -1.0);
     }
     CHECK(tmdq_chart_usable_range(0.0, std::numeric_limits<double>::infinity()) == 0);
+    CHECK(tmdq_chart_round_ticks(0.0, 1155.0, 6, nullptr, 0) == 6);   // 0, 200 ... 1000, measured
+    CHECK(tmdq_chart_round_ticks(1.0, 1.0, 6, nullptr, 0) == 0);
 
     // A buffer too small for them: how many there are, and only as many written as fit.
     double two[3] = {-1.0, -1.0, -1.0};
@@ -157,6 +164,9 @@ TEST_CASE("Abi: a tick count no axis could have is refused")
     CHECK(ticks[0] == -1.0);   // nothing written
     CHECK(tmdq_chart_ticks(0.0, 100.0, std::numeric_limits<int32_t>::max(), nullptr, 0) == -1);
 
+    CHECK(tmdq_chart_round_ticks(0.0, 100.0, 65537, ticks, 4) == -1);
+    CHECK(std::string(tmdq_last_error()).find("tick count") != std::string::npos);
+    CHECK(tmdq_chart_round_ticks(0.0, 100.0, 5, ticks, -1) == -1);   // a negative capacity
     CHECK(tmdq_chart_time_ticks(0.0, 100.0, 65537, 0.0, ticks, 4) == -1);
     CHECK(std::string(tmdq_last_error()).find("tick count") != std::string::npos);
     CHECK(tmdq_chart_time_ticks(0.0, 100.0, std::numeric_limits<int32_t>::max(), 0.0, nullptr, 0) == -1);
