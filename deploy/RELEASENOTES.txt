@@ -1,9 +1,23 @@
-tmDataQualityAnalyzer v3.3.0 - What's New
+tmDataQualityAnalyzer v3.3.1 - What's New
 =================================
 
-  Upgrading from v3.0.0, v3.1.0 or v3.2.0 keeps everything: your settings
-  files and your window preferences. Upgrading from v2.x: please read the
-  v3.1.0 notes below about your window preferences.
+  Upgrading from v3.0.0, v3.1.0, v3.2.0 or v3.3.0 keeps everything: your
+  settings files and your window preferences. Upgrading from v2.x: please
+  read the v3.1.0 notes below about your window preferences.
+
+  Fixed:
+
+  - Four pictures in the user manual showed the log of the previous version
+  (v3.2.0); they now show this one.
+
+  - The manual's description of the Export window calls the three outputs'
+    boxes check boxes, as they are.
+
+  Everything else is as in v3.3.0, below.
+
+
+tmDataQualityAnalyzer v3.3.0 - What's New
+=================================
 
   New:
 
