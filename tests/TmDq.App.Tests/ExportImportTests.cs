@@ -1216,6 +1216,39 @@ public sealed class ExportImportTests
         window.Close();
     }
 
+    [Fact]
+    public void TheDataRowCannotBeTickedWhenThePlotHoldsNothingToWrite()
+    {
+        var vm = new ExportViewModel("a.png", "a.csv", "a_log.txt", new FakeFiles(), dataAvailable: false);
+        Assert.False(vm.DataAvailable);
+        vm.ExportData = true;
+        Assert.False(vm.ExportData);
+        Assert.False(vm.BrowseDataCommand.CanExecute(null));
+        Assert.True(vm.CanExport);   // the image, ticked at first, still exports
+
+        vm.ExportLog = true;   // the other rows are not affected
+        Assert.True(vm.ExportLog);
+        Assert.True(new ExportViewModel("a", "b", "c").DataAvailable);
+    }
+
+    [AvaloniaFact]
+    public void TheExportWindowDisablesTheDataBoxAndSaysWhyWhenThereIsNothingToWrite()
+    {
+        var window = new ExportWindow { DataContext = new ExportViewModel("a.png", "a.csv", "a_log.txt", new FakeFiles(), dataAvailable: false) };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(window.FindControl<CheckBox>("DataBox")!.IsEnabled);
+        Assert.True(window.FindControl<TextBlock>("DataUnavailableNote")!.IsVisible);
+        window.Close();
+
+        var normal = new ExportWindow { DataContext = new ExportViewModel("a.png", "a.csv", "a_log.txt", new FakeFiles()) };
+        normal.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(normal.FindControl<CheckBox>("DataBox")!.IsEnabled);
+        Assert.False(normal.FindControl<TextBlock>("DataUnavailableNote")!.IsVisible);
+        normal.Close();
+    }
+
     [AvaloniaFact]
     public void TheExportDialogClosesOnExportAndOnCancel()
     {

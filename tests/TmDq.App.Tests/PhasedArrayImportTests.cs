@@ -11,6 +11,7 @@ using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
 using TmDq.App.Services;
 using TmDq.App.ViewModels;
+using TmDq.App.ViewModels.Dialogs;
 using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
 using TmDq.Core.Tests;
@@ -189,6 +190,40 @@ public sealed class PhasedArrayImportTests
             TempFiles.Delete(only);
             TempFiles.Delete(mixed);
         }
+    }
+
+    private sealed class FakeExportDialog : IExportDialog
+    {
+        public ExportViewModel? Shown;
+
+        public Task ShowAsync(ExportViewModel vm)
+        {
+            Shown = vm;
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task ExportDataCannotBeTickedWhileTheAntennasLogIsAllThePlotHolds()
+    {
+        var kinds = new FakeKinds();
+        kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
+        var dialog = new FakeExportDialog();
+        var vm = new MainWindowViewModel(new MainWindowServices { CsvKinds = kinds, ExportDialog = dialog });
+        await vm.ImportCsvAsync(Sample);
+
+        Assert.False(vm.Plot.HasExportableData);
+        Assert.True(vm.ExportCommand.CanExecute(null));   // the plot image and the log still export
+        await vm.ExportCommand.ExecuteAsync(null);
+        Assert.False(dialog.Shown!.DataAvailable);
+
+        // Beside a series of a telemetry receiver there is data to write again.
+        List<PlotSeries> series = vm.Plot.Series.Take(3).ToList();
+        series.Add(PlotFixtures.Lock(1000, "CH-01 PRN", 1, 0, new[] { 0.0, 1.0 }, new[] { 99.0, 98.0 }));
+        vm.Plot.SetSeries(series);
+        Assert.True(vm.Plot.HasExportableData);
+        await vm.ExportCommand.ExecuteAsync(null);
+        Assert.True(dialog.Shown.DataAvailable);
     }
 
     // ---- an antenna's log joins what the plot shows, placed by the clock (US10.0) -------------------------------------

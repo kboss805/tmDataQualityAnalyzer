@@ -26,8 +26,11 @@ public sealed class ExportViewModel : DialogViewModel
     private string _logPath;
 
     /// <param name="files">The save dialogs Browse opens; null leaves Browse unavailable.</param>
-    public ExportViewModel(string imagePath, string dataPath, string logPath, IDataFilePicker? files = null)
+    /// <param name="dataAvailable">False when the plot holds nothing Export Data writes (an antenna's log alone,
+    /// US10.0): the data row's box cannot be ticked.</param>
+    public ExportViewModel(string imagePath, string dataPath, string logPath, IDataFilePicker? files = null, bool dataAvailable = true)
     {
+        DataAvailable = dataAvailable;
         _imagePath = imagePath;
         _dataPath = dataPath;
         _logPath = logPath;
@@ -61,11 +64,15 @@ public sealed class ExportViewModel : DialogViewModel
         }
     }
 
+    /// <summary>Whether the plot has data Export Data can write; when not, the box is disabled and stays unticked.</summary>
+    public bool DataAvailable { get; }
+
     public bool ExportData
     {
         get => _exportData;
         set
         {
+            if (value && !DataAvailable) return;
             if (!SetProperty(ref _exportData, value)) return;
             OnPropertyChanged(nameof(CanExport));
             BrowseDataCommand.NotifyCanExecuteChanged();

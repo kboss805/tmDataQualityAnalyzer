@@ -12,6 +12,21 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Export Data is disabled on a plot of an antenna's log alone (US10.0)
+
+An antenna's log is never exported (US10.0), so a plot holding nothing else had no data to write, and the Export dialog still
+let **Export Data** be ticked, which then wrote no file and reported a failure. The box is now disabled, with a line beneath
+it saying why, whenever the plot has nothing `Export Data` writes.
+
+- `PlotCsv.IsExported` is the one rule (a series that is not an antenna's); `PlotCsv.Columns` and the new
+  `PlotViewModel.HasExportableData` both use it. `ExportViewModel` takes `dataAvailable` (default true), exposes
+  `DataAvailable`, and ignores a request to tick the data row without it; `ExportWindow.axaml` binds the box's
+  `IsEnabled` to it and shows `DataUnavailableNote`. The plot image and the log still export, and a telemetry series
+  beside the antenna's brings the box back.
+- **Checked by:** the mutation check, 7 of 7 CAUGHT (the dialog told "true" always, the plot counting an antenna's series,
+  the guard in the setter, the box's `IsEnabled`, the note's visibility, the one rule, and the constructor ignoring its argument).
+  App baseline 801 -> 804 (three new tests).
+
 #### Manual figures deep dive, part 3: the legend off the right axis, round Y ticks, and a step file shown as text
 
 Findings 7, 8 and 9 of the review; 10 was looked at and left as it is (below).
