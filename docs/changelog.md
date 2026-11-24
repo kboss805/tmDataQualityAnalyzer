@@ -10,6 +10,14 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
+### Unreleased
+
+#### The figure renderer's scratch folder no longer fails the suite when it will not delete
+
+`ManualFiguresTests.TheBatchConfirmationAndPlotFile` failed CI's app suite in its `Dispose()`, not in any assertion: `The process cannot access the file 'prn_testfile 3.ch10' because it is being used by another process`, after the three-second retry window of `TempFiles.DeleteDirectory`. It is the flake seen once before on #337 (then as `flight 2.ch10`), and it has now recurred. The fixture removes its two folders (the figures and the scratch with three copies of the 81 MB PRN sample) with `TempFiles.TryDeleteDirectory`, which waits out the same window and then gives up quietly. Test code only.
+
+What was checked, and what was not: the holder was never identified. By reading, the core closes a recording before it reports a run finished (`Ch10PacketReader::run` ends in `closeFile()`, `PipelineRunner::drive` joins the streams and drops the reader before `finish()`), `Ch10File.Open` closes its handle in a `finally`, and nothing under `src/TmDq.App` or `src/TmDq.Core` keeps a recording open (no watcher, no stream). A strict delete stays where the same path is exercised for its own sake: `TemplateBatchTests` copies the same sample and runs the same batch, and its `Dispose` still uses `DeleteDirectory`, so a real leak there still fails. `TempFiles.TryDeleteDirectory`'s remark now names this fixture as its one exception to "never for a file the library opened". The flake cannot be reproduced on demand (about one run in fifteen on CI), so the fix is shown only by the suite passing; no mutation check: nothing it guards is behaviour.
+
 ### v3.3.1 — The manual's figures show the right version
 
 A patch release, the first change since v3.3.0 (2026-11-23): four figures of the user manual named v3.2.0 in their log pane, because v3.3.0's manuals were stamped with `-NoCapture` after the bump. They are re-rendered (here, by v3.3.1, which is also the first release whose figures are guarded: `docs\manual_images\rendered-version.txt` must name the release's version or the consistency check fails). No application code changed, so the soak and the throughput guard were not re-run; the three suites were.

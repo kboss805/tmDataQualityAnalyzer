@@ -72,8 +72,12 @@ public sealed class ManualFiguresTests : IDisposable
 
     public void Dispose()
     {
-        if (!_keep) TempFiles.DeleteDirectory(_out, recursive: true);
-        TempFiles.DeleteDirectory(_scratch, recursive: true);
+        // This fixture renders figures and asserts nothing about a handle being released, so a scratch folder that will
+        // not go is no failure: on CI the three copies of the 81 MB recording have twice been held past the retry window
+        // (never traced to a holder; the core closes a recording before it reports a run finished). TemplateBatchTests
+        // runs the same copy and batch under the strict delete, so a leak in that path still fails there.
+        if (!_keep) TempFiles.TryDeleteDirectory(_out);
+        TempFiles.TryDeleteDirectory(_scratch);
     }
 
     /// <summary>The calibration walkthrough shows the step file as text, not as a picture of an editor: what it shows must
