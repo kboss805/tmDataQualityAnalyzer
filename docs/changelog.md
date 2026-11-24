@@ -12,6 +12,14 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### CI runs the native tests in Debug, and keeps the build logs of a failed run
+
+CI built the core in Debug and tested only Release, so a Debug-only failure (the evaluation order of PR #369) waited for a developer to build Debug. `ci.yml` has a second job, `native-debug`, that runs `eng	est_native.ps1 -Configuration Debug` on a runner of its own, beside `ci`, so the run takes as long as before (the Debug suite is 106 s here from cold; added to `ci` it would have made the run about 180 s longer). It is not a required check; making it one is a setting for the owner. Both jobs upload `out/*.log` (the MSBuild logs) as an artifact when they fail, kept seven days. `eng\ci_local.ps1` runs the Debug suite last (`-SkipDebugTests` leaves it out), and `TheLocalCiRunsTheStepsTheWorkflowRunsInTheSameOrder` holds the two lists together.
+
+**A NuGet cache was measured by its numbers and not added:** the hosted restores take about 5 s (the managed project) and 11 s (the app), so about 16 s, and a cache must itself download and unpack Avalonia's packages, so the gain is a few seconds at best against a cache key to keep right.
+
+**Checked:** the workflow parses with two jobs; `check_scripts.ps1` is clean; `eng\ci_local.ps1 -SkipDebugTests` passed (150.8 s); the drift test went red on my first edit, when a tab had replaced a backslash in the new step's path and the workflow no longer showed the step, and is green with it fixed. The hosted run of this PR is the first to run the new job and the upload steps, and an upload that never fires on a failure is not checked until one fails. No product code; no baseline moved.
+
 #### The linters are kept as local tools, and the docs say why
 
 The 2026-11-24 list asked whether `.clang-tidy`, `.clang-format` and `.pymarkdown`, which nothing enforces, should be enforced or deleted. Neither: clang-tidy needs the LLVM of Visual Studio 2026 (the hosted runner has only 2022's, whose clang static-asserts on the MSVC STL), clang-format would reflow a quarter to a third of every file it touched, and the markdown lint's objective rules are already held in CI by `RepoFilesTests` (audit T11: no second toolchain). `pymarkdown scan` over every `.md` file but the changelog and `docs/records/` finds nothing now, and over those two finds 125 and 7 of its 132, which are kept as written. `docs/guide.md` says all that where it described the lint ("Nothing runs it automatically, on purpose"), and gets the blank line before a list that was its one finding. Documentation only: no code, no baseline moved.
