@@ -62,10 +62,27 @@ Write-Host '============================================'
 Write-Host " tmDataQualityAnalyzer v$version"
 Write-Host '============================================'
 
+# --- The full manual: generated here, not kept in the repository. ---
+# UserManual.html is derived (assets\usermanual.html + docs\manual\walkthroughs.html + the figures), so it is made from the figures
+# in docs\manual_images, which the consistency check below refuses unless this version rendered them (-NoCapture: they are not
+# rendered again here). The same step re-stamps and re-embeds the BASE manual, which is tracked and compiled into the
+# application, so it must come out byte for byte as it went in: a changed base means the application was about to be built with
+# a stale manual, and the fix is to run eng\build_manual.ps1 and commit, not to ship.
+Write-Host 'Generating the full manual...'
+$baseManual = Join-Path $Root 'assets\usermanual.html'
+# The text, not the bytes: a checkout with core.autocrlf holds the file with CR LF and the embed step writes LF.
+function Get-ManualText { [System.IO.File]::ReadAllText($baseManual).Replace("`r`n", "`n") }
+$baseBefore = Get-ManualText
+& powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'eng\build_manual.ps1') -NoCapture
+if ($LASTEXITCODE -ne 0) { throw 'build_manual.ps1 failed: the full manual was not generated' }
+if ($baseBefore -ne (Get-ManualText)) {
+    throw 'assets\usermanual.html is out of date: generating the manual changed it. Run eng\build_manual.ps1 (not -NoCapture after a version bump), commit the result and package again'
+}
+
 # --- Every user-facing version literal agrees with AppVersion, and the changelog has this version's section. ---
 # Before anything is built: a mismatched manual or release-notes header is not something to discover afterwards.
 Write-Host 'Checking release consistency...'
-& powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'eng\check_release_consistency.ps1') -ReleaseMode
+& powershell -ExecutionPolicy Bypass -File (Join-Path $Root 'eng\check_release_consistency.ps1') -ReleaseMode -FullManual
 if ($LASTEXITCODE -ne 0) { throw 'check_release_consistency.ps1 failed: fix the inconsistencies above before packaging' }
 
 # --- 0. Signing pre-flight, before anything is built. ---
@@ -255,7 +272,7 @@ Copy-Item $AppDir $portable -Recurse
 # The full manual: always in the portable copy (there is no installer to ask), an optional task in the installer, which
 # takes it from beside the staged application rather than from within it (plan step 4.9).
 $manual = Join-Path $Root 'UserManual.html'
-if (-not (Test-Path $manual)) { throw 'UserManual.html is missing: run eng\build_manual.ps1' }
+if (-not (Test-Path $manual)) { throw 'UserManual.html was not generated' }
 New-Item -ItemType Directory -Force -Path (Join-Path $Stage 'manual') | Out-Null
 Copy-Item $manual (Join-Path $Stage 'manual\UserManual.html') -Force
 Copy-Item $manual (Join-Path $portable 'UserManual.html') -Force

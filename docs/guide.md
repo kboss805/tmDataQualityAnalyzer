@@ -756,7 +756,9 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
   - `Platform/`: their Avalonia implementations, which the application hands in (`App.Compose` in `App.axaml.cs`, to the view models and
     to `PlotView`; `CompositionRootTests` holds the wiring) and a test replaces; `Modal` and `StorageDialogs` are what the hosts and the pickers share.
 - **Assets**: `assets/` (the base manual, the icon, the UTF-8 manifest); the full manual, `UserManual.html`, at the
-  root (Windows cannot hold it beside `usermanual.html`, whose name differs only in case); shipped settings in
+  root (Windows cannot hold it beside `usermanual.html`, whose name differs only in case), **generated and untracked**
+  (`eng\build_manual.ps1` writes it from the base manual and `docs/manual/walkthroughs.html`; `deploy\build_package.ps1`
+  makes it itself and stops if that changes the base, which is tracked and compiled in); shipped settings in
   `settings/`; build and test scripts, and the props and targets every .NET project imports, in `eng/`; the vendored
   libraries in `third_party/`; build output in the ignored `out/`.
 

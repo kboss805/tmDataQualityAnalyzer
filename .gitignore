@@ -71,6 +71,11 @@ desktop.ini
 # eng/build_manual.ps1.
 docs/manual_images/processed/
 
+# The FULL manual is derived output too: eng/embed_manual_images.py writes it from assets/usermanual.html (tracked, compiled
+# into the application) and docs/manual/walkthroughs.html, and deploy/build_package.ps1 makes it at packaging. It was tracked
+# until then, and each change to a figure put another ~4 MB version of it into the history.
+/UserManual.html
+
 # Python bytecode cache (eng/ helpers)
 __pycache__/
 *.pyc
