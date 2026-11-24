@@ -36,7 +36,9 @@ internal static class TempFiles
     /// run a build tool (dotnet, msbuild) or a script, whose child process can still hold a file in it as the test ends,
     /// and a folder left in %TEMP% is no failure of the product. Waits out the window like <see cref="DeleteDirectory(string, bool)"/>,
     /// then gives up quietly. Never for a file the library under test opened: that one must fail the test when it is not
-    /// released, which is what <see cref="Delete(string)"/> and <see cref="DeleteDirectory(string, bool)"/> are for.</summary>
+    /// released, which is what <see cref="Delete(string)"/> and <see cref="DeleteDirectory(string, bool)"/> are for. The
+    /// one exception is the manual-figures fixture, which renders pictures and asserts nothing about release, and whose
+    /// recording copies the strict <c>TemplateBatchTests</c> holds to that rule over the same path.</summary>
     /// <returns>Whether the folder is gone.</returns>
     public static bool TryDeleteDirectory(string path) => TryDeleteDirectory(path, Window);
 
