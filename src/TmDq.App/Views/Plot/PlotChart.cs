@@ -152,6 +152,15 @@ public sealed class PlotChart : Control
     /// the title and the headroom kept for the overlays at the top.</summary>
     public Rect PlotArea => AreaFor(Bounds.Size);
 
+    /// <summary>The values the left axis is ticked at (round ones: 0, 200, 400... for a range of 0 to 1155); none without data or
+    /// while the axis is hidden. The ticks need the core, which is loaded once there is data.</summary>
+    public double[] LeftTicks =>
+        Plot is { HasData: true, LeftAxisVisible: true } vm ? ChartGeometry.RoundTicks(vm.LeftMin, vm.LeftMax, YTickCount) : Array.Empty<double>();
+
+    /// <summary>The values the right axis is ticked at, as <see cref="LeftTicks"/>.</summary>
+    public double[] RightTicks =>
+        Plot is { HasData: true, RightAxisVisible: true } vm ? ChartGeometry.RoundTicks(vm.RightMin, vm.RightMax, YTickCount) : Array.Empty<double>();
+
     /// <summary>
     /// Where the legend's right edge may reach in a chart of <paramref name="size"/>: the chart's own right edge, or, while
     /// the right axis is shown, the plot area's, so that the legend does not cover that axis's labels and title. A hidden
@@ -340,8 +349,7 @@ public sealed class PlotChart : Control
 
         // Ticks need the core, which is loaded once there is data; an empty chart draws its own (DrawEmptyTicks).
         double[] xTicks = hasData ? ChartGeometry.TimeTicks(vm!.XViewMin, vm.XViewMax, XTickCount, vm.TimeOrigin) : Array.Empty<double>();
-        double[] leftTicks = hasData && leftVisible ? ChartGeometry.Ticks(vm!.LeftMin, vm.LeftMax, YTickCount) : Array.Empty<double>();
-        double[] rightTicks = hasData && rightVisible ? ChartGeometry.Ticks(vm!.RightMin, vm.RightMax, YTickCount) : Array.Empty<double>();
+        double[] leftTicks = LeftTicks, rightTicks = RightTicks;
         ChartView left = ViewFor(true, area), right = ViewFor(false, area);
 
         // The grid: dotted, at the X ticks and at the Y ticks of the axis drawn (the left when both are).

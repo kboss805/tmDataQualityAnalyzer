@@ -175,6 +175,28 @@ public sealed class ChartViewTests
     }
 
     [AvaloniaFact]
+    public void TheYAxesAreTickedAtRoundValuesWhateverTheirRange()
+    {
+        PlotViewModel plot = LockPlot();
+        Shown s = Show(plot);
+        Assert.Equal(new[] { 0.0, 20, 40, 60, 80, 100 }, s.View.Chart.LeftTicks);
+        Assert.Empty(s.View.Chart.RightTicks);   // no Receiver SNR, no right axis
+
+        // A maximum of 42 (a range as arbitrary as an accumulation's 1155) was ticked at 8.4, 16.8, 25.2...
+        plot.SetLeftMaxOverride(42);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { 0.0, 10, 20, 30, 40 }, s.View.Chart.LeftTicks);
+
+        plot.SetSeries(new[] { PlotFixtures.Snr(0, "red", 40, 0, 1, 0, new[] { 0.0, 2.0 }, new[] { 0.0, 50.0 }) });
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(s.View.Chart.LeftTicks);   // the left axis is hidden with nothing on it
+        plot.SetRightMaxOverride(42);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { 0.0, 10, 20, 30, 40 }, s.View.Chart.RightTicks);
+        s.Window.Close();
+    }
+
+    [AvaloniaFact]
     public void TheLegendSitsLeftOfTheRightAxisLabelsWhileThatAxisIsShown()
     {
         var plot = new PlotViewModel();

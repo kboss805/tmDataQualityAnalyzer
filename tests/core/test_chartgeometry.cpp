@@ -717,6 +717,73 @@ TEST_CASE("ChartGeometry: plain ticks divide the range evenly, both ends include
     CHECK(chart::tickValues(0.0, kInf, 5).empty());
 }
 
+TEST_CASE("ChartGeometry: round ticks are the multiples of a 1, 2 or 5 step inside the range")
+{
+    using V = std::vector<double>;
+    // The axes the application draws: a percentage and decibels keep their familiar ticks...
+    CHECK(chart::roundTickValues(0.0, 100.0, 6) == V{0.0, 20.0, 40.0, 60.0, 80.0, 100.0});
+    // ...and a data maximum divided by five (1155 gave 231, 462, 693...) gives round ones instead, the top of the axis
+    // not being a tick.
+    CHECK(chart::roundTickValues(0.0, 1155.0, 6) == V{0.0, 200.0, 400.0, 600.0, 800.0, 1000.0});
+    CHECK(chart::roundTickValues(0.0, 100.0, 5) == V{0.0, 20.0, 40.0, 60.0, 80.0, 100.0});   // about the count asked for
+    // The step is the nearest of the ladder, not the next up: 231 -> 200, 25 -> 20, 800 -> 1000, 1.5 -> 2, 7 -> 10.
+    CHECK(chart::roundTickValues(0.0, 4.0, 5) == V{0.0, 1.0, 2.0, 3.0, 4.0});
+    CHECK(chart::roundTickValues(0.0, 7.0, 2) == V{0.0});
+    // A range that does not start at a multiple starts at the first one inside it; negatives too, and no negative zero.
+    CHECK(chart::roundTickValues(-50.0, 50.0, 6) == V{-40.0, -20.0, 0.0, 20.0, 40.0});
+    CHECK(chart::roundTickValues(3.0, 7.0, 6) == V{3.0, 4.0, 5.0, 6.0, 7.0});
+    const V around = chart::roundTickValues(-1.0, 1.0, 5);
+    REQUIRE(around.size() == 5);
+    CHECK(around[2] == 0.0);
+    CHECK(!std::signbit(around[2]));
+    // A range's own round ends are ticks, though a division can miss them by a bit: 0.07 / 0.01 is a hair over 7 (a
+    // ceiling would skip 0.07) and 0.3 / 0.1 is 2.9999999999999996 (a floor would skip 0.3).
+    const V up = chart::roundTickValues(0.07, 0.11, 5);
+    REQUIRE(up.size() == 5);
+    CHECK(up.front() == doctest::Approx(0.07));
+    CHECK(up.back() == doctest::Approx(0.11));
+    const V down = chart::roundTickValues(0.0, 0.3, 4);
+    REQUIRE(down.size() == 4);
+    CHECK(down.back() == doctest::Approx(0.3));
+    // A range from just below zero starts at zero, and that is not a negative zero.
+    const V fromZero = chart::roundTickValues(-0.5, 5.0, 6);
+    REQUIRE(fromZero.size() == 6);
+    CHECK(fromZero[0] == 0.0);
+    CHECK(!std::signbit(fromZero[0]));
+    // Below one: 98 to 100 in halves, a step of 0.5.
+    const V halves = chart::roundTickValues(98.0, 100.0, 6);
+    REQUIRE(halves.size() == 5);
+    for (std::size_t i = 0; i < halves.size(); ++i) CHECK(halves[i] == doctest::Approx(98.0 + 0.5 * double(i)));
+    // None where the range is not usable, as for the even ticks.
+    CHECK(chart::roundTickValues(1.0, 1.0, 5).empty());
+    CHECK(chart::roundTickValues(0.0, kInf, 5).empty());
+    CHECK(chart::roundTickValues(kNaN, 5.0, 5).empty());
+
+    // Whatever the range: inside it, ascending, evenly spaced, a step of 1, 2 or 5 times a power of ten, and about as many
+    // as were asked for.
+    std::mt19937 rng(21);
+    auto uniform = [&](double a, double b) { return std::uniform_real_distribution<double>(a, b)(rng); };
+    for (int trial = 0; trial < 5000; ++trial)
+    {
+        const double lower = uniform(-1e4, 1e4) * std::pow(10.0, std::floor(uniform(-3.0, 3.0)));
+        const double upper = lower + std::pow(10.0, uniform(-3.0, 6.0));
+        const int count = 2 + static_cast<int>(uniform(0.0, 12.0));
+        const V t = chart::roundTickValues(lower, upper, count);
+        CHECK(t.size() <= static_cast<std::size_t>(1.5 * (count - 1) + 2));
+        if (t.size() < 2) continue;
+        const double step = t[1] - t[0];
+        const double mantissa = step / std::pow(10.0, std::floor(std::log10(step)));
+        CHECK((std::abs(mantissa - 1.0) < 1e-4 || std::abs(mantissa - 2.0) < 1e-4 || std::abs(mantissa - 5.0) < 1e-4 ||
+               std::abs(mantissa - 10.0) < 1e-4));
+        for (std::size_t i = 0; i < t.size(); ++i)
+        {
+            CHECK(t[i] >= lower - step * 1e-6);
+            CHECK(t[i] <= upper + step * 1e-6);
+            if (i > 0) CHECK((t[i] - t[i - 1]) == doctest::Approx(step).epsilon(1e-4));
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // A series' index: the envelope looked up rather than walked
 // ---------------------------------------------------------------------------

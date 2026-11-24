@@ -145,6 +145,12 @@ SeriesGeometry buildSeriesGeometry(std::span<const double> xs, std::span<const d
 /// is not usable.
 std::vector<double> tickValues(double lower, double upper, int count);
 
+/// Round ticks for a value axis (a percentage, a count, decibels): the multiples of a step of 1, 2 or 5 times a power of
+/// ten, inside [@p lower, @p upper], the step being the one nearest the span divided evenly into @p count (at least 2),
+/// so there are about @p count of them and none lands on an arbitrary value such as a data maximum divided by five. The
+/// axis's own ends are ticks only when they are multiples of the step. None for a range that is not usable.
+std::vector<double> roundTickValues(double lower, double upper, int count);
+
 /// Ticks for a time axis read as DDD:HH:MM:SS: a round step (1 s up to a day, then whole days) at least the span
 /// divided evenly into @p count, on the round clock times inside [@p lower, @p upper]. @p origin is the clock time
 /// of x = 0; snapping happens on the clock and the values returned are X values again. Below a second per tick the

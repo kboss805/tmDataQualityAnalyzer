@@ -148,6 +148,12 @@ public static unsafe class ChartGeometry
     public static double[] Ticks(double lower, double upper, int count) =>
         ReadTicks((buffer, capacity) => Native.tmdq_chart_ticks(lower, upper, count, buffer, capacity));
 
+    /// <summary>Round ticks for a value axis: the multiples, inside the range, of the 1, 2 or 5 times a power of ten nearest
+    /// the span divided evenly into <paramref name="count"/>, so about that many and none on an arbitrary value; the axis's own
+    /// ends are ticks only when they are such multiples. None for a range that is not usable.</summary>
+    public static double[] RoundTicks(double lower, double upper, int count) =>
+        ReadTicks((buffer, capacity) => Native.tmdq_chart_round_ticks(lower, upper, count, buffer, capacity));
+
     /// <summary>Ticks for a time axis read as DDD:HH:MM:SS: a round step on the round clock times inside the range,
     /// <paramref name="origin"/> being the clock time of x = 0.</summary>
     public static double[] TimeTicks(double lower, double upper, int count, double origin = 0.0) =>
