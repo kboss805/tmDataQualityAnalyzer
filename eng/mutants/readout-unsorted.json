@@ -1,0 +1,49 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.PlotTests"
+  ],
+  "mutants": [
+    {
+      "id": "U1",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotReadout.cs",
+      "old": "            if (s.SortedX)\n",
+      "new": "            if (s.X.Length > 0)\n",
+      "expect": "caught",
+      "note": "every series binary-searched, as before (the length test is always true here, which the compiler cannot see): the sample beside the search's landing is read, not the nearest"
+    },
+    {
+      "id": "U2",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotReadout.cs",
+      "old": "            if (s.SortedX)\n",
+      "new": "            if (!s.SortedX)\n",
+      "expect": "caught",
+      "note": "the two branches swapped: a sorted series is scanned (the same answer, only slower), an unsorted one is searched"
+    },
+    {
+      "id": "U3",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotReadout.cs",
+      "old": "                for (int k = 0; k < s.X.Length; k++)\n",
+      "new": "                for (int k = 1; k < s.X.Length; k++)\n",
+      "expect": "caught",
+      "note": "the scan of an unsorted series skips its first sample"
+    },
+    {
+      "id": "U4",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotReadout.cs",
+      "old": "                for (int k = 0; k < s.X.Length; k++)\n",
+      "new": "                for (int k = 0; k < s.X.Length - 1; k++)\n",
+      "expect": "caught",
+      "note": "the scan of an unsorted series skips its last sample"
+    },
+    {
+      "id": "U5",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotReadout.cs",
+      "old": "                if (d < bestDist)\n",
+      "new": "                if (!(d >= bestDist))\n",
+      "expect": "caught",
+      "note": "a sample whose time is not a number counts as nearer: its distance compares false either way round, so the rewrite takes it"
+    }
+  ]
+}

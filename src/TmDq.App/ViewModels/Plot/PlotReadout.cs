@@ -34,10 +34,20 @@ internal static class PlotReadout
             if (pinned && i != pinnedIndex) continue;
             PlotSeries s = series[i];
             if (!shown(s) || s.X.Length == 0) continue;
-            int at = LowerBound(s.X, x);
-            for (int k = at; k < s.X.Length && k - at < 2; k++)
-                Consider(i, k);
-            if (at > 0) Consider(i, at - 1);
+            if (s.SortedX)
+            {
+                int at = LowerBound(s.X, x);
+                for (int k = at; k < s.X.Length && k - at < 2; k++)
+                    Consider(i, k);
+                if (at > 0) Consider(i, at - 1);
+            }
+            else
+            {
+                // Times out of order (an imported CSV): a binary search would say whatever sample it lands beside, so look
+                // at every one. A time that is not a number is never nearer than another (its distance compares false).
+                for (int k = 0; k < s.X.Length; k++)
+                    Consider(i, k);
+            }
 
             void Consider(int which, int index)
             {
@@ -65,7 +75,8 @@ internal static class PlotReadout
                bestY.ToString("F2", CultureInfo.InvariantCulture) + unit;
     }
 
-    /// <summary>The first index whose time is not before <paramref name="value"/> (the times sorted).</summary>
+    /// <summary>The first index whose time is not before <paramref name="value"/>. Only for times that are sorted
+    /// (<see cref="PlotSeries.SortedX"/>): on any other order it names an index that means nothing.</summary>
     private static int LowerBound(double[] xs, double value)
     {
         int lo = 0, hi = xs.Length;

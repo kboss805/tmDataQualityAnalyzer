@@ -151,7 +151,7 @@ public sealed class ReceiverParamsTests : IDisposable
     /// <summary>The word-map section names, in file order: every section but the seven the core skips as metadata or a
     /// placeholder (FrameSetup's reserved names; RASA's map has an [EMPTY] for each unused fourth channel).</summary>
     private static string[] Sections(string path) =>
-        Regex.Matches(File.ReadAllText(path), @"(?m)^\[([^\]]+)\]")
+        Regex.Matches(TempFiles.ReadAllText(path), @"(?m)^\[([^\]]+)\]")   // a file the core just wrote: read through the retry
              .Select(m => m.Groups[1].Value)
              .Where(n => n is not ("Defaults" or "Frame" or "Parameters" or "Time" or "Receivers" or "Bounds" or "EMPTY"))
              .ToArray();

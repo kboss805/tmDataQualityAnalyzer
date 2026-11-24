@@ -12,6 +12,28 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The readout of a series whose times are out of order names the nearest sample
+
+The crosshair readout found the sample under the cursor with a binary search on the series' times, which only works when they are
+sorted. A series from a processed recording always is, but one from an imported CSV need not be (a clock that stepped back, a file
+edited by hand), and then the search landed beside whatever it landed beside: the readout named a sample that was not the nearest,
+or nothing at all when the nearest was within reach. (The 2026-11-21 review of speed and the interface found it and left it open.) The chart already knew which series are sorted (`PlotSeries.SortedX`, the
+flag its drawing uses to walk only what is in view); the readout now uses it, searching a sorted series as before and looking at every
+sample of one that is not. A time that is not a number is never the nearest. The scan is linear in that one series per mouse move,
+which is nothing at the sizes an import holds (one point per averaging window).
+
+Also here: `ReceiverParamsTests.Sections` read a TOML the core had just written with a plain `File.ReadAllText`, and failed once more with "in use" (a
+managed run straight after a mutation run and a full app run; 40 reruns of the class alone: 0 failures; the dev folder is no longer under Google
+Drive, so Drive was not the only holder). It reads through `TempFiles.ReadAllText`, which retries for 3 s, as the other tests reading a file the
+product has just written do. The test's other plain reads were left as they are.
+
+**Checked:** the new `PlotTests` case (times 0, 1, 2, 100, 3, 4, 5 with the cursor at 4.1: the readout was empty, the search having
+landed beside the 100) failed before the change and passes after; app suite 855 passed / 0 failed / 34 not run (was 854). The mutation
+check, `eng\mutants\readout-unsorted.json`, 5 mutants, **all caught** by that one case: every series searched as before (U1; written as an always-true
+length test, because the compiler refuses `if (true)` as unreachable code), the two branches swapped (U2), the scan starting at the second sample (U3) or
+stopping before the last (U4), and a sample whose time is not a number taken as the nearest (U5, which is why the case's NaN time comes last: in the
+middle a later sample would hide it).
+
 #### The pinned scan tests no longer depend on the order the compiler evaluates their draws in
 
 "FrameProcessor: the scan's output on random synthetic streams" and "...on long synthetic streams" failed in every Debug build (58 of

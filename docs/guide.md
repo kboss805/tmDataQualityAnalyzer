@@ -582,7 +582,8 @@ profile, so a batch processes with the linear calibration.
 - **The plot** (`ViewModels/Plot`): `PlotViewModel` (the series built by the core, the axes and overrides, the view mode, the
   recordings and Plot File, the readout's pin), with its jobs in types of their own, the folder's other seven files:
   `PlotTimeWindow` (the span, the window and its zoom history, the gestures and keys that move it), `PlotReadout` (what
-  the readout says), `PlotCsv` (the series to and from the core's CSV), `PlotColors` (the colours), `PlotCommands` (below),
+  the readout says: the nearest sample, found by binary search in a series whose times are sorted and by looking at every sample in one whose
+  times are not, as an imported CSV's can be: `PlotSeries.SortedX` says which), `PlotCsv` (the series to and from the core's CSV), `PlotColors` (the colours), `PlotCommands` (below),
   `PlotTemplates` (under Templates) and `CustomizeViewModel`
   (Customize View's state, edited as a copy of the plot and applied only on OK). `PlotChart` draws it (from the core's
   geometry, each long series' envelope looked up in its `SeriesIndex`, a cached data layer, a draft while a gesture

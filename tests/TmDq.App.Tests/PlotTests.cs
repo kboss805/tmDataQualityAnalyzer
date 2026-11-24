@@ -455,6 +455,41 @@ public sealed class PlotTests
     }
 
     [AvaloniaFact]
+    public void TheReadoutOfASeriesWhoseTimesAreOutOfOrderIsStillTheNearestSample()
+    {
+        // An imported CSV can hold times that are not in order (a clock that stepped back, a file edited by hand). The
+        // readout used to binary-search them as if sorted, and said a sample that was not the nearest: the search that
+        // lands on the 100 below looks only at the samples around it, and the one 0.1 s from the cursor is not there.
+        var plot = new PlotViewModel();
+        plot.SetSeries(new[]
+        {
+            PlotFixtures.Lock(0, "Lock A", 1, 0, new[] { 0.0, 1.0, 2.0, 100.0, 3.0, 4.0, 5.0 },
+                              new[] { 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0 }),
+        });
+        Assert.False(plot.Series[0].SortedX);
+        double Pixel(double x) => x * 10;
+
+        Assert.Equal($"Lock A\n{plot.FormatTime(4.0)}\n15.00%", plot.Readout(4.1, 41, Pixel));
+        Assert.Equal($"Lock A\n{plot.FormatTime(5.0)}\n16.00%", plot.Readout(5.2, 52, Pixel));
+        Assert.Equal($"Lock A\n{plot.FormatTime(0.0)}\n10.00%", plot.Readout(0.2, 2, Pixel));
+        Assert.Equal($"Lock A\n{plot.FormatTime(100.0)}\n13.00%", plot.Readout(99.5, 995, Pixel));
+        Assert.Null(plot.Readout(50.0, 500, Pixel));                  // nothing within 10 px, wherever the search would land
+
+        plot.ReadoutSeriesId = 0;                                     // pinned: the nearest sample wherever it is
+        Assert.Equal($"Lock A  (pinned)\n{plot.FormatTime(4.0)}\n15.00%", plot.Readout(4.1, 41, Pixel));
+        Assert.Equal($"Lock A  (pinned)\n{plot.FormatTime(100.0)}\n13.00%", plot.Readout(70.0, 700, Pixel));
+
+        // A time that is not a number is never the nearest, in a series of either kind.
+        plot.ReadoutSeriesId = null;
+        plot.SetSeries(new[]
+        {
+            PlotFixtures.Lock(0, "Lock A", 1, 0, new[] { 0.0, 1.0, 2.0, 1.5, double.NaN }, new[] { 1.0, 3.0, 4.0, 5.0, 2.0 }),
+        });
+        Assert.False(plot.Series[0].SortedX);
+        Assert.Equal($"Lock A\n{plot.FormatTime(1.5)}\n5.00%", plot.Readout(1.4, 14, Pixel));
+    }
+
+    [AvaloniaFact]
     public void ClearingForgetsTheRecording()
     {
         PlotViewModel plot = HundredSeconds();
