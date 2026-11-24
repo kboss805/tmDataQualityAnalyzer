@@ -559,6 +559,18 @@ profile, so a batch processes with the linear calibration.
   one result line to the file and exits (0 when the stream was processed, 1 when not, 2 when the report could not be
   written: `Startup.RunSmokeAsync`, which `OpenToChartTests` runs): the installer's clean-machine test
   proves the whole path, native core included, with it.
+- **A crash leaves a report** (`CrashHandling`, `Models/Logging/CrashReporter`, `Platform/NativeMessageBox`): `Program.Main`
+  installs the handling before anything else can fail, and nothing else does (the tests call what the hooks call).
+  An exception left unhandled on any thread (`AppDomain.UnhandledException`) or on the UI thread (the dispatcher's own
+  `UnhandledException`, hooked in `AfterSetup` so the tests' `BuildAvaloniaApp` has none) writes a text report to
+  `crash-reports\` beside the preferences (`%APPDATA%\tmDataQualityAnalyzer\`, beside the exe for a portable copy) and the
+  user is told once, in the operating system's own message box, where it is: the process is ending and Avalonia may be what
+  failed. The report holds the version, the time, where it was raised, Windows and .NET, the exception with its inner ones, each
+  frame's IL offset (the release has no symbols, so the trace has no line numbers: the release's symbols ZIP turns a method
+  and an offset into one) and the last 200 lines of the session's log (`App.Compose` hands it over). The newest ten are
+  kept; the same exception reaching both hooks is one report; writing never throws. The installer's smoke run installs it
+  with no message box (it has no one to dismiss one). An exception no task observes does not end the process in .NET, so it is
+  not a crash and is not reported.
 - **Windows:** every window with a view model is XAML (`MainWindow`, `ConfigureStreamsWindow`, `StreamSetupWindow`,
   `ExtractCalibrationWindow`, `ProcessingWindow`, `ExportWindow`, `BatchApplyWindow`, `CustomizeViewWindow`), each
   loading itself through the generated `InitializeComponent()` (which fills its named controls; `AvaloniaXamlLoader.Load`
@@ -826,8 +838,13 @@ Everything builds from `tmdq.sln`, which VS Code opens by default; `.claude/CLAU
   `ManualFiguresTests` writes `docs\manual_images\rendered-version.txt` (the rendering application's version) beside the
   figures, because the log in four of them names the version, and `eng\check_release_consistency.ps1` fails when it is not
   `AppVersion`: a version bump needs a full render, never `-NoCapture`.
-- **The release**: `deploy\build_package.ps1` (single-file publish, signing, the portable ZIP and the
-  Inno installer); `.claude/skills/cut-release` is the procedure.
+- **The release**: `deploy\build_package.ps1` (single-file publish, signing, the portable ZIP, the
+  Inno installer and the symbols ZIP); `.claude/skills/cut-release` is the procedure. The symbols ZIP
+  (`tmDataQualityAnalyzer-vX.Y.Z_symbols.zip`: `tmDataQualityAnalyzer.pdb`, `TmDq.Core.pdb`, `tmdq_core.pdb`) is not shipped to
+  users; it is kept with the release and **attached to its GitHub release**, because it is the only thing that turns a crash
+  report's frames, or a crash dump, of that version into source lines. A symbol file matches its binary by an id the build wrote
+  into both, so signing afterwards does not unmatch it; keep the ones of the build that shipped, since a rebuild is another
+  binary with another id.
 - **A recording that finds no sync**: `py eng\ch10_triage.py <file.ch10>` walks the packets with no build and no
   irig106, checks the reader's TMATS gates, tries the sixteen combinations of the four bit transforms, and finds the
   sync word and frame length that actually recur. Its transforms mirror `FrameProcessor`'s; keep them in step.
@@ -889,8 +906,8 @@ that worktrees also need.
 
 - **Build automation**: `deploy/build_package.ps1` — the consistency check, a signing pre-flight,
   the core in Release, a self-contained single-file publish, staging (settings, the VC++ runtime the core imports, the
-  licence, `THIRD-PARTY-NOTICES.txt`), signing our two binaries only, a smoke run on the PRN sample, the ZIP and the
-  installer.
+  licence, `THIRD-PARTY-NOTICES.txt`), signing our two binaries only, a smoke run on the PRN sample, the ZIP, the
+  symbols ZIP and the installer.
 - **Inno Setup installer**: `deploy/tmDataQualityAnalyzer.iss` — v2.x's AppId and folder, so it upgrades a
   v2.x install in place (its `bin\`, `UserGuide.txt` and old manual deleted, `settings\` kept), admin or per-user,
   the `.ch10` association, the "What's New" page, the optional full manual.
@@ -1136,7 +1153,8 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
 **The application** (`tests/TmDq.App.Tests`, on the headless platform with Skia drawing):
 
 - **The run:** `OpenToChartTests` (Open to the drawn chart on the PRN sample, failures, the smoke report),
-  `CompositionRootTests` (`App.Compose`: every service the menu needs wired, the window's view model and the plot's prompts, the preferences read from their folder, beside the exe for a portable copy, and the theme following them and the menu; the smoke test keeping nothing and running the defaults end to end),
+  `CompositionRootTests` (`App.Compose`: every service the menu needs wired, the window's view model and the plot's prompts, the preferences read from their folder, beside the exe for a portable copy, and the theme following them and the menu; the smoke test keeping nothing and running the defaults end to end; the session log handed to the crash report),
+  `CrashReportTests` (the report's content, CR LF ends and file name; the last 200 log lines; an unreadable log, a folder that cannot be written and a non-exception object each handled; the same exception reported once and a second one in the same millisecond not overwriting the first; the newest ten kept and another file left alone; the folder beside the preferences; every frame's IL offset, inner exceptions too; the user told once whatever more arrives, with no box for the smoke run, and a box that fails not replacing the crash. The process-wide hook itself is not unit-tested, since installing it would hang a handler on the test process; `Program.Main` installs it),
   `ProcessingTests` (the log, the progress dialog and its Cancel, its token source released with the run, the run's lines in the order the core promises: the job lines,
   the summary, then each thread's own lines in order, the reader's and the streams' interleaving as they come; a report the observer could not handle, said and not dropped), `SeveralStreamsTests`.
 - **Configure Streams:** `StreamRulesTests` and `StreamFilesTests` (the rules and files without a window),

@@ -8,6 +8,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using TmDq.App.Models.Export;
+using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Settings;
 using TmDq.App.Platform;
@@ -90,6 +91,26 @@ public class CompositionRootTests : IDisposable
         finally
         {
             TempFiles.Delete(csv);
+        }
+    }
+
+    [AvaloniaFact]
+    public void TheSessionLogIsGivenToTheCrashReport()
+    {
+        string folder = TempFiles.NewPath("compose-crash");
+        try
+        {
+            var crash = new CrashHandling(new CrashReporter(folder, "1.2.3"), null);
+            MainWindowViewModel vm = _app.Compose(new MainWindow(), null, _root, _appData, crash);
+            vm.Log.Add("opened the recording");
+
+            crash.Raised("the test", new InvalidOperationException("boom"));
+
+            Assert.Contains("opened the recording", File.ReadAllText(Assert.Single(Directory.GetFiles(folder))));
+        }
+        finally
+        {
+            TempFiles.TryDeleteDirectory(folder);
         }
     }
 

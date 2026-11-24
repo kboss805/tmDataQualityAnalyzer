@@ -262,9 +262,11 @@ while one is running, for that reason.
 
 Don't commit, tag, or push unless the user asks. When they do: commit the `constants.h` + notes
 changes together with a `feat: release vX.Y.Z` style message, and tag `vX.Y.Z` (annotated) to match the
-existing tag convention. The GitHub release is titled `vX.Y.Z`, carries the setup.exe and the portable
-ZIP, and its body is the top section of `RELEASENOTES.txt`. Publishing it is outward-facing: confirm
-with the user first. The release artifacts are build outputs and are not tracked.
+existing tag convention. The GitHub release is titled `vX.Y.Z`, carries the setup.exe, the portable
+ZIP and the symbols ZIP (`tmDataQualityAnalyzer-vX.Y.Z_symbols.zip`, which `build_package.ps1` makes: not shipped
+to users, but the only thing that turns a crash report's frames, or a dump, of that version into source lines, so
+attach it every time), and its body is the top section of `RELEASENOTES.txt`. Publishing it is outward-facing:
+confirm with the user first. The release artifacts are build outputs and are not tracked.
 
 ## Guardrails
 
