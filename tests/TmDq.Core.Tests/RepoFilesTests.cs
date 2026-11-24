@@ -133,6 +133,39 @@ public class RepoFilesTests
         Assert.Matches(@"(?ms)^permissions:\s*\r?\n\s+contents:\s*read\s*$", ci);
     }
 
+    /// <summary>
+    /// <c>eng\ci_local.ps1</c> runs here what the workflow runs, so a push can be checked on this machine before the hosted run.
+    /// It is only as good as its list: a step added to ci.yml and not to the script would pass here and fail there. The two
+    /// lists, script by script and configuration by configuration, in order, are the same.
+    /// </summary>
+    [Fact]
+    public void TheLocalCiRunsTheStepsTheWorkflowRunsInTheSameOrder()
+    {
+        string workflow = File.ReadAllText(RepoPaths.File(Path.Combine(".github", "workflows", "ci.yml")));
+        string local = File.ReadAllText(RepoPaths.File(Path.Combine("eng", "ci_local.ps1")));
+
+        // The workflow builds the core in a loop over its configurations; a step that says $cfg runs once for each.
+        Match loop = Regex.Match(workflow, @"foreach \(\$cfg in ((?:'\w+'(?:, )?)+)\)");
+        Assert.True(loop.Success, "ci.yml no longer loops over the core's configurations the way this test reads it");
+        string[] configurations = Regex.Matches(loop.Groups[1].Value, @"'(\w+)'").Select(m => m.Groups[1].Value).ToArray();
+
+        var inWorkflow = new List<string>();
+        foreach (Match m in Regex.Matches(workflow, @"-File eng\\(\w+)\.ps1(?: -Configuration (\$cfg|\w+))?"))
+        {
+            string step = m.Groups[1].Value;
+            string configuration = m.Groups[2].Value;
+            if (configuration == "$cfg") inWorkflow.AddRange(configurations.Select(c => step + " -Configuration " + c));
+            else inWorkflow.Add(configuration.Length == 0 ? step : step + " -Configuration " + configuration);
+        }
+
+        var inLocal = Regex.Matches(local, @"(?m)^Invoke-CiStep '[^']+' 'eng\\(\w+)\.ps1'(?: '-Configuration (\w+)')?")
+                           .Select(m => m.Groups[2].Length == 0 ? m.Groups[1].Value : m.Groups[1].Value + " -Configuration " + m.Groups[2].Value)
+                           .ToList();
+
+        Assert.True(inWorkflow.Count >= 6, "read only " + inWorkflow.Count + " steps from ci.yml: has its command shape changed?");
+        Assert.Equal(inWorkflow, inLocal);
+    }
+
     [Fact]
     public void NoFileButTheProjectsOwnIsNamedClaudeMdWhereClaudeCodeWouldLoadItAsInstructions()
     {

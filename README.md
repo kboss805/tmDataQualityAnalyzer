@@ -117,11 +117,15 @@ powershell -ExecutionPolicy Bypass -File eng\test_native.ps1 -Configuration Rele
 powershell -ExecutionPolicy Bypass -File eng\test_dotnet.ps1 -Configuration Release
 powershell -ExecutionPolicy Bypass -File eng\test_app.ps1 -Configuration Release
 
+# Everything CI runs, in CI's order, with each step's time (stops at the first failure; -KeepGoing runs them all)
+powershell -ExecutionPolicy Bypass -File eng\ci_local.ps1
+
 # The release packages (signed; pass -SignCertSha1 '' for an unsigned build)
 powershell -ExecutionPolicy Bypass -File deploy\build_package.ps1
 ```
 
-The scripts find MSVC themselves (`eng\env.ps1`). `.claude/CLAUDE.md` and `docs/guide.md` describe each one, the
+`eng\ci_local.ps1` finds a failure on this machine before the hosted run does; the hosted `ci` check is still the one `main`
+requires. The scripts find MSVC themselves (`eng\env.ps1`). `.claude/CLAUDE.md` and `docs/guide.md` describe each one, the
 test baselines and the release process.
 
 ## Usage

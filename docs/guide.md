@@ -997,6 +997,13 @@ Three suites, each run by its own script; the baselines are in `.claude/CLAUDE.m
   `-tc="<name>*"` while iterating.
 - **The C# library** (xunit v3, `tests/TmDq.Core.Tests`): `eng\test_dotnet.ps1`.
 - **The application** (xunit v3 on `Avalonia.Headless.XUnit`, `tests/TmDq.App.Tests`): `eng\test_app.ps1`.
+- **All of CI, here** (`eng\ci_local.ps1`): the release consistency check, the script analyzer, the core in Debug and Release,
+  and the three suites in `.github/workflows/ci.yml`'s order, each step's time at the end; it stops at the first failure
+  (`-KeepGoing` runs them all, `-SkipDebugCore` leaves out the Debug core build). Run it before a push: on this
+  machine's cores it finds what the hosted run would, sooner. It is **not** the required check (`main` requires the
+  Actions run's `ci`, which nothing local can post, and a self-hosted runner is out while the repository is public:
+  `docs/records/ci_runner.md`). `TheLocalCiRunsTheStepsTheWorkflowRunsInTheSameOrder` (`RepoFilesTests`) fails when a step is
+  added to `ci.yml` and not to the script, or the other way round.
 
 The suites read the committed recordings under `tests/data/test files` and the fixtures under `tests/fixtures`. Two
 more checks run by hand:
