@@ -14,6 +14,7 @@
         4. the native tests (doctest), Release
         5. the managed tests, Release
         6. the application's tests (Avalonia, headless), Release
+        7. the native tests, Debug (the workflow's second job, which runs beside the first; here it runs last)
 
     It stops at the first step that fails, as CI does; -KeepGoing runs the rest anyway and lists every failure. The
     hosted job also installs .NET 10 and the MSVC environment: here they are whatever is installed, and eng\env.ps1
@@ -22,14 +23,16 @@
     Each step runs in a child Windows PowerShell, as CI's do. Works under Windows PowerShell 5.1 and PowerShell 7.
 
     Usage:
-        powershell -ExecutionPolicy Bypass -File eng\ci_local.ps1 [-KeepGoing] [-SkipDebugCore]
+        powershell -ExecutionPolicy Bypass -File eng\ci_local.ps1 [-KeepGoing] [-SkipDebugCore] [-SkipDebugTests]
         ... -KeepGoing      run every step even after one fails, then list the failures
         ... -SkipDebugCore  leave out the Debug build of the core (CI builds it only to see that Debug compiles
                             warning-free); the hosted run still does
+        ... -SkipDebugTests leave out the native tests in Debug (about 100 s); the hosted run still runs them
 #>
 param(
     [switch]$KeepGoing,
-    [switch]$SkipDebugCore
+    [switch]$SkipDebugCore,
+    [switch]$SkipDebugTests
 )
 $ErrorActionPreference = 'Stop'
 
@@ -38,6 +41,7 @@ Set-Location $root
 
 $keepGoing = $KeepGoing.IsPresent
 $skipDebugCore = $SkipDebugCore.IsPresent
+$skipDebugTests = $SkipDebugTests.IsPresent
 $results = New-Object System.Collections.Generic.List[object]
 $failed = $false
 $total = [System.Diagnostics.Stopwatch]::StartNew()
@@ -45,7 +49,9 @@ $total = [System.Diagnostics.Stopwatch]::StartNew()
 # One CI step: the script, with the arguments CI gives it, in a child Windows PowerShell. A step that fails stops the run
 # unless -KeepGoing; the steps after it are listed as not run.
 function Invoke-CiStep([string]$Name, [string]$Script, [string]$Arguments = '') {
-    if ($skipDebugCore -and $Script -like '*build_core_dll*' -and $Arguments -eq '-Configuration Debug') {
+    $debugCore = $skipDebugCore -and $Script -like '*build_core_dll*'
+    $debugTests = $skipDebugTests -and $Script -like '*test_native*'
+    if (($debugCore -or $debugTests) -and $Arguments -eq '-Configuration Debug') {
         $results.Add([pscustomobject]@{ Name = $Name; Outcome = 'skipped'; Seconds = 0 })
         return
     }
@@ -76,6 +82,7 @@ Invoke-CiStep 'Build native core, Release' 'eng\build_core_dll.ps1' '-Configurat
 Invoke-CiStep 'Native tests (doctest)' 'eng\test_native.ps1' '-Configuration Release'
 Invoke-CiStep 'Managed tests (TmDq.Core against the native DLL)' 'eng\test_dotnet.ps1' '-Configuration Release'
 Invoke-CiStep 'App tests (Avalonia, headless)' 'eng\test_app.ps1' '-Configuration Release'
+Invoke-CiStep 'Native tests (doctest), Debug' 'eng\test_native.ps1' '-Configuration Debug'
 
 Write-Host ''
 Write-Host '============================================'

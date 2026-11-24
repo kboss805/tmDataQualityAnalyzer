@@ -34,7 +34,7 @@ powershell -ExecutionPolicy Bypass -File eng\test_dotnet.ps1 -Configuration Rele
 powershell -ExecutionPolicy Bypass -File eng\test_app.ps1 -Configuration Release
 ```
 
-CI is one job: it builds the core in Debug and Release, then runs the three suites in Release. Use the same configuration for the DLL and the suites
+CI is two jobs: `ci` builds the core in Debug and Release, then runs the three suites in Release, and `native-debug`, beside it, runs the native suite in Debug. Use the same configuration for the DLL and the suites
 that load it: the managed and app scripts take `out\<config>\tmdq_core.dll` (or
 `TMDQ_CORE_DLL`), and a Debug suite against a Release DLL built an hour ago tests the hour-old core.
 

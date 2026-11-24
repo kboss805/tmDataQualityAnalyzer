@@ -133,3 +133,46 @@ jobs:
           $ErrorActionPreference = 'Continue'
           powershell -ExecutionPolicy Bypass -File eng\test_app.ps1 -Configuration Release
           if ($LASTEXITCODE -ne 0) { throw "the app tests failed" }
+
+      - name: Build logs (on failure)
+        # The MSBuild logs of the native steps, which hold what the console shows only in part. Kept for a week.
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: out/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # The native tests in Debug, on a runner of their own so the run takes as long as before. The `ci` job builds the core in
+  # Debug and tests only Release; a Debug-only failure (an evaluation order the compiler chose differently, an assert) was
+  # found by hand once (PR #369) and would otherwise wait for the next developer to build Debug. Not a required check yet.
+  native-debug:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC (cl / msbuild / dumpbin / mt)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          vsversion: 2022
+
+      - name: Native tests (doctest), Debug
+        shell: powershell
+        run: |
+          # The same script and suite as the Release step above, with the Debug runtime: assertions, no optimiser.
+          $ErrorActionPreference = 'Continue'
+          powershell -ExecutionPolicy Bypass -File eng\test_native.ps1 -Configuration Debug
+          if ($LASTEXITCODE -ne 0) { throw "the native tests failed (Debug)" }
+
+      - name: Build logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-debug
+          path: out/*.log
+          if-no-files-found: ignore
+          retention-days: 7

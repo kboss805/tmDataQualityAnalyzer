@@ -1021,7 +1021,7 @@ Three suites, each run by its own script; the baselines are in `.claude/CLAUDE.m
 - **The application** (xunit v3 on `Avalonia.Headless.XUnit`, `tests/TmDq.App.Tests`): `eng\test_app.ps1`.
 - **All of CI, here** (`eng\ci_local.ps1`): the release consistency check, the script analyzer, the core in Debug and Release,
   and the three suites in `.github/workflows/ci.yml`'s order, each step's time at the end; it stops at the first failure
-  (`-KeepGoing` runs them all, `-SkipDebugCore` leaves out the Debug core build). Run it before a push: on this
+  (`-KeepGoing` runs them all, `-SkipDebugCore` leaves out the Debug core build and `-SkipDebugTests` the native tests in Debug). Run it before a push: on this
   machine's cores it finds what the hosted run would, sooner. It is **not** the required check (`main` requires the
   Actions run's `ci`, which nothing local can post, and a self-hosted runner is out while the repository is public:
   `docs/records/ci_runner.md`). `TheLocalCiRunsTheStepsTheWorkflowRunsInTheSameOrder` (`RepoFilesTests`) fails when a step is
@@ -1056,9 +1056,12 @@ stays in folders of its own.
 
 ### Continuous Integration
 
-`.github/workflows/ci.yml` is one job, `ci`, on GitHub-hosted `windows-2022` (Visual Studio 2022, as releases are
+`.github/workflows/ci.yml` has two jobs, both on GitHub-hosted `windows-2022` (Visual Studio 2022, as releases are
 built, which the job checks), on every push to `main` and every PR: the release consistency check, the core built
-Debug and Release, then the native, managed and app suites. It runs with a read-only token (`permissions: contents:
+Debug and Release, then the native, managed and app suites, in the job `ci` (the required check); the job `native-debug` runs
+beside it on a runner of its own and runs the native suite in Debug (a Debug-only failure, such as an evaluation order the compiler
+chose differently, was found by hand once, in PR #369), so the run takes as long as before. It is not a required check yet. A failed
+job uploads the MSBuild logs in `out/` as an artifact (`build-logs`, `build-logs-debug`; seven days). It runs with a read-only token (`permissions: contents:
 read`) and stops after 45 minutes. The workflow's own constraints (ASCII-only, Windows PowerShell 5.1) are in its
 header comment, and `RepoFilesTests` holds the scripts, the installer script and the workflow to ASCII. The self-hosted runner CI used until plan
 step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_runner.md) records how, and why it must not come back.
