@@ -10,7 +10,9 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
-### Unreleased
+### v3.3.0 — An antenna's SNR log joins the plot, Receiver SNR in 15 hues, and a manual that tells one story
+
+The first release since v3.2.0 (2026-11-22). What a user sees: **US10.0**, a phased array antenna's SNR log (AV Inc.) is imported through a kind dialog, shown as one series per stream and polarization (H, V, C), placed on the plot's time axis by its clock so it can sit beside a processed recording, and never exported; Receiver SNR is drawn in 15 hues, solid then dotted, the combined channel the strongest and the only one shown at first; the Y axes are ticked at round values; the legend no longer covers the right axis. The manual's figures were reviewed one by one (findings 1 to 9 fixed, 10 left on purpose) and the manual covers the antenna log. One real application bug was found by that review: a lone `_` in a menu item's header is Avalonia's access-key mark, so `prn_testfile` was listed as "prntestfile". The soak and the throughput guard were run for the release (below). The entries are in the order they landed, newest first.
 
 #### Export Data is disabled on a plot of an antenna's log alone (US10.0)
 

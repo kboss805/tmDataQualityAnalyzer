@@ -1,3 +1,45 @@
+tmDataQualityAnalyzer v3.3.0 - What's New
+=================================
+
+  Upgrading from v3.0.0, v3.1.0 or v3.2.0 keeps everything: your settings
+  files and your window preferences. Upgrading from v2.x: please read the
+  v3.1.0 notes below about your window preferences.
+
+  New:
+
+  - Import a phased array antenna's SNR log. Import/Export > Import from
+    CSV..., dragging a .csv file onto the window, or the Recent Files list
+    now asks what the file is: a CSV this application exported (Standalone
+    Telemetry Receivers) or a log written by an AV Inc. Phased Array Antenna.
+    The antenna's log is drawn with one line for each stream and
+    polarization (H, V and C), on the Receiver SNR axis, and is placed on the
+    time axis by its clock. Imported while a recording is shown, it joins the
+    plot as a recording of its own, so the two can be compared. At first only
+    each stream's combined (C) line is shown; the rest are a click away in
+    Customize View. The log is never exported as data, and Export Data is
+    unavailable on a plot that holds nothing else.
+
+  - Receiver SNR is drawn in 15 hues, one for each stream: the first 15
+    streams as solid lines and the next 15 dotted, in the same hues. The
+    combined channel of a stream is its strongest line and the only one shown
+    at first.
+
+  Improved:
+
+  - The plot's Y axes are ticked at round values (0, 200, 400 ... rather than
+    231, 462, 693 ...).
+
+  - The legend sits beside the right axis's labels instead of over them when
+    Receiver SNR is shown.
+
+  - A recording whose name has an underscore, such as prn_testfile, is listed
+    under its own name in the menu; the underscore used to be dropped.
+
+  - The user manual describes the antenna log, and its figures were checked
+    one by one: the names in them are the ones the application produces, and
+    the text and the pictures tell the same story.
+
+
 tmDataQualityAnalyzer v3.2.0 - What's New
 =================================
 
