@@ -14,7 +14,7 @@ namespace TmDq.App.ViewModels.Dialogs;
 /// </summary>
 public sealed class ExportViewModel : DialogViewModel
 {
-    public const string Title = "Export Data";
+    public const string Title = "Export";
 
     private readonly IDataFilePicker? _files;
 

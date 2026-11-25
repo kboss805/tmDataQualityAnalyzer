@@ -137,7 +137,7 @@ SeriesColumnSchema::ParsedColumn SeriesColumnSchema::parseColumnHeader(const std
 
     // SNR: "<pcmChannelId> - <streamLabel> <channelName>". Recover the stream id and
     // label so multiple receiver-SNR streams stay grouped/labelled on import (the
-    // Customize Plot Series dialog keys SNR grouping on streamOrder + streamLabel).
+    // Customize View dialog keys SNR grouping on streamOrder + streamLabel).
     out.metricType = MetricType::SNR;
     out.name       = header;
 

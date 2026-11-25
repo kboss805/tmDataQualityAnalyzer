@@ -59,7 +59,7 @@ public sealed class StreamSetupViewModel : DialogViewModel
     /// <param name="timeChannelId">The time channel chosen in Configure Streams, which a calibration is extracted with;
     /// -1 when the recording has none.</param>
     /// <param name="swapBytes">The recording's byte order (Legacy Chapter 10 off), which a calibration is read with.</param>
-    /// <param name="dialogs">Shows Extract Calibration and its report; null leaves Apply Cal unavailable.</param>
+    /// <param name="dialogs">Shows Extract Calibration and its report; null leaves Apply Calibration unavailable.</param>
     /// <param name="lastCalFolder">The folder a calibration recording was last chosen from in this session.</param>
     public StreamSetupViewModel(StreamSetup edited, ISettingsFilePicker? files, string? appRoot, string? lastFolder,
                                 int timeChannelId = -1, bool swapBytes = true, IStreamDialogs? dialogs = null,
@@ -192,11 +192,11 @@ public sealed class StreamSetupViewModel : DialogViewModel
         "map, frame sync, and polarity above plus the time channel from the main dialog. Runtime-only; the profile " +
         "itself is not saved to disk.";
 
-    /// <summary>Apply Cal opens Extract Calibration: for a Receiver SNR stream whose settings have no problem, in a
+    /// <summary>Apply Calibration opens Extract Calibration: for a Receiver SNR stream whose settings have no problem, in a
     /// recording with a time channel.</summary>
     public bool CanApplyCal => _dialogs is not null && IsReceiverSnr && _timeChannelId >= 0 && CanAccept;
 
-    /// <summary>What Apply Cal does, or why it is not available.</summary>
+    /// <summary>What Apply Calibration does, or why it is not available.</summary>
     public string ApplyCalTip =>
         !IsReceiverSnr || _dialogs is null ? ApplyCalTipText
         : _timeChannelId < 0 ? "Select a Time Channel in the Configure Streams dialog before extracting calibration."
@@ -205,12 +205,12 @@ public sealed class StreamSetupViewModel : DialogViewModel
 
     public IAsyncRelayCommand ApplyCalCommand { get; }
 
-    /// <summary>The profiles Apply Cal gave, carried to the row on OK.</summary>
+    /// <summary>The profiles Apply Calibration gave, carried to the row on OK.</summary>
     public IReadOnlyList<CalibrationProfile> Calibration => _calibration;
 
     public int CalibratedChannels => _calibration.Count(p => p.Valid);
 
-    /// <summary>Beside Apply Cal, in v2.14.2's words.</summary>
+    /// <summary>Beside Apply Calibration, in v2.14.2's words.</summary>
     public string CalibrationText => CalibratedChannels == 0
         ? "(none — using linear calibration)"
         : string.Create(CultureInfo.InvariantCulture, $"{CalibratedChannels} channel(s) calibrated (non-linear)");

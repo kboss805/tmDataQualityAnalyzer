@@ -18,7 +18,7 @@
     </c:DialogFooter>
   <StackPanel Margin="{DynamicResource ContentDialogPadding}" Spacing="8">
     <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,12,Auto,Auto,16,Auto,Auto" ColumnSpacing="12" RowSpacing="4">
-      <TextBlock Grid.Row="0" Grid.Column="0" Text="Step Cal File:" VerticalAlignment="Center" />
+      <TextBlock Grid.Row="0" Grid.Column="0" Text="Step Calibration File:" VerticalAlignment="Center" />
       <TextBlock x:Name="StepName" Grid.Row="0" Grid.Column="1" Text="{Binding StepName}" MinWidth="260" VerticalAlignment="Center" />
       <Button x:Name="BrowseStep" AutomationProperties.Name="Browse for the step calibration file" Grid.Row="0" Grid.Column="2" Content="Browse..." Command="{Binding BrowseStepCommand}"
               ToolTip.Tip="Browse for the step calibration configuration TOML file that defines the RF signal step levels." />

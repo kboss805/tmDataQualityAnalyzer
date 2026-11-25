@@ -22,6 +22,21 @@ Only one control in the application (the Legacy Chapter 10 switch) had an `Autom
 
 **Not done, on purpose:** the visible wording that disagrees between places (Export... against the Export Data dialog, Apply Cal against Extract Calibration, Accumulation against Missed Frames against Accumulated Missed Frames, abbreviations such as Num Rcvrs) is the user's to choose and is listed for them; and the plot itself, one custom-drawn control, still defines no automation peer of its own, so a screen reader reaches its menu and chips but not the curves. App baseline 855 -> 858 passed (the three cases).
 
+#### Four disagreements of wording settled: the second metric, Export, Calibration, and two dialog titles
+
+The item 21 of the 2026-11-24 list, the visible half (the names a screen reader reads are the previous entry). The words the application used for the same thing disagreed between places; the user chose each (all four as recommended):
+
+- **The second metric is "Missed Frames"** in the View Mode menu (was "Accumulation"), on the chart's chip ("Show Missed Frames", was "Show Accumulation"), and in the manual and the guide. It had five names (Accumulation, Show Accumulation, Accumulated Missed Frames, Missed Frames plots, Missed Frames); the Customize and Batch dialogs and the exported file names (`..._missed_frames.png`) already said Missed Frames. The axis title stays "Accumulated Missed Frames", which says what the curve is.
+- **The Export dialog is titled "Export"** (was "Export Data", which it also called its CSV checkbox): the title now matches the menu entry "Export..." and its own Export button; the checkboxes (Export Image, Export Data, Export Log) are unchanged.
+- **"Apply Calibration"** (was "Apply Cal") in the receiver setup dialog, and **"Step Calibration File:"** (was "Step Cal File:") in Extract Calibration, which keeps its title. "Calibration Ch10:" was not touched.
+- **A dialog is titled by the menu entry that opens it:** "Process Multiple Files" (was "Batch Process Files") and "Customize View" (was "Customize Plot Series").
+
+**Where it reaches:** the XAML and view-model titles, the strings the tests assert, `assets/usermanual.html`, `docs/manual/walkthroughs.html`, `eng/embed_manual_images.py` (the figures' alt text, and the anchor of one figure, which the reworded sentence had moved), `docs/guide.md` and `README.md`, the three `settings/rcvr_cals` comments that name the button, and a few code comments. **Not rewritten, on purpose:** `docs/changelog.md`, `docs/records/` and `deploy/RELEASENOTES.txt` describe what was true when they were written. The acceptance criteria in the guide that name the two controls (US5.3's "Apply Cal", the Customize dialog's title) were changed to the new words and nothing else of them: the stories are the user's, so this is for them to check.
+
+**Figures:** `eng\build_manual.ps1` re-rendered them; 11 changed, each because a word on it changed (the chip in the lock plots, the Log, the Processing and light-theme figures; the View Mode and Y Axes menus; the receiver setup dialog's button; the Extract Calibration labels and clips; the Plot File menu). Two more differed only by the antialiasing flicker the guide already describes, and were put back, so the diff is words only. I looked at the chip, the log and the extract dialog: the longer chip text and the longer label fit.
+
+How it was checked: the app suite (855 passed, the tests that assert each string changed with it) and the local CI mirror. No mutation list: the chip, the menu, the Export title, the Apply Calibration button and the two dialog titles are each asserted by a test that fails on the old string; the Extract Calibration label is held only by its figure. Nothing here is logic.
+
 #### A corrupt time stamp can no longer fill the machine with rows: the stream stops with an error
 
 `FrameProcessor::closeElapsedWindows` closed one output window, one row of the result, for every period between the clock's last window and the time of the next bit, with no bound. A time channel that leaps years ahead (a corrupt stamp) therefore asked for about 31 million rows per stream per year at the default 1 s window: gigabytes, and a minute of loop. An infinite time never ended the loop at all. The item 20 of the 2026-11-24 list; found by reading the code, not by a recording, and not reproduced on one.

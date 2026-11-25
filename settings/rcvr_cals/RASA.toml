@@ -2,7 +2,7 @@
 # Range: 0 to 36 dB; 3 dB for the first two increments (0->3->6), then 6 dB.
 # 8 steps total — the injected calibration sequence.
 #
-# Usage: load this file via "Apply Cal" in the Receiver SNR
+# Usage: load this file via "Apply Calibration" in the Receiver SNR
 # setup dialog alongside a calibration Chapter 10 recording that steps
 # through each level in the order listed below. No dwell/duration is
 # configured here -- each step is confirmed once its level holds steady

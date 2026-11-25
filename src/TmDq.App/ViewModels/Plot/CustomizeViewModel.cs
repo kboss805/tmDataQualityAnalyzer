@@ -18,7 +18,7 @@ namespace TmDq.App.ViewModels.Plot;
 /// </summary>
 public sealed class CustomizeViewModel : ObservableObject
 {
-    public const string Title = "Customize Plot Series";
+    public const string Title = "Customize View";
     public const string LockDescription =
         "Select the streams to display Frame Sync Lock data for.\n(This toggles both Lock % and Missed Frames plots)";
 

@@ -71,7 +71,7 @@ public sealed record StreamSetup
     /// <summary>The receiver-parameters file the word map comes from; empty means the shipped default.</summary>
     public string ReceiverParamsToml { get; init; } = string.Empty;
 
-    // --- the calibration Apply Cal gave (Extract Calibration, plan step 4.6) and what it was extracted from ---
+    // --- the calibration Apply Calibration gave (Extract Calibration, plan step 4.6) and what it was extracted from ---
 
     public IReadOnlyList<CalibrationProfile> Calibration { get; init; } = Array.Empty<CalibrationProfile>();
 
