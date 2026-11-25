@@ -10,8 +10,10 @@ canvas first; a non-square icon is stretched.
 Sizes below 256 are 32-bit DIBs (with the all-zero AND mask Windows ignores for 32-bit images), 256 is PNG, as the
 Windows SDK's own icons are: the DIB form is what every reader takes, and a 256 px DIB would be 256 KB.
 
-The output is committed; run this again only after the artwork changes (needs Pillow):
+The output is committed; run this again only after the artwork changes. It needs Pillow, the only third-party
+package any script in eng/ imports (pinned in eng/requirements.txt):
 
+    py -m pip install -r eng/requirements.txt
     py eng/gen_app_icon.py
 """
 
@@ -21,7 +23,10 @@ import io
 import struct
 from pathlib import Path
 
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError:
+    raise SystemExit("gen_app_icon.py needs Pillow: py -m pip install -r eng/requirements.txt") from None
 
 REPO = Path(__file__).resolve().parent.parent
 ARTWORK = REPO / "docs" / "design" / "icon_image.png"

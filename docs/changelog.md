@@ -12,6 +12,10 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The one Python package the scripts need is written down, and its absence says so
+
+The item 24 of the 2026-11-24 list, smaller than it was listed. Of the four Python scripts in `eng\`, only `gen_app_icon.py` imports a third-party package (Pillow); `embed_manual_images.py`, `ch10_triage.py` and `gen_compile_flags.py` use the standard library, and the manual's figures are scaled with System.Drawing, so `build_manual.ps1` does not need Pillow (an earlier note of this work said it did; it does not). Nothing said Pillow was needed, and without it the script ended in a traceback. **Now:** `eng/requirements.txt` pins `Pillow==12.1.1` (the version the committed icon was checked with) and says which script needs it, and `gen_app_icon.py` ends with `needs Pillow: py -m pip install -r eng/requirements.txt` when the import fails. No linter was added: the linters stay local tools (the decision on items 8 and 9 of the 2026-11-24 list). Checked: the message with Pillow made unimportable; and a real run of the script writes `assets/icon.ico` byte for byte as committed. No code of the application.
+
 #### The app suite's baseline said 870 passed: it is 836, and 870 is the total
 
 xunit's `Total` counts the 34 explicit soak cases that are not run (the soak class alone reports `Total: 34 ... Not Run: 34`), so the green baseline is the total less 34: **836 passed / 0 failed / 0 skipped, 34 not run** (870 in all). `.claude/CLAUDE.md` had said 870 passed since the title bar change (the figure before it, 804, was from an older count), and four entries of this release's section (the names, the wording, Select None and the title bar) called a total 'passed'; they now say total. Found by the CSV session's report, then measured: native 549 passed / 1 skipped and managed 420 passed / 2 skipped locally (1 on CI, which builds the Debug core that its guard test needs) were already right. No code.
