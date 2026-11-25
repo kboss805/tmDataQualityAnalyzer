@@ -11,6 +11,7 @@
 #ifndef CLOCKTIME_H
 #define CLOCKTIME_H
 
+#include <cstdint>
 #include <string>
 
 namespace clocktime {
@@ -20,6 +21,10 @@ namespace clocktime {
 /// midnight. Fields are zero-padded to 3, 2, 2, 2 and 3 digits and grow if the value is wider; a time
 /// before the first day borrows from the day count, so the clock never reads negative.
 std::string format(int baseDay, double baseTimeOffset, double elapsed, bool includeMilliseconds);
+
+/// The stamp "DDD:HH:MM:SS.mmm" of @p milliseconds after midnight of day @p baseDay, worked in whole integers (no
+/// floating-point sum to land a millisecond short); a negative count borrows from the day count as `format` does.
+std::string formatMilliseconds(int baseDay, std::int64_t milliseconds);
 
 } // namespace clocktime
 

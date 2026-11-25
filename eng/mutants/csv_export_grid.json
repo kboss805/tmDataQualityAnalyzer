@@ -1,0 +1,102 @@
+{
+  "suite": "native",
+  "args": ["-tc=csvseries*"],
+  "mutants": [
+    {
+      "id": "G1",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "constexpr std::int64_t kLongestPeriodMs = 100'000;",
+      "new": "constexpr std::int64_t kLongestPeriodMs = 10'000;",
+      "expect": "caught",
+      "note": "the longest grid cut to 10 s: a 100 s column would be written to the millisecond"
+    },
+    {
+      "id": "G2",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "if (medianMs > static_cast<double>(kLongestPeriodMs))",
+      "new": "if (false)",
+      "expect": "caught",
+      "note": "a column slower than the longest grid snapped to it, moving a ten-minute sample by up to 50 s"
+    },
+    {
+      "id": "G3",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "if (gaps.size() < 2)",
+      "new": "if (gaps.size() < 1)",
+      "expect": "caught",
+      "note": "a column of two times given a rate from its one gap"
+    },
+    {
+      "id": "G4",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "static_cast<std::size_t>(steady) * 3 < gaps.size() * 2",
+      "new": "static_cast<std::size_t>(steady) * 3 < gaps.size()",
+      "expect": "caught",
+      "note": "the steadiness rule loosened from two thirds of the gaps to a third"
+    },
+    {
+      "id": "G5",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "g >= 0.5 * median && g <= 1.5 * median",
+      "new": "g >= 0.5 * median",
+      "expect": "caught",
+      "note": "no upper edge to the steady band, so a long gap counts as steady"
+    },
+    {
+      "id": "G6",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "std::fabs(std::log(medianMs / static_cast<double>(period)))",
+      "new": "std::fabs(medianMs - static_cast<double>(period))",
+      "expect": "caught",
+      "note": "the nearest step by plain distance instead of on a log scale"
+    },
+    {
+      "id": "G7",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "const auto middle = gaps.begin() + static_cast<std::ptrdiff_t>(gaps.size() / 2);",
+      "new": "const auto middle = gaps.begin();",
+      "expect": "caught",
+      "note": "the smallest gap taken for the median"
+    },
+    {
+      "id": "G8",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "(base.baseTimeOffset + c.xValues[j]) * 1000.0",
+      "new": "c.xValues[j] * 1000.0",
+      "expect": "caught",
+      "note": "the grid anchored to elapsed time instead of the clock: a recording not starting on a second lands its rows off the whole seconds"
+    },
+    {
+      "id": "G9",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "if (!std::is_sorted(times.begin(), times.end()))",
+      "new": "if (false)",
+      "expect": "caught",
+      "note": "times not sorted before their gaps are taken: out of order samples give a column the wrong rate"
+    },
+    {
+      "id": "G10",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "periods >= 0.0 ? static_cast<std::int64_t>(periods + 0.5) : static_cast<std::int64_t>(periods - 0.5)",
+      "new": "static_cast<std::int64_t>(periods + 0.5)",
+      "expect": "caught",
+      "note": "a time before midnight of the base day rounded the wrong way"
+    },
+    {
+      "id": "G11",
+      "file": "src/core/src/clocktime.cpp",
+      "old": "        days--;\n    }\n    return std::format(\"{:03}:{:02}:{:02}:{:02}.{:03}\"",
+      "new": "    }\n    return std::format(\"{:03}:{:02}:{:02}:{:02}.{:03}\"",
+      "expect": "caught",
+      "note": "a negative count of milliseconds not borrowing from the day"
+    },
+    {
+      "id": "G12",
+      "file": "src/core/src/clocktime.cpp",
+      "old": "rest / 60'000 % 60",
+      "new": "rest / 60'000 % 59",
+      "expect": "caught",
+      "note": "minutes of the hour wrong"
+    }
+  ]
+}

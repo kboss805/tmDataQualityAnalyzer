@@ -325,6 +325,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The current plot data is exported to a single CSV file covering every Frame Sync Lock, Accumulated Missed Frames, and Receiver SNR series, every time: shown or hidden, whichever metric the view is on.
   - **Scope:** the CSV is the data, not the view. Hiding a series, switching the left axis's metric or zooming changes what is drawn, never what is exported; only the batch run's per-file export narrows it, to one source.
 - [x] The CSV file includes a timestamp column and one data column per series.
+- [x] A row is one time on the clock, not one sample: each column's times are rounded to the nearest multiple of its own sample rate (the median gap between its samples, as 1, 2, 5, 10, 20, 50 ... ms, up to 100 s), so channels of one recording whose windows end a few milliseconds apart share a row (one row a second for 1 Hz data, one a tenth for 100 ms data) with every column filled. A column with no steady rate keeps its times to the millisecond.
 - [x] Each column header identifies its stream and receiver/channel so the exported data is self-describing.
 - [x] The user specifies the CSV filename and location via the export dialog.
 
@@ -686,7 +687,10 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
     CSV reader that streams a file as well as for `decodeText`) - the TOML subset every settings file uses, sections in file
     order, arrays of tables (`[[Name]]`) read only; `FrameSyncFile` (`framesyncfile`) is the pattern file over it.
 13. **CsvSeriesParser / CsvSeriesWriter** (`csvseriesparser`, `csvserieswriter`, `clocktime`) - the two directions of
-    the application's CSV, matched inverses, with the `DDD:HH:MM:SS.mmm` stamp; **SeriesColumnSchema**
+    the application's CSV, matched inverses, with the `DDD:HH:MM:SS.mmm` stamp (the writer puts each column on the
+    clock rounded to its own sample rate, `samplePeriodMs`, so a time is where a sample sits after its first export and
+    a second export of a file read back is byte for byte the same; `clocktime::formatMilliseconds` writes the stamp in
+    integers); **SeriesColumnSchema**
     (`seriescolumnschema`) is the single source of the column headers both use. **PhasedArrayLogParser**
     (`phasedarraylogparser`, US10.0) reads a third party's phased array antenna SNR log (ISO 8601 UTC time, a unit name, HPol / VPol /
     Comb, one column a stream) into the same `CsvParseResult`, each stream three series H, V and C; both parsers read a

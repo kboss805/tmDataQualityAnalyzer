@@ -42,4 +42,18 @@ std::string format(int baseDay, double baseTimeOffset, double elapsed, bool incl
     return result;
 }
 
+std::string formatMilliseconds(int baseDay, std::int64_t milliseconds)
+{
+    constexpr std::int64_t kMsPerDay = 86'400'000;
+    std::int64_t days = milliseconds / kMsPerDay;
+    std::int64_t rest = milliseconds % kMsPerDay;
+    if (rest < 0)
+    {
+        rest += kMsPerDay;
+        days--;
+    }
+    return std::format("{:03}:{:02}:{:02}:{:02}.{:03}", baseDay + static_cast<int>(days), rest / 3'600'000,
+                       rest / 60'000 % 60, rest / 1000 % 60, rest % 1000);
+}
+
 } // namespace clocktime

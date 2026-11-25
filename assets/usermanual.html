@@ -391,7 +391,11 @@ produced in one action.</p>
       receiver and channel — <code>26 - CH-16 AGC STEP CALS 800K L_RCVR1</code>, the channel ID,
       the stream's name, then the channel and receiver — so the file is self-describing.
       Frame sync columns carry their metric, because a stream's lock&nbsp;% and missed-frames
-      series share a name and would otherwise be indistinguishable. After a batch run, columns
+      series share a name and would otherwise be indistinguishable. Each row is one moment, with
+      every column that has a sample then filled in: a column's times are rounded to its own
+      sample rate (once a second, every 100&nbsp;ms, every 10&nbsp;ms), so channels of one
+      recording whose windows end a few milliseconds apart share a row instead of taking one each.
+      After a batch run, columns
       from the second recording onward are prefixed <code>S1|</code>, <code>S2|</code> and so
       on, so several files can share one CSV without ambiguity. A phased array antenna's log
       (<a href="#import-antenna">below</a>) is not part of it.</li>

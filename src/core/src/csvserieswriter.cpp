@@ -7,8 +7,12 @@
 #include "csvserieswriter.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <fstream>
+#include <limits>
+#include <vector>
 
 #include "clocktime.h"
 #include "seriescolumnschema.h"
@@ -16,7 +20,7 @@
 
 namespace {
 
-/// One sample, placed on the millisecond grid.
+/// One sample, placed on the time grid: milliseconds after midnight of the base day.
 struct Cell
 {
     std::int64_t ms;
@@ -24,14 +28,87 @@ struct Cell
     double value;
 };
 
-/// A time rounded to whole milliseconds, halves away from zero, by adding or subtracting a half and
-/// truncating - which v2.14's export did, so even the values where that differs from `std::round` agree:
-/// -62.5 ms is -63, not -62, and 0.49999999999999994 is 1.
-std::int64_t toMilliseconds(double seconds)
+/// The slowest sample period the export snaps a column to; a column slower than this is written to the millisecond.
+constexpr std::int64_t kLongestPeriodMs = 100'000;
+
+/// A column's sample period in whole milliseconds: the median gap between its successive distinct times, snapped to
+/// the nearest of 1, 2, 5, 10, 20, 50 ... ms (nearest on a log scale, so 0.96 s and 1.04 s are both 1 s), at least
+/// 1 ms and at most `kLongestPeriodMs`. A column with no steady rate to read gets 1 ms, the grid that moves a time the
+/// least: one with fewer than three distinct times, or fewer than two thirds of whose gaps lie within half a median of
+/// the median, or whose median gap is longer than `kLongestPeriodMs`.
+std::int64_t samplePeriodMs(std::span<const double> xs)
 {
-    const double ms = seconds * 1000.0;
+    std::vector<double> times;
+    times.reserve(xs.size());
+    for (const double x : xs)
+    {
+        if (std::isfinite(x))
+        {
+            times.push_back(x);
+        }
+    }
+    if (!std::is_sorted(times.begin(), times.end()))
+    {
+        std::sort(times.begin(), times.end());
+    }
+    std::vector<double> gaps;
+    gaps.reserve(times.size());
+    for (std::size_t i = 1; i < times.size(); ++i)
+    {
+        if (times[i] > times[i - 1])
+        {
+            gaps.push_back(times[i] - times[i - 1]);
+        }
+    }
+    if (gaps.size() < 2)
+    {
+        return 1;
+    }
+    const auto middle = gaps.begin() + static_cast<std::ptrdiff_t>(gaps.size() / 2);
+    std::nth_element(gaps.begin(), middle, gaps.end());
+    const double median = *middle;
+    const auto steady = std::count_if(gaps.begin(), gaps.end(), [median](double g) { return g >= 0.5 * median && g <= 1.5 * median; });
+    if (static_cast<std::size_t>(steady) * 3 < gaps.size() * 2)
+    {
+        return 1;
+    }
+    const double medianMs = median * 1000.0;
+    if (medianMs > static_cast<double>(kLongestPeriodMs))
+    {
+        return 1;
+    }
+
+    std::int64_t best = 1;
+    double bestDistance = std::numeric_limits<double>::infinity();
+    for (std::int64_t decade = 1; decade <= kLongestPeriodMs; decade *= 10)
+    {
+        for (const std::int64_t step : { 1, 2, 5 })
+        {
+            const std::int64_t period = decade * step;
+            if (period > kLongestPeriodMs)
+            {
+                continue;
+            }
+            const double distance = std::fabs(std::log(medianMs / static_cast<double>(period)));
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = period;
+            }
+        }
+    }
+    return best;
+}
+
+/// @p timeMs (milliseconds after midnight of the base day) moved to the nearest multiple of @p periodMs, halves away
+/// from zero, by adding or subtracting a half and truncating - as v2.14's export rounded to the millisecond, so with a
+/// period of 1 even the values where that differs from `std::round` agree: -62.5 ms is -63, not -62.
+std::int64_t onGrid(double timeMs, std::int64_t periodMs)
+{
+    const double periods = timeMs / static_cast<double>(periodMs);
     // NOLINTNEXTLINE(bugprone-incorrect-roundings): half away from zero, as v2.14.2 wrote it
-    return ms >= 0.0 ? static_cast<std::int64_t>(ms + 0.5) : static_cast<std::int64_t>(ms - 0.5);
+    const std::int64_t whole = periods >= 0.0 ? static_cast<std::int64_t>(periods + 0.5) : static_cast<std::int64_t>(periods - 0.5);
+    return whole * periodMs;
 }
 
 } // namespace
@@ -63,9 +140,10 @@ bool CsvSeriesWriter::write(const std::filesystem::path& path, std::span<const C
     }
     out += kLineEnd;
 
-    // Place every sample on the millisecond grid, in column order and then sample order, so that a
-    // stable sort leaves a column's samples in one millisecond in the order they were given and the
-    // last of them wins.
+    // Place every sample on its column's own time grid (its sample period, on the clock: a 1 s column on whole
+    // seconds, a 100 ms one on tenths), in column order and then sample order, so that a stable sort leaves a
+    // column's samples in one slot in the order they were given and the last of them wins. Columns that sample at
+    // the same rate share their rows, however far apart their samples fell within a period.
     std::size_t total = 0;
     for (const CsvColumn& c : columns)
     {
@@ -77,21 +155,23 @@ bool CsvSeriesWriter::write(const std::filesystem::path& path, std::span<const C
     {
         const CsvColumn& c = columns[i];
         const std::size_t n = std::min(c.xValues.size(), c.yValues.size());
+        const std::int64_t period = samplePeriodMs(c.xValues.first(n));
         for (std::size_t j = 0; j < n; ++j)
         {
-            cells.push_back({toMilliseconds(c.xValues[j]), static_cast<int>(i), c.yValues[j]});
+            const double clockMs = (base.baseTimeOffset + c.xValues[j]) * 1000.0;
+            cells.push_back({onGrid(clockMs, period), static_cast<int>(i), c.yValues[j]});
         }
     }
     std::stable_sort(cells.begin(), cells.end(), [](const Cell& a, const Cell& b) {
         return a.ms != b.ms ? a.ms < b.ms : a.column < b.column;
     });
 
-    // One line per distinct millisecond.
+    // One line per distinct time on the grid.
     std::size_t at = 0;
     while (at < cells.size())
     {
         const std::int64_t ms = cells[at].ms;
-        out += clocktime::format(base.baseDay, base.baseTimeOffset, static_cast<double>(ms) / 1000.0, true);
+        out += clocktime::formatMilliseconds(base.baseDay, ms);
 
         int column = 0;
         while (at < cells.size() && cells[at].ms == ms)
