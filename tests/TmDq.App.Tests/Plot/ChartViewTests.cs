@@ -544,7 +544,7 @@ public sealed class ChartViewTests
         ContextMenu menu = Menus.Open(s.View);
         Assert.Equal(new[]
         {
-            "Set Plot Title...", "-", "Plot File", "View Mode  (V)", "-", "Customize View...", "Show Legend", "Readout", "-",
+            "Set Plot Title...", "-", "Plot File", "Remove File...", "View Mode  (V)", "-", "Customize View...", "Show Legend", "Readout", "-",
             "X Axis", "Y Axes", "Reset View",
         }, Headers(menu));
         Assert.Equal(new[] { "Set Time Window...", "Zoom Back", "Reset Span" }, Headers(Item(menu, "X Axis")));
@@ -554,6 +554,8 @@ public sealed class ChartViewTests
         Assert.DoesNotContain(Headers(menu), h => h.Contains("Export"));
         // Plot File waits for batch runs (plan step 4.7): one recording has nothing to switch between.
         Assert.False(Item(menu, "Plot File").IsEnabled);
+        Assert.True(Item(menu, "Remove File...").IsEnabled);   // with a plot there is always something to remove
+        Assert.Same(s.View.Commands!.RemoveFileCommand, Item(menu, "Remove File...").Command);
         s.Window.Close();
 
         // Without a plot there is nothing to bind to, and no menu.

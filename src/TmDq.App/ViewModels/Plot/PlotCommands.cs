@@ -48,6 +48,7 @@ public sealed class PlotCommands : ObservableObject, IDisposable
         PanLaterCommand = new RelayCommand(() => _plot.PanWindow(PlotViewModel.KeyPanFraction), hasData);
         ZoomInCommand = new RelayCommand(() => _plot.ZoomWindow(PlotViewModel.KeyZoomFactor), hasData);
         ZoomOutCommand = new RelayCommand(() => _plot.ZoomWindow(1.0 / PlotViewModel.KeyZoomFactor), hasData);
+        RemoveFileCommand = new AsyncRelayCommand(RemoveFileAsync, hasData);
         ShowSourceCommand = new RelayCommand<int>(_plot.SetVisibleSource);
         PinReadoutCommand = new RelayCommand<int?>(id => _plot.ReadoutSeriesId = id);
         _all = new IRelayCommand[]
@@ -55,7 +56,7 @@ public sealed class PlotCommands : ObservableObject, IDisposable
             SetTitleCommand, CustomizeCommand, SetTimeWindowCommand, SetLeftMinCommand, SetLeftMaxCommand, SetRightMinCommand,
             SetRightMaxCommand, ToggleLegendCommand, ToggleViewModeCommand, ShowLockPercentCommand, ShowMissedFramesCommand,
             ZoomBackCommand, ResetSpanCommand, ResetYCommand, ResetViewCommand, PanEarlierCommand, PanLaterCommand,
-            ZoomInCommand, ZoomOutCommand,
+            ZoomInCommand, ZoomOutCommand, RemoveFileCommand,
         };
         SyncChoices();
         _plot.SeriesChanged += OnSeriesChanged;
@@ -147,8 +148,26 @@ public sealed class PlotCommands : ObservableObject, IDisposable
     /// <summary>Plot File's entries: a recording's id, or -1 for every one.</summary>
     public IRelayCommand<int> ShowSourceCommand { get; }
 
+    /// <summary>Remove File...: asks which recording, batch file or imported CSV to remove from the plot, and removes every series
+    /// of it (<see cref="PlotViewModel.RemoveSource"/>).</summary>
+    public IAsyncRelayCommand RemoveFileCommand { get; }
+
     /// <summary>Readout's entries: a series' id, or null for the nearest.</summary>
     public IRelayCommand<int?> PinReadoutCommand { get; }
+
+    /// <summary>Remove File...: the recordings, batch files and imported CSVs the plot holds, asked as a list (the first starts chosen),
+    /// and on OK every series of the one chosen goes from the plot and from what the next export
+    /// writes. Nothing on disk changes; processing the recording again brings it back. Cancel changes nothing.</summary>
+    public async Task RemoveFileAsync()
+    {
+        IReadOnlyList<(int Id, string Label)> sources = _plot.SourceList();
+        if (sources.Count == 0) return;
+        string label = sources.Count == 1
+            ? "Remove everything of this file from the plot? Process it again to bring it back."
+            : "Remove every series of this file from the plot, and keep the others? Process it again to bring it back.";
+        int? chosen = await _prompts.ChooseAsync("Remove File", label, sources.Select(s => s.Label).ToList());
+        if (chosen is int index && index >= 0 && index < sources.Count) _plot.RemoveSource(sources[index].Id);
+    }
 
     public async Task SetTitleAsync()
     {
