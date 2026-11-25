@@ -47,7 +47,7 @@
       <KeyBinding Gesture="OemMinus" Command="{Binding ZoomOutCommand}" />
     </Grid.KeyBindings>
     <pv:PlotChart x:Name="Chart" x:FieldModifier="public">
-      <!-- The right-click menu, as v2.x had it: Set Plot Title first; Plot File; View Mode, its key in its title (a submenu
+      <!-- The right-click menu, as v2.x had it: Set Plot Title first; Plot File; Remove File; View Mode, its key in its title (a submenu
            can show no key of its own); Customize View; Show Legend; Readout; X Axis; Y Axes; Reset View. Everything that
            acts on data is disabled until there is some. Export is not here: it is a file operation, in the main menu (plan
            step 4.5). A key shown on an item is advertised only: the keys are the plot's (above). -->
@@ -59,6 +59,8 @@
                step 4.7, US1.1). -->
           <MenuItem Header="Plot File" IsEnabled="{Binding CanChoosePlotFile}"
                     ItemsSource="{Binding PlotFiles}" ItemContainerTheme="{StaticResource RadioChoice}" />
+          <!-- Drops every series of one recording, batch file or imported CSV, keeping the others. -->
+          <MenuItem Header="Remove File..." Command="{Binding RemoveFileCommand}" />
           <MenuItem Header="View Mode  (V)" IsEnabled="{Binding CanSwitchViewMode}">
             <MenuItem Header="Lock Percentage" ToggleType="Radio" IsChecked="{Binding IsLockPercentView, Mode=OneWay}"
                       Command="{Binding ShowLockPercentCommand}" />

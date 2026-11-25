@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -26,6 +27,9 @@ public sealed class WindowPlotPrompts : IPlotPrompts
 
     public Task<(string Start, string Stop)?> AskTimeWindowAsync(string start, string stop) =>
         Ask<(string Start, string Stop)?>(new TimeWindowPromptWindow(start, stop));
+
+    public Task<int?> ChooseAsync(string title, string label, IReadOnlyList<string> choices) =>
+        Ask<int?>(new ChoiceWindow(title, label, choices));
 
     public Task<Color?> PickColorAsync(Color initial) => Ask<Color?>(new ColorPromptWindow(initial));
 

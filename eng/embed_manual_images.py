@@ -114,7 +114,7 @@ after('<p>Right-click anywhere on the chart. Entries stay disabled until a file 
       fig('Main Context Menu.png',
           'The plot’s right-click menu — every plot control lives here. Entries that need more than '
           'one loaded file, such as Plot File, stay disabled until they apply.',
-          'The plot right-click menu open over a chart, showing Set Plot Title, Plot File, '
+          'The plot right-click menu open over a chart, showing Set Plot Title, Plot File, Remove File, '
           'View Mode (V), Customize View, Show Legend, Readout, X Axis, Y Axes and Reset View')
     + fig('Y Axes Submenu.png',
           'Y Axes, opened. Either end of either axis can be pinned, and a limit left alone still '

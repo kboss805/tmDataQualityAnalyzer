@@ -388,6 +388,39 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Removes every series of <paramref name="sourceId"/> (a recording, a batch file or an imported CSV) from the plot, and
+    /// with them its name in Plot File, so what is kept is the other recordings' and nothing of this one: the plot, Customize
+    /// View, the readout and the next CSV export no longer have it, and its memory is free. Process the recording again to
+    /// bring it back. Removing the only recording leaves the plot as a new one starts (<see cref="Clear"/>). What is drawn is
+    /// fitted again only when it changed: with the recording shown gone, or with every recording overlaid (the window then
+    /// spans the ones that are left); with another one shown, the view is left where it is.
+    /// </summary>
+    /// <returns>False, with nothing changed, when no series comes from <paramref name="sourceId"/>.</returns>
+    public bool RemoveSource(int sourceId)
+    {
+        if (!_series.Any(s => s.SourceId == sourceId)) return false;
+        if (_series.All(s => s.SourceId == sourceId))
+        {
+            Clear();
+            return true;
+        }
+        _series.RemoveAll(s => s.SourceId == sourceId);
+        _sourceLabels.Remove(sourceId);
+        if (_readoutSeriesId is int pin && _series.All(s => s.Id != pin)) _readoutSeriesId = null;
+        bool drawnChanged = _visibleSource < 0 || _visibleSource == sourceId;
+        if (_visibleSource == sourceId) _visibleSource = -1;
+        if (drawnChanged)
+        {
+            SetVisibleSource(_visibleSource);   // the window and the axes follow what is left; it tells the view
+        }
+        else
+        {
+            SeriesChanged?.Invoke(this, EventArgs.Empty);
+        }
+        return true;
+    }
+
+    /// <summary>
     /// What shows when Receiver SNR series arrive: of each stream's channels (a receiver's L, R and C, an antenna's H, V and C)
     /// only the combined one, which keeps a plot of many receivers readable; Customize View shows the others. A group with no
     /// combined channel (a receiver set up with fewer than three) keeps all of its series, so nothing arrives hidden entirely.
