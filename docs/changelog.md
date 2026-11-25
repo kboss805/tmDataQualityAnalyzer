@@ -218,6 +218,10 @@ A loose end of the previous entry, named by its session and then measured. A col
 
 How it was checked: two native cases (7 rates, 40 starts each, 600 samples: every sample has a row; and a time 0.1 ms either side of halfway on a 100 ms grid still rounds to the nearer slot, with exactly halfway going up), replacing the throwaway probe that found it; `eng/mutants/csv_export_grid.json`: 16 mutants, all caught (G10 re-anchored on the changed line; four new: no tolerance, a tolerance below the noise, one a hundredth of a period wide, the tolerance on the wrong side); the soak's 34 runs still export what is recorded; local CI mirror green. Native baseline 549 -> 551. Not done: the user's original `.ch10` was not processed in the app and exported.
 
+#### SECURITY.md says how to report a vulnerability, privately
+
+The item 25 of the 2026-11-24 list. The repository had no security policy, so a finding would have gone to a public issue. `SECURITY.md` at the root (GitHub shows it under the Security tab) gives the email address to write to, what is in scope (a crafted recording, CSV, TOML or template; the installer and the signed binaries), a best-effort reply of about a week, and the support rule: only the latest release, whose installer and ZIP are signed. The address is the maintainer's, published on their word (2026-11-25). README's Support section points to it. Documentation only: no code, no baseline moved.
+
 ### v3.3.1 — The manual's figures show the right version
 
 A patch release, the first change since v3.3.0 (2026-11-23): four figures of the user manual named v3.2.0 in their log pane, because v3.3.0's manuals were stamped with `-NoCapture` after the bump. They are re-rendered (here, by v3.3.1, which is also the first release whose figures are guarded: `docs\manual_images\rendered-version.txt` must name the release's version or the consistency check fails). No application code changed, so the soak and the throughput guard were not re-run; the three suites were.

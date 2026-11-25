@@ -235,6 +235,7 @@ public class RepoFilesTests
     private static IEnumerable<string> DocumentationFiles()
     {
         yield return RepoPaths.File("README.md");
+        yield return RepoPaths.File("SECURITY.md");
         foreach (string root in new[] { "docs", ".claude" })
         {
             foreach (string file in Directory.EnumerateFiles(Path.Combine(RepoPaths.Root, root), "*.md", SearchOption.AllDirectories))
