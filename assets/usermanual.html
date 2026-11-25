@@ -581,6 +581,12 @@ name, for example <code>[CH 13 CH-01 PRN 15 5M]</code>.</p>
       <td>The pattern appeared, but never at the expected frame spacing. The line reports how many
           matches were found and how many were <em>boundary-aligned</em>; when that second number
           is zero, the matches were coincidence rather than a frame structure.</td></tr>
+  <tr><td><code>the recording's time jumps ahead by &hellip;</code></td>
+      <td>The recording's time channel leapt forward by more than a million averaging windows (about
+          eleven days at the 1&nbsp;s window) between two packets. That is a corrupt time stamp, not a
+          pause in recording, and the statistics on either side of it would mean nothing, so the
+          stream was stopped; the curve is not plotted. The line gives the size of the jump and the
+          packet it happened at. Other streams of the file are not affected.</td></tr>
 </table>
 
 <h3>What to check</h3>

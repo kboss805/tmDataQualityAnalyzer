@@ -55,6 +55,12 @@ namespace PCMConstants {
     inline constexpr double k100NsPerSecond = 1.0e7;  ///< 100 ns units in one second.
     /// @}
 
+    /// The most output windows one jump of a recording's clock may close. A window is a row of the result, so a time
+    /// channel that leaps years ahead (a corrupt stamp) would otherwise ask for tens of millions of rows per stream and
+    /// run the machine out of memory; a stream whose clock leaps further than this is stopped with an error instead.
+    /// Eleven days at the default 1 s window, sixteen minutes at 1 ms: more than any recording's real pauses.
+    inline constexpr double kMaxWindowsPerTimeJump = 1.0e6;
+
     /// @name Channel type identifiers from TMATS records
     /// @{
     inline constexpr const char* kChannelTypeTime = "TIMEIN"; ///< TMATS type for time channels.

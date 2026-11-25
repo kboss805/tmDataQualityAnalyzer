@@ -135,9 +135,12 @@ private:
     /// Closes every output window whose end @p current_time_eval has passed, emitting
     /// one averaged sample per window (or an extrapolated missed-frame count for a
     /// genuine recording gap) and advancing the windowing clock in @p s.
-    void closeElapsedWindows(ScanState& s, double current_time_eval,
-                             const ProcessingParams& params,
-                             const std::vector<const ParameterInfo*>& enabled_params);
+    /// @return false, having closed none, when that would take more than
+    ///         PCMConstants::kMaxWindowsPerTimeJump windows (the clock leapt, or is not a number a clock can be): the run
+    ///         must stop. True otherwise, however many windows closed.
+    [[nodiscard]] bool closeElapsedWindows(ScanState& s, double current_time_eval,
+                                           const ProcessingParams& params,
+                                           const std::vector<const ParameterInfo*>& enabled_params);
 
     /// Feeds bits @p from up to (not including) @p to of @p data (MSB first) through the
     /// acquire/lock state machine, one at a time: shifts the sync register, tracks

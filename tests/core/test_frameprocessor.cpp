@@ -1257,6 +1257,85 @@ TEST_CASE("FrameProcessor: a recording gap extrapolates the missed frames from t
     checkSeries(user.accumulatedMissedFrames, {0, 0, 15, 30, 45, 60, 60, 60, 60}, "missed frames at the operator's rate");
 }
 
+TEST_CASE("FrameProcessor: a clock that leaps further than the limit stops the stream instead of filling the result")
+{
+    // A corrupt time stamp can put a packet years after the one before it, and every window between is a row of the
+    // result: at 1 s a year is 31 million rows per stream. The first packet (bits at 1000..1027 s, one second a bit)
+    // leaves the windowing clock at 1027 s with 1 s or 0.5 s windows; a second packet then arrives some time after that.
+    // The limit is on the WINDOWS the jump closes, not its seconds: exactly kMaxWindowsPerTimeJump of them is allowed,
+    // one more is not.
+    const double limit = PCMConstants::kMaxWindowsPerTimeJump;
+    const std::string first  = stream({1, 4});
+    const std::string second = frame(5) + frame(6);
+    constexpr double kClockAfterFirst = 1027.0;
+
+    const auto run = [&](StreamMode mode, double period, double jump, Capture& events, bool& ok) {
+        ProcessingParams p = timedParams(mode, false);
+        p.samplePeriodSec = period;
+        FrameSetup setup;
+        addWord0(setup);
+        return runPackets(p, &setup, {{first, 1000.0}, {second, kClockAfterFirst + jump}}, &events, &ok);
+    };
+
+    for (const double period : {1.0, 0.5})
+    {
+        for (const StreamMode mode : {StreamMode::FrameSyncLockStats, StreamMode::ReceiverChannelInfo})
+        {
+            INFO("window " << period << " s, mode " << (mode == StreamMode::FrameSyncLockStats ? "lock" : "receiver"));
+
+            // At the limit: processed as ever, every window of the leap a row (a recording gap).
+            Capture at;
+            bool at_ok = false;
+            const ProcessedStreamData allowed = run(mode, period, limit * period, at, at_ok);
+            // Whether the run then SUCCEEDS is the recording's business (at 0.5 s a gap window carries a fraction of a
+            // frame, so lock never restarts and there are no frames); that the limit did not stop it is this test's.
+            for (const std::string& e : at.errors)
+            {
+                CHECK(e.find("time jumps ahead") == std::string::npos);
+            }
+            static_cast<void>(at_ok);
+            REQUIRE_FALSE(allowed.timesSec.empty());
+            CHECK(allowed.timesSec.size() > static_cast<std::size_t>(limit));
+            CHECK(allowed.timesSec.front() == doctest::Approx(1000.0));
+
+            // One window over: stopped, with the one error, no success reported, and the rows before the jump kept.
+            Capture over;
+            bool over_ok = true;
+            const ProcessedStreamData stopped = run(mode, period, (limit + 1.0) * period, over, over_ok);
+            CHECK_FALSE(over_ok);
+            REQUIRE(over.errors.size() == 1);
+            CHECK(over.errors[0].find(period == 1.0 ? "windows of 1 s: the time channel looks corrupt, so this stream was stopped."
+                                                     : "windows of 0.5 s: the time channel looks corrupt, so this stream was stopped.")
+                  != std::string::npos);
+            CHECK(over.finished == std::vector<bool>{false});
+            CHECK(stopped.timesSec.size() < 100);
+            REQUIRE_FALSE(stopped.timesSec.empty());
+            CHECK(stopped.timesSec.back() < kClockAfterFirst);
+            if (period == 1.0)
+            {
+                CHECK(over.errors[0] ==
+                      "[CH 7 Rcvr Bus] the recording's time jumps ahead by 1000001 s (11.6 days) at packet 2, which is "
+                      "more than 1000000 windows of 1 s: the time channel looks corrupt, so this stream was stopped.");
+            }
+        }
+    }
+}
+
+TEST_CASE("FrameProcessor: a clock that is infinite stops the stream, which it once could not")
+{
+    // An infinite time never ends a window, so the loop that closes them ran until the memory did.
+    FrameSetup none;
+    ProcessingParams p = timedParams(StreamMode::FrameSyncLockStats, false);
+    Capture events;
+    bool ok = true;
+    const ProcessedStreamData r =
+        runPackets(p, &none, {{stream({1, 4}), 1000.0}, {frame(5), std::numeric_limits<double>::infinity()}}, &events, &ok);
+    CHECK_FALSE(ok);
+    REQUIRE(events.errors.size() == 1);
+    CHECK(events.errors[0].find("the recording's time jumps ahead by inf s") != std::string::npos);
+    CHECK(r.timesSec.size() < 10);
+}
+
 TEST_CASE("FrameProcessor: frames are extracted only after the minimum number of syncs")
 {
     // "1001001" holds two syncs three bits apart: the first starts collecting, and the second - off-phase, while not

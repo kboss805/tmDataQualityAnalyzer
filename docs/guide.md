@@ -961,7 +961,8 @@ that worktrees also need.
 - **What the code measures** (`.claude/CLAUDE.md`, Domain invariants; `docs/framesync_logic.md` §6): lock % is
   `valid_bits_in_window / total_bits_in_window × 100`, a **bit-span** quantity (the bits scanned while in lock over the
   bits scanned in the window; it cannot exceed 100, so nothing clamps it), not `time × bitrate`; off-phase syncs are rejected while
-  locked; missed frames are extrapolated across a gap only when a window has no bits at all.
+  locked; missed frames are extrapolated across a gap only when a window has no bits at all; a clock that leaps more than
+  `PCMConstants::kMaxWindowsPerTimeJump` windows ahead in one step stops the stream with an error instead of writing a row for each.
 
 ## Common Development Tasks
 

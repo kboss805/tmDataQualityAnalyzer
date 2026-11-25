@@ -1,0 +1,105 @@
+{
+  "suite": "native",
+  "args": [
+    "-tc=FrameProcessor*"
+  ],
+  "timeoutSeconds": 180,
+  "mutants": [
+    {
+      "id": "J1",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "/ s.sample_period > PCMConstants::kMaxWindowsPerTimeJump)",
+      "new": "/ s.sample_period >= PCMConstants::kMaxWindowsPerTimeJump)",
+      "expect": "caught",
+      "note": "exactly the limit is refused: the boundary is allowed, one window more is not"
+    },
+    {
+      "id": "J2",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "(current_time_eval - s.next_time_sample) / s.sample_period >",
+      "new": "(current_time_eval - s.next_time_sample) >",
+      "expect": "caught",
+      "note": "the limit counted in seconds, not windows: only a window other than one second tells them apart"
+    },
+    {
+      "id": "J3",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "        return false;\n    }\n\n    while (s.next_time_sample < current_time_eval)",
+      "new": "        return true;\n    }\n\n    while (s.next_time_sample < current_time_eval)",
+      "expect": "caught",
+      "note": "the guard says it closed fine and closes nothing: the stream goes on with the clock behind"
+    },
+    {
+      "id": "J4",
+      "file": "src/core/include/constants.h",
+      "old": "kMaxWindowsPerTimeJump = 1.0e6;",
+      "new": "kMaxWindowsPerTimeJump = 1.0e5;",
+      "expect": "caught",
+      "note": "the limit a tenth of what the error message says"
+    },
+    {
+      "id": "J5",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "m_report.error(streamTag(params)\n                               + std::format(\"the recording's time jumps ahead",
+      "new": "m_report.log(streamTag(params)\n                               + std::format(\"the recording's time jumps ahead",
+      "expect": "caught",
+      "note": "the jump is logged, not reported as an error"
+    },
+    {
+      "id": "J6",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "                m_report.finished(false);\n                return false;\n            }\n\n            // A run ends at the next abort check",
+      "new": "                m_report.finished(true);\n                return false;\n            }\n\n            // A run ends at the next abort check",
+      "expect": "caught",
+      "note": "a stopped stream reported as finished successfully"
+    },
+    {
+      "id": "J7",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "                m_report.finished(false);\n                return false;\n            }\n\n            // A run ends at the next abort check",
+      "new": "                m_report.finished(false);\n                return true;\n            }\n\n            // A run ends at the next abort check",
+      "expect": "caught",
+      "note": "a stopped stream says the run succeeded"
+    },
+    {
+      "id": "J8",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "                m_report.finished(false);\n                return false;\n            }\n\n            // A run ends at the next abort check",
+      "new": "                m_report.finished(false);\n            }\n\n            // A run ends at the next abort check",
+      "expect": "caught",
+      "note": "the stream is reported stopped and scanned on regardless"
+    },
+    {
+      "id": "J9",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "const double leap = bit_time - state.next_time_sample;",
+      "new": "const double leap = bit_time - state.current_time_sample;",
+      "expect": "caught",
+      "note": "the size of the leap measured from the window before the clock"
+    },
+    {
+      "id": "J10",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "leap / TimeConstants::kSecondsPerDay",
+      "new": "leap / 3600.0",
+      "expect": "caught",
+      "note": "the leap in days divided by hours"
+    },
+    {
+      "id": "J11",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "total_packets,\n",
+      "new": "total_packets + 1,\n",
+      "expect": "caught",
+      "note": "the packet that leapt named one late"
+    },
+    {
+      "id": "J12",
+      "file": "src/core/src/frameprocessor.cpp",
+      "old": "    return true;\n}\n\nvoid FrameProcessor::scanBits",
+      "new": "    return false;\n}\n\nvoid FrameProcessor::scanBits",
+      "expect": "caught",
+      "note": "every run of windows said to have been refused"
+    }
+  ]
+}

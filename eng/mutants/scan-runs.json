@@ -45,8 +45,8 @@
     {
       "id": "S6",
       "file": "src/core/src/frameprocessor.cpp",
-      "old": "closeElapsedWindows(state, time_at(bit_pos), params, enabled_params);",
-      "new": "closeElapsedWindows(state, time_at(bit_pos) - 1e-3, params, enabled_params);",
+      "old": "const double bit_time = time_at(bit_pos);",
+      "new": "const double bit_time = time_at(bit_pos) - 1e-3;",
       "expect": "caught",
       "note": "the first bit of a run is timed a little early, so a window it should close stays open"
     },
