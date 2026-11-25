@@ -1,0 +1,212 @@
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia.Headless.XUnit;
+using TmDq.App.Models.Export;
+using TmDq.App.Models.Processing;
+using TmDq.App.Services;
+using TmDq.App.ViewModels;
+using TmDq.Core;
+using TmDq.Core.Tests;
+using Xunit;
+
+namespace TmDq.App.Tests;
+
+/// <summary>
+/// Processing a recording leaves what was imported from CSV files on the plot, so that the two can be compared: an antenna's
+/// log (US10.0) or this application's own export is kept, the recordings processed before are replaced as they always were,
+/// and the new run is numbered so that it never shares a source id with an import.
+/// </summary>
+[Collection(NativeCoreCollection.Name)]
+public sealed class ImportedDataKeptTests
+{
+    public ImportedDataKeptTests() => NativeCore.EnsureLoaded();
+
+    private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
+
+    private static string AntennaLog => Repo.Recording("av_snr_log.csv");
+
+    private static string PrnName => MainWindowViewModel.BaseName(Path.GetFileName(Prn));
+
+    private sealed class FakeKinds : ICsvKindDialog
+    {
+        public readonly Queue<CsvKind?> Answers = new();
+
+        public Task<CsvKind?> ChooseAsync(string fileName) => Task.FromResult(Answers.Count > 0 ? Answers.Dequeue() : null);
+    }
+
+    private static MainWindowViewModel Window(params CsvKind[] answers)
+    {
+        var kinds = new FakeKinds();
+        foreach (CsvKind answer in answers) kinds.Answers.Enqueue(answer);
+        return new MainWindowViewModel(new MainWindowServices { CsvKinds = kinds });
+    }
+
+    [AvaloniaFact]
+    public async Task AnAntennasLogImportedBeforeARecordingIsProcessedStaysOnThePlot()
+    {
+        MainWindowViewModel vm = Window(CsvKind.PhasedArrayAntenna);
+        await vm.ImportCsvAsync(AntennaLog);
+        Assert.Equal(90, vm.Plot.Series.Count);
+
+        await vm.LoadAsync(Prn);
+
+        Assert.Equal(90, vm.Plot.Series.Count(s => s.IsPhasedArray));   // the log is all still there
+        Assert.Contains(vm.Plot.Series, s => s.Metric == MetricType.FrameSyncLock);   // and so is the run
+        Assert.Equal(PrnName, vm.Plot.Title);                          // the title is the recording's, as it is for a run
+        Assert.Equal(new[] { "av_snr_log", PrnName }, vm.Plot.SourceList().Select(x => x.Label));
+        Assert.Single(vm.Sources);                                      // Save Template is offered the recording, not the log
+        int runId = vm.Sources[0].SourceId;
+        Assert.DoesNotContain(vm.Plot.Series.Where(s => s.IsPhasedArray), s => s.SourceId == runId);   // the run has an id of its own
+    }
+
+    [AvaloniaFact]
+    public async Task AnotherRecordingReplacesTheLastOneAndTheImportStillStays()
+    {
+        MainWindowViewModel vm = Window(CsvKind.PhasedArrayAntenna);
+        await vm.ImportCsvAsync(AntennaLog);
+        await vm.LoadAsync(Prn);
+        int once = vm.Plot.Series.Count;
+
+        await vm.LoadAsync(Prn);
+
+        Assert.Equal(once, vm.Plot.Series.Count);                       // the recording again, not two of it
+        Assert.Equal(90, vm.Plot.Series.Count(s => s.IsPhasedArray));
+        Assert.Single(vm.Sources);
+        Assert.Equal(2, vm.Plot.SourceList().Count);
+    }
+
+    [AvaloniaFact]
+    public async Task AnExportImportedBeforeARecordingIsProcessedKeepsItsSeriesAndNeverSharesTheRunsSourceId()
+    {
+        string csv = TempFiles.NewPath("kept-export", ".csv");
+        try
+        {
+            // An export of the same recording, to import as a data set of its own.
+            var maker = new MainWindowViewModel();
+            await maker.LoadAsync(Prn);
+            Assert.True(maker.Plot.ExportCsv(csv));
+            int exported = maker.Plot.Series.Count;
+
+            MainWindowViewModel vm = Window(CsvKind.TelemetryReceivers);
+            await vm.ImportCsvAsync(csv);
+            int[] importedIds = vm.Plot.Series.Select(s => s.SourceId).Distinct().ToArray();
+            Assert.Equal(exported, vm.Plot.Series.Count);
+
+            await vm.LoadAsync(Prn);
+
+            Assert.Equal(2 * exported, vm.Plot.Series.Count);          // the import's and the run's, side by side
+            int runId = vm.Sources[0].SourceId;
+            Assert.DoesNotContain(runId, importedIds);
+            Assert.Equal(exported, vm.Plot.Series.Count(s => s.SourceId == runId));
+            Assert.Equal(importedIds.Length + 1, vm.Plot.SourceList().Count);
+        }
+        finally
+        {
+            TempFiles.Delete(csv);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task AnImportedFileIsNamedForItInPlotFileAndRemoveFile()
+    {
+        string csv = TempFiles.NewPath("named-export", ".csv");
+        try
+        {
+            var maker = new MainWindowViewModel();
+            await maker.LoadAsync(Prn);
+            Assert.True(maker.Plot.ExportCsv(csv));
+
+            MainWindowViewModel vm = Window(CsvKind.TelemetryReceivers);
+            await vm.ImportCsvAsync(csv);
+
+            Assert.Equal(MainWindowViewModel.BaseName(Path.GetFileName(csv)), Assert.Single(vm.Plot.SourceList()).Label);
+        }
+        finally
+        {
+            TempFiles.Delete(csv);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task AnImportThatReplacesWhatIsShownLeavesNoNameOfTheRecordingBehind()
+    {
+        string csv = TempFiles.NewPath("no-stale-name", ".csv");
+        try
+        {
+            var vm = new MainWindowViewModel();
+            await vm.LoadAsync(Prn);
+            Assert.True(vm.Plot.ExportCsv(csv));
+            Assert.Equal(PrnName, Assert.Single(vm.Plot.SourceList()).Label);
+
+            Assert.True(vm.Plot.LoadCsv(csv));   // straight into the plot, which replaces what it held, with no name given
+
+            Assert.Equal("Source 0", Assert.Single(vm.Plot.SourceList()).Label);
+        }
+        finally
+        {
+            TempFiles.Delete(csv);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task ARecordingThatFailsToOpenRemovesTheLastRunButKeepsTheImport()
+    {
+        string junk = TempFiles.NewPath("junk", ".ch10");
+        File.WriteAllText(junk, "not a recording");
+        try
+        {
+            MainWindowViewModel vm = Window(CsvKind.PhasedArrayAntenna);
+            await vm.ImportCsvAsync(AntennaLog);
+            await vm.LoadAsync(Prn);
+            Assert.Single(vm.Sources);
+
+            await vm.LoadAsync(junk);
+
+            Assert.Empty(vm.Sources);
+            Assert.Equal(90, vm.Plot.Series.Count);                     // only the log is left
+            Assert.All(vm.Plot.Series, s => Assert.True(s.IsPhasedArray));
+        }
+        finally
+        {
+            TempFiles.Delete(junk);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task WithNothingImportedANewRecordingStillStartsThePlotAgain()
+    {
+        var vm = new MainWindowViewModel();
+        await vm.LoadAsync(Prn);
+        vm.Plot.Title = "my title";
+
+        await vm.LoadAsync(Prn);
+
+        Assert.Equal(PrnName, vm.Plot.Title);
+        Assert.Single(vm.Sources);
+        Assert.Single(vm.Plot.SourceList());
+        Assert.Equal(0, vm.Sources[0].SourceId);                        // numbered from 0 as before
+    }
+
+    [AvaloniaFact]
+    public async Task AnImportedCsvStillReplacesWhatTheRunShowed()
+    {
+        string csv = TempFiles.NewPath("replaces", ".csv");
+        try
+        {
+            var vm = Window(CsvKind.TelemetryReceivers);
+            await vm.LoadAsync(Prn);
+            Assert.True(vm.Plot.ExportCsv(csv));
+
+            await vm.ImportCsvAsync(csv);
+
+            Assert.Empty(vm.Sources);                                   // an import of this application's own export replaces the run
+            Assert.DoesNotContain(vm.Plot.Series, s => s.IsPhasedArray);
+        }
+        finally
+        {
+            TempFiles.Delete(csv);
+        }
+    }
+}

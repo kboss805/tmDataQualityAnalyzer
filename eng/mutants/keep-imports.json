@@ -1,0 +1,84 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.ImportedDataKeptTests",
+    "-class",
+    "TmDq.App.Tests.PhasedArrayImportTests",
+    "-stopOnFail"
+  ],
+  "mutants": [
+    {
+      "id": "K1",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "            ClearProcessedRun();\n            // The run is numbered",
+      "new": "            ClearRun();\n            // The run is numbered",
+      "expect": "caught",
+      "note": "processing a recording clears the plot, and with it what was imported"
+    },
+    {
+      "id": "K2",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "choice.Request with { SourceId = Plot.NextSourceId };",
+      "new": "choice.Request with { SourceId = choice.Request.SourceId };",
+      "expect": "caught",
+      "note": "the run keeps source id 0 and shares it with an import"
+    },
+    {
+      "id": "K3",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        catch (RecordingException e)\n        {\n            ClearProcessedRun();",
+      "new": "        catch (RecordingException e)\n        {\n            ClearRun();",
+      "expect": "caught",
+      "note": "a recording that fails to open takes the import with it"
+    },
+    {
+      "id": "K4",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "if (Plot.SourceList().All(s => processed.Contains(s.Id)))",
+      "new": "if (Plot.SourceList().Any(s => processed.Contains(s.Id)))",
+      "expect": "caught",
+      "note": "the plot is cleared whenever it holds a processed recording, imports or not"
+    },
+    {
+      "id": "K5",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        foreach (int id in processed) Plot.RemoveSource(id);\n",
+      "new": "        _ = processed.Count;\n",
+      "expect": "caught",
+      "note": "the recordings processed before stay beside the new one"
+    },
+    {
+      "id": "K6",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "_series.Count == 0 ? 0 : _series.Max(s => s.SourceId) + 1;\n\n",
+      "new": "_series.Count == 0 ? 0 : _series.Max(s => s.SourceId) + 0;\n\n",
+      "expect": "caught",
+      "note": "the run takes the greatest id the plot holds, which an import has"
+    },
+    {
+      "id": "K7",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "SetSourceLabel(only, sourceLabel);",
+      "new": "SetSourceLabel(only + 1, sourceLabel);",
+      "expect": "caught",
+      "note": "the imported file's name goes to a source that is not its own"
+    },
+    {
+      "id": "K8",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "            _sourceLabels.Clear();   // the new file is the only recording",
+      "new": "            _ = _sourceLabels.Count;   // the new file is the only recording",
+      "expect": "caught",
+      "note": "an import that replaces the plot keeps the earlier recording's name for its source"
+    },
+    {
+      "id": "K9",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "Plot.RemoveSource(id);\n        SetSources(Array.Empty<ProcessedSource>());",
+      "new": "Plot.RemoveSource(id);",
+      "expect": "caught",
+      "note": "Save Template is still offered the recordings that were removed from the plot"
+    }
+  ]
+}

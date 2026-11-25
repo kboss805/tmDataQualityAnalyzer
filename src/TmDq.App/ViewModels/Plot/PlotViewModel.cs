@@ -298,6 +298,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         else
         {
             _series.Clear();
+            _sourceLabels.Clear();   // the new file is the only recording; the earlier names went with it
             _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);
         }
         _window.ClearHistory();
@@ -305,6 +306,8 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         List<PlotSeries> imported = PlotCsv.Series(data, _lockAxisView, ref _nextId, kind, sourceId, shift);
         ShowOnlyTheCombinedChannels(imported);   // as a run's are: the rest are a click away in Customize View
         _series.AddRange(imported);
+        // A file of one recording is named for it in Plot File and Remove File; one that holds several (a batch's export) keeps "Source N".
+        if (!added && sourceLabel is not null && imported.Select(s => s.SourceId).Distinct().ToList() is [int only]) SetSourceLabel(only, sourceLabel);
         _window.ShowSpan(added ? SpanOf(_series) : data.XMax);
         PlotColors.Assign(_series);
         ComputeSnrRange();
@@ -361,6 +364,10 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         }
         return list;
     }
+
+    /// <summary>The id a recording added now would take: one past the greatest the plot holds, or 0 for an empty plot. A run is
+    /// numbered with it, so that it never shares an id with data already shown (an imported CSV).</summary>
+    public int NextSourceId => _series.Count == 0 ? 0 : _series.Max(s => s.SourceId) + 1;
 
     /// <summary>Names a recording in the Plot File selector.</summary>
     public void SetSourceLabel(int sourceId, string label) => _sourceLabels[sourceId] = label;
