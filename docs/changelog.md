@@ -18,7 +18,7 @@ Reported by the user: in Customize View, with some receivers partly checked, Sel
 
 **What changed:** `ReceiverGroup.SetAll(bool)` sets every channel to the value whatever they were and says the group's box changed; Select All and Select None use it. The box keeps v2.x's click rule, which a test still holds.
 
-How it was checked: a new case in `CustomizeViewStateTests` leaves receivers partly checked, unchecked and checked, presses Select None and then Select All, and checks the states, the notification, and that a click on a partly checked box still checks it; `eng/mutants/select-none-receivers.json` (5 mutants, all caught: Select None through the box again, the box not told, the value inverted, the first channel skipped, the click rule lost). App baseline 855 -> 856.
+How it was checked: a new case in `CustomizeViewStateTests` leaves receivers partly checked, unchecked and checked, presses Select None and then Select All, and checks the states, the notification, and that a click on a partly checked box still checks it; `eng/mutants/select-none-receivers.json` (5 mutants, all caught: Select None through the box again, the box not told, the value inverted, the first channel skipped, the click rule lost). App baseline 858 -> 859.
 
 #### The controls a person operates now have names a screen reader can say
 
