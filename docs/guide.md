@@ -548,6 +548,13 @@ profile, so a batch processes with the linear calibration.
   parsed values, and setting one types it). The plot's number prompt (`NumberPromptWindow`, Set Y-Axis Minimum and
   Maximum) is a text box too: text that is not a number (a whole one when the prompt has no decimals) is said so and
   holds OK, and a number is kept inside the prompt's range and rounded to its decimals (`PlotCommands.SpinValue`) as before.
+  Extract Calibration also lets the operator choose the channels of the calibration recording, which is often not the
+  recording the stream was set up on: `LoadCalibrationAsync` first lists its PCM and time channels (`ReadChannels`, the
+  core's `RecordingChannels.Read`, off the UI thread; a file that will not open is a cross and clears the lists), selects the
+  stream's own channels where the recording has them, else its first PCM channel and its default time channel (`ChannelNote`
+  says so), and `CalPcmIndex`/`CalTimeIndex` extract again; `ToRequest` carries `PcmChannelId`/`TimeChannelId`, the selected
+  ones. The choice is the dialog's alone (session-only, like the calibration profiles): it is not kept in the stream's
+  setup or a template.
 - **The run** (`Models/Processing`: `StreamsRun`, `NativeCore`; `ViewModels/Dialogs/ProcessingViewModel` and its window;
   `Models/Logging/SessionLog` and `Views/Controls/LogView`): the core's run on its own threads, the modal progress dialog whose
   Cancel stops every stream, and the log. A run's outcome (`RunOutcome`) holds the core's own result of each stream that
@@ -1181,7 +1188,7 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   the summary, then each thread's own lines in order, the reader's and the streams' interleaving as they come; a report the observer could not handle, said and not dropped), `SeveralStreamsTests`.
 - **Configure Streams:** `StreamRulesTests` and `StreamFilesTests` (the rules and files without a window),
   `StreamSetupViewModelTests`, `ConfigureStreamsTests`, `StreamWindowsTests`; `CalibrationDialogTests` (Extract
-  Calibration, Apply Calibration and the clips' text entry); `NoSpinnersTests` (no up/down control in any
+  Calibration, Apply Calibration and the clips' text entry), `CalibrationChannelTests` (the calibration recording's own PCM and time channels: listed, started on the stream's, re-extracted on a change); `NoSpinnersTests` (no up/down control in any
   source file or window, and `NumberText`).
 - **The plot:** `PlotTests` (series, axes, view mode, the time window and zoom, the readout, the chart's drawing and
   gestures), `PlotDraftTests` (the draft a gesture - the wheel, a drag, a held pan or zoom key - paints on a heavy plot

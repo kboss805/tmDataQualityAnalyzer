@@ -46,6 +46,8 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
     private decimal _clipStart, _clipEnd;
     private string _clipStartText = NumberText.FormatDecimal(0m), _clipEndText = NumberText.FormatDecimal(0m);
     private string? _clipStartProblem, _clipEndProblem;
+    private IReadOnlyList<ChannelInfo> _calPcm = Array.Empty<ChannelInfo>(), _calTime = Array.Empty<ChannelInfo>();
+    private int _calPcmIndex = -1, _calTimeIndex = -1;
 
     /// <param name="initialStepPath">The step file the stream last used; it is loaded if it exists, else the shipped
     /// default.</param>
@@ -80,6 +82,56 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
     /// <summary>What the calibration run is given besides the files and clips. No view reads it: it is kept public as the
     /// tests' only window onto the request the stream's settings make, as audit D8 decided.</summary>
     public CalibrationBase Base => _base;
+
+    /// <summary>What lists the calibration recording's channels once it is chosen: the core, unless a test stands in.</summary>
+    public Func<string, RecordingChannels> ReadChannels { get; set; } = RecordingChannels.Read;
+
+    // The calibration recording is often not the recording the stream was set up on, and its step cals can be on another
+    // channel of it. Once it is chosen the dialog lists its PCM and time channels, starts on the stream's own (or, where
+    // the recording has none by that id, the first PCM channel and the recording's default time channel) and extracts
+    // again when either is changed.
+
+    /// <summary>"&lt;id&gt; - &lt;name&gt;" for each PCM channel of the calibration recording; empty until one is chosen.</summary>
+    public IReadOnlyList<string> CalPcmItems { get; private set; } = Array.Empty<string>();
+
+    /// <summary>The same for its time channels; empty when it has none.</summary>
+    public IReadOnlyList<string> CalTimeItems { get; private set; } = Array.Empty<string>();
+
+    /// <summary>True once the calibration recording's channels are listed, which is when the dialog shows them.</summary>
+    public bool HasCalChannels => _calPcm.Count > 0;
+
+    /// <summary>Says when the stream's PCM channel is not in the calibration recording and another was selected.</summary>
+    public string ChannelNote { get; private set; } = string.Empty;
+
+    public bool HasChannelNote => ChannelNote.Length > 0;
+
+    /// <summary>The selected PCM channel; setting it extracts again.</summary>
+    public int CalPcmIndex
+    {
+        get => _calPcmIndex;
+        set
+        {
+            if (value < 0 || value >= _calPcm.Count || !SetProperty(ref _calPcmIndex, value)) return;
+            _ = ExtractAsync();
+        }
+    }
+
+    /// <summary>The selected time channel; setting it extracts again.</summary>
+    public int CalTimeIndex
+    {
+        get => _calTimeIndex;
+        set
+        {
+            if (value < 0 || value >= _calTime.Count || !SetProperty(ref _calTimeIndex, value)) return;
+            _ = ExtractAsync();
+        }
+    }
+
+    /// <summary>The PCM channel the extraction reads: the selected one, else the stream's own.</summary>
+    public int PcmChannelId => _calPcmIndex >= 0 && _calPcmIndex < _calPcm.Count ? _calPcm[_calPcmIndex].Id : _base.PcmChannelId;
+
+    /// <summary>The time channel the extraction reads: the selected one, else the one chosen in Configure Streams.</summary>
+    public int TimeChannelId => _calTimeIndex >= 0 && _calTimeIndex < _calTime.Count ? _calTime[_calTimeIndex].Id : _base.TimeChannelId;
 
     public string StepPath => _stepPath;
 
@@ -199,26 +251,69 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
 
     /// <summary>Takes <paramref name="path"/> as the calibration recording and extracts (what Browse does once a file is
     /// chosen). Refused, with the reason in its status, while the stream has no frame sync pattern.</summary>
-    public Task LoadCalibrationAsync(string path)
+    public async Task LoadCalibrationAsync(string path)
     {
         if (_base.SyncPattern.Trim().Length == 0)
         {
             SetCal(CalibrationStatusKind.Fail, "Set a frame sync pattern before loading the calibration file.");
-            return Task.CompletedTask;
+            return;
         }
         CalFolder = Path.GetDirectoryName(path);
         _calPath = path;
         OnPropertyChanged(nameof(CalPath));
         OnPropertyChanged(nameof(CalName));
-        return ExtractAsync();
+
+        // The recording's channels first (its TMATS only, off the UI thread): the extraction below reads the ones chosen.
+        RecordingChannels channels;
+        try
+        {
+            channels = await Task.Run(() => ReadChannels(path));
+        }
+        catch (RecordingException e)
+        {
+            SetChannels(null);
+            SetCalibrated(false, Array.Empty<CalibrationProfile>(), string.Empty);
+            SetCal(CalibrationStatusKind.Fail, e.Message);
+            return;
+        }
+        SetChannels(channels);
+        await ExtractAsync();
     }
+
+    /// <summary>Lists <paramref name="channels"/> and selects what the extraction starts on: the stream's own channels
+    /// where the recording has them, else its first PCM channel and its default time channel. Null clears the lists.</summary>
+    private void SetChannels(RecordingChannels? channels)
+    {
+        _calPcm = channels?.Pcm ?? Array.Empty<ChannelInfo>();
+        _calTime = channels?.Time ?? Array.Empty<ChannelInfo>();
+        CalPcmItems = _calPcm.Select(ChannelText).ToList();
+        CalTimeItems = _calTime.Select(ChannelText).ToList();
+        int pcm = _calPcm.ToList().FindIndex(c => c.Id == _base.PcmChannelId);
+        int time = _calTime.ToList().FindIndex(c => c.Id == _base.TimeChannelId);
+        if (time < 0 && channels is not null) time = _calTime.ToList().FindIndex(c => c.Id == channels.DefaultTimeChannel);
+        _calPcmIndex = _calPcm.Count == 0 ? -1 : Math.Max(0, pcm);
+        _calTimeIndex = _calTime.Count == 0 ? -1 : Math.Max(0, time);
+        ChannelNote = _calPcm.Count > 0 && pcm < 0
+            ? string.Create(CultureInfo.InvariantCulture, $"The recording has no channel {_base.PcmChannelId}: channel {_calPcm[_calPcmIndex].Id} is selected.")
+            : string.Empty;
+        OnPropertyChanged(nameof(CalPcmItems));
+        OnPropertyChanged(nameof(CalTimeItems));
+        OnPropertyChanged(nameof(CalPcmIndex));
+        OnPropertyChanged(nameof(CalTimeIndex));
+        OnPropertyChanged(nameof(HasCalChannels));
+        OnPropertyChanged(nameof(ChannelNote));
+        OnPropertyChanged(nameof(HasChannelNote));
+    }
+
+    private static string ChannelText(ChannelInfo channel) =>
+        channel.Id.ToString(CultureInfo.InvariantCulture) + " - " + channel.Name;
 
     /// <summary>What the extraction is asked for: the dialog's base, its step file and its clips.</summary>
     public CalibrationRequest ToRequest() => new()
     {
         FileName = _calPath,
-        TimeChannelId = _base.TimeChannelId,
-        PcmChannelId = _base.PcmChannelId,
+        TimeChannelId = TimeChannelId,
+        PcmChannelId = PcmChannelId,
         SyncPattern = _base.SyncPattern,
         SyncMask = _base.SyncMask.Length == 0 ? null : _base.SyncMask,
         BitsInMinorFrame = _base.BitsInMinorFrame,

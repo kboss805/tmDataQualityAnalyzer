@@ -277,7 +277,8 @@ public sealed class CalibrationDialogTests : IDisposable
         var progress = new FakeProgress();
         var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = progress };
         await vm.LoadCalibrationAsync(notRecording);
-        Assert.Equal(("✗ Error opening data file.", CalibrationStatusKind.Fail), (vm.CalStatus, vm.CalKind));
+        Assert.Equal(CalibrationStatusKind.Fail, vm.CalKind);
+        Assert.StartsWith("✗ notes.ch10 could not be opened: ", vm.CalStatus, StringComparison.Ordinal);   // the file is named, then the core's reason
         Assert.False(vm.CanAccept);
         Assert.Empty(progress.Shown);   // over before it started: no progress dialog flashes up
 
@@ -423,7 +424,9 @@ public sealed class CalibrationDialogTests : IDisposable
     public async Task TheExtractionIsAskedForWithTheBaseGivenAndTheTimeChannelIsUsed()
     {
         var calibrationBase = new CalibrationBase(7, 26, "FE6B2840", "FFFF0000", 800, true, true, 0.8, false, Shipped("../receiver_params/RASA.toml"), 12, 3);
-        var vm = new ExtractCalibrationViewModel(calibrationBase, Repo.Root, null);
+        // The listing stands in for the core: the stream's time channel 7 is one the calibration recording has, so it is the one read.
+        var recording = new RecordingChannels(new[] { new ChannelInfo(7, "TIME", 0) }, new[] { new ChannelInfo(26, "PCM", 800000) }, 7);
+        var vm = new ExtractCalibrationViewModel(calibrationBase, Repo.Root, null) { ReadChannels = _ => recording };
         await vm.LoadCalibrationAsync(StepCal);
         CalibrationRequest r = vm.ToRequest();
         Assert.Equal((StepCal, 7, 26, "FE6B2840", "FFFF0000", 800), (r.FileName, r.TimeChannelId, r.PcmChannelId, r.SyncPattern, r.SyncMask, r.BitsInMinorFrame));
