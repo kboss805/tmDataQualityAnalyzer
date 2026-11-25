@@ -31,6 +31,15 @@ struct Cell
 /// The slowest sample period the export snaps a column to; a column slower than this is written to the millisecond.
 constexpr std::int64_t kLongestPeriodMs = 100'000;
 
+/// How far from exactly halfway between two slots, as a share of a period, a time still counts as halfway, and goes the
+/// way halfway goes (up, away from zero). A column's times are made by adding its period over and over, so a time that is
+/// exactly halfway in the recording is halfway only to within the noise of those sums (about 1e-8 of a millisecond a sample,
+/// more over a long run): without this, such a column's samples fell to either side of the halfway point by chance, two
+/// to one slot and none to the next, and the second of the two won. A time less than this from halfway is rounded as
+/// halfway is; the width is far above the noise and far below any difference between two real times (a millisecond is
+/// 0.01 of a 100 ms period).
+constexpr double kTieTolerance = 1e-4;
+
 /// A column's sample period in whole milliseconds: the median gap between its successive distinct times, snapped to
 /// the nearest of 1, 2, 5, 10, 20, 50 ... ms (nearest on a log scale, so 0.96 s and 1.04 s are both 1 s), at least
 /// 1 ms and at most `kLongestPeriodMs`. A column with no steady rate to read gets 1 ms, the grid that moves a time the
@@ -107,7 +116,8 @@ std::int64_t onGrid(double timeMs, std::int64_t periodMs)
 {
     const double periods = timeMs / static_cast<double>(periodMs);
     // NOLINTNEXTLINE(bugprone-incorrect-roundings): half away from zero, as v2.14.2 wrote it
-    const std::int64_t whole = periods >= 0.0 ? static_cast<std::int64_t>(periods + 0.5) : static_cast<std::int64_t>(periods - 0.5);
+    const std::int64_t whole = periods >= 0.0 ? static_cast<std::int64_t>(periods + 0.5 + kTieTolerance)
+                                              : static_cast<std::int64_t>(periods - 0.5 - kTieTolerance);
     return whole * periodMs;
 }
 

@@ -986,7 +986,7 @@ std::string referenceExport(const std::vector<CsvColumn>& columns, const CsvTime
         for (std::size_t j = 0; j < n; ++j)
         {
             const double slots = (base.baseTimeOffset + c.xValues[j]) * 1000.0 / period;
-            const double whole = slots >= 0.0 ? std::floor(slots + 0.5) : -std::floor(-slots + 0.5);
+            const double whole = slots >= 0.0 ? std::floor(slots + 0.5 + 1e-4) : -std::floor(-slots + 0.5 + 1e-4);   // 1e-4: the tie tolerance
             rows[static_cast<std::int64_t>(whole * period)][i] = c.yValues[j];
         }
     }
@@ -1050,7 +1050,7 @@ TEST_CASE("csvseries: the core writes every generated series as the plain refere
     CHECK(multi_source == 207);
     CHECK(with_nonfinite == 123);
     CHECK(with_empty_cells == 243);
-    CHECK(big == 193);
+    CHECK(big == 192);   // 193 before the tie tolerance: one case had a time near halfway, whose two rows now share one
     CHECK(coarser_grid == 165);   // cases with a column the grid moved (the rest stay to the millisecond)
 }
 
@@ -1326,6 +1326,62 @@ TEST_CASE("csvseries: channels whose windows end a few milliseconds apart share 
           "004:07:08:10.000,1.000000,0.000000,2.000000,0.000000,3.000000,0.000000\\r\\n"
           "004:07:08:11.000,4.000000,0.000000,5.000000,0.000000,6.000000,1.000000\\r\\n"
           "004:07:08:12.000,7.000000,0.000000,8.000000,1.000000,9.000000,2.000000\\r\\n");
+}
+
+TEST_CASE("csvseries: a column whose samples sit exactly half a period off the grid loses none")
+{
+    // A recording that starts half a period past a grid line (a 100 ms column whose windows end at .050, .150, ...) has times that
+    // are halfway between two slots, made by adding the period over and over, so each is halfway only to within the noise of
+    // the sums. Rounded on their own they fell to either side of halfway by chance: two samples in one slot, the second winning,
+    // and none in the next. Seven rates, 40 starts each, 600 samples: every sample has a row, and the rows are in order.
+    std::uint64_t seed = 12345;
+    const auto next = [&seed] {
+        seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
+        return static_cast<double>(seed >> 11) / 9007199254740992.0;
+    };
+    for (const double period : { 1.0, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01 })
+    {
+        INFO("period " << period);
+        for (int trial = 0; trial < 40; ++trial)
+        {
+            const double start = std::floor(next() * 80000.0) + 0.5 * period;   // whole seconds into the day, then half a period
+            std::vector<double> times;
+            std::vector<double> values;
+            double x = start;
+            for (int k = 0; k < 600; ++k)
+            {
+                times.push_back(x);
+                values.push_back(k);
+                x += period;
+            }
+            TempDir dir;
+            const Export e = exportOf(dir, { lockStream("A", 1, times, values, {}) }, -1);
+            REQUIRE(e.wrote);
+            const auto rows = static_cast<long>(std::count(e.bytes.begin(), e.bytes.end(), static_cast<char>(10))) - 1;
+            CHECK(rows == 600);
+        }
+    }
+}
+
+TEST_CASE("csvseries: a time a little off halfway rounds to the nearer slot, and only one at halfway goes up")
+{
+    // The tie tolerance (1e-4 of a period) must not widen into rounding that is wrong: on a 100 ms grid 49.9 ms is nearer the
+    // slot before and 50.1 ms the one after, and exactly 50 ms goes up, as halfway always did.
+    TempDir dir;
+    const auto rows = [&](double offset) {
+        return escaped(exportOf(dir, { lockStream("A", 1, { kBase + offset, kBase + offset + 0.1, kBase + offset + 0.2 }, { 1, 2, 3 }, {}) }, -1).bytes);
+    };
+    CHECK(rows(0.0499) ==
+          "Time (DOY:HH:MM:SS.mmm),A Lock (%)\\r\\n"
+          "004:07:08:09.000,1.000000\\r\\n"
+          "004:07:08:09.100,2.000000\\r\\n"
+          "004:07:08:09.200,3.000000\\r\\n");
+    CHECK(rows(0.0501) ==
+          "Time (DOY:HH:MM:SS.mmm),A Lock (%)\\r\\n"
+          "004:07:08:09.100,1.000000\\r\\n"
+          "004:07:08:09.200,2.000000\\r\\n"
+          "004:07:08:09.300,3.000000\\r\\n");
+    CHECK(rows(0.05) == rows(0.0501));
 }
 
 TEST_CASE("csvseries: a 100 ms column and a 10 ms column are written on tenths and on hundredths of a second")
