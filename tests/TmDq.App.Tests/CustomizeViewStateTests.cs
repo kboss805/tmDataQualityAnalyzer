@@ -84,6 +84,40 @@ public sealed class CustomizeViewStateTests
     }
 
     [Fact]
+    public void SelectNoneClearsPartlyCheckedReceiversInOnePressAndSelectAllChecksThem()
+    {
+        // Some receivers partly checked, one wholly, one not at all: the states a person leaves them in. Select None used the
+        // receiver's own box, whose click on a partly checked one CHECKS it, so those came out fully checked and it took a
+        // second press to clear them.
+        var c = new CustomizeViewModel(Mixed(), new FakePrompts());
+        SnrStreamGroup stream = c.SnrStreams[0];
+        ReceiverGroup[] receivers = stream.Receivers.ToArray();
+        Assert.True(receivers.Length >= 3);
+        receivers[0].Channels[1].IsChecked = false;          // partly
+        receivers[1].SetAll(false);                          // none
+        receivers[2].SetAll(true);                           // all
+        Assert.Equal(new bool?[] { null, false, true }, receivers.Take(3).Select(r => r.IsChecked));
+
+        // Each receiver says its box changed, or the box in the window would keep showing the dash.
+        var said = new List<string?>();
+        receivers[0].PropertyChanged += (_, e) => said.Add(e.PropertyName);
+        c.SelectNoneSnrCommand.Execute(null);
+        Assert.Contains(nameof(ReceiverGroup.IsChecked), said);
+        Assert.All(receivers, r => Assert.Equal(false, r.IsChecked));
+        Assert.All(receivers.SelectMany(r => r.Channels), ch => Assert.False(ch.IsChecked));
+
+        receivers[0].Channels[0].IsChecked = true;           // partly again, the other way round
+        Assert.Null(receivers[0].IsChecked);
+        c.SelectAllSnrCommand.Execute(null);
+        Assert.All(receivers, r => Assert.Equal(true, r.IsChecked));
+
+        // The group's own box keeps v2.x's rule for a click.
+        receivers[0].Channels[1].IsChecked = false;
+        receivers[0].IsChecked = false;
+        Assert.Equal(true, receivers[0].IsChecked);
+    }
+
+    [Fact]
     public void SelectAllAndNoneAndExpandActOnTheirTabAndTheStreamShown()
     {
         var c = new CustomizeViewModel(Mixed(), new FakePrompts());
