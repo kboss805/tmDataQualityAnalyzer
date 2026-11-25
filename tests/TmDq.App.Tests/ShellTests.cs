@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Chrome;
 using Avalonia.Controls.Documents;
@@ -117,9 +118,11 @@ public sealed class ShellTests : IDisposable
         window.MaximizeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(WindowState.Maximized, window.WindowState);
         Assert.Equal(("\uE923", "Restore"), ((string)window.MaximizeButton.Content!, (string)ToolTip.GetTip(window.MaximizeButton)!));
+        Assert.Equal("Restore", AutomationProperties.GetName(window.MaximizeButton));   // in words: the glyph cannot be read aloud
         window.MaximizeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(WindowState.Normal, window.WindowState);
         Assert.Equal(("\uE922", "Maximize"), ((string)window.MaximizeButton.Content!, (string)ToolTip.GetTip(window.MaximizeButton)!));
+        Assert.Equal("Maximize", AutomationProperties.GetName(window.MaximizeButton));
         window.MinimizeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(WindowState.Minimized, window.WindowState);
         window.WindowState = WindowState.Maximized;   // however it is maximized, the button follows

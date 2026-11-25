@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Avalonia.Automation;
 using Avalonia.Controls;
 
 namespace TmDq.App.Views.Dialogs;
@@ -10,6 +11,7 @@ public sealed class ChoiceWindow : PromptWindow<int?>
     public ChoiceWindow(string title, string label, IReadOnlyList<string> choices) : base(title)
     {
         Choices = new ComboBox { ItemsSource = choices, SelectedIndex = choices.Count > 0 ? 0 : -1, MinWidth = 320 };
+        AutomationProperties.SetName(Choices, label.TrimEnd(':', ' '));
         var body = new StackPanel { Spacing = 8 };
         body.Children.Add(new TextBlock { Text = label });
         body.Children.Add(Choices);

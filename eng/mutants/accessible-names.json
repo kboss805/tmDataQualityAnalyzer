@@ -1,0 +1,124 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.AccessibleNamesTests",
+    "-class",
+    "TmDq.App.Tests.ShellTests",
+    "-stopOnFail"
+  ],
+  "mutants": [
+    {
+      "id": "N1",
+      "file": "src/TmDq.App/Views/MainWindow.axaml",
+      "old": "x:Name=\"CloseButton\" AutomationProperties.Name=\"Close\"",
+      "new": "x:Name=\"CloseButton\"",
+      "expect": "caught",
+      "note": "the close button, a glyph, is named by a private-use character"
+    },
+    {
+      "id": "N2",
+      "file": "src/TmDq.App/Views/MainWindow.axaml",
+      "old": "x:Name=\"SidebarButton\" AutomationProperties.Name=\"Toggle sidebar\"",
+      "new": "x:Name=\"SidebarButton\"",
+      "expect": "caught",
+      "note": "the sidebar toggle, a ToggleButton glyph, has no name"
+    },
+    {
+      "id": "N3",
+      "file": "src/TmDq.App/Views/MainWindow.axaml.cs",
+      "old": "AutomationProperties.SetName(MaximizeButton, maximized ? \"Restore\" : \"Maximize\");",
+      "new": "AutomationProperties.SetName(MaximizeButton, \"Maximize\");",
+      "expect": "caught",
+      "note": "the maximize button keeps saying Maximize while the window is maximized"
+    },
+    {
+      "id": "N4",
+      "file": "src/TmDq.App/Views/Dialogs/StreamSetupWindow.axaml",
+      "old": "x:Name=\"SyncPattern\" AutomationProperties.Name=\"Frame Sync\"",
+      "new": "x:Name=\"SyncPattern\"",
+      "expect": "caught",
+      "note": "a text box beside its label has no name"
+    },
+    {
+      "id": "N5",
+      "file": "src/TmDq.App/Views/Dialogs/StreamSetupWindow.axaml",
+      "old": "x:Name=\"Period\" AutomationProperties.Name=\"Average Period\"",
+      "new": "x:Name=\"Period\"",
+      "expect": "caught",
+      "note": "a combo box beside its label has no name"
+    },
+    {
+      "id": "N6",
+      "file": "src/TmDq.App/Views/Dialogs/ExportWindow.axaml",
+      "old": "AutomationProperties.Name=\"Browse for the image file\"",
+      "new": "AutomationProperties.Name=\"Browse for the data file\"",
+      "expect": "caught",
+      "note": "two Browse buttons with one name"
+    },
+    {
+      "id": "N7",
+      "file": "src/TmDq.App/Views/Dialogs/ExtractCalibrationWindow.axaml",
+      "old": "AutomationProperties.Name=\"Clip End (s)\"",
+      "new": "AutomationProperties.Name=\"Clip Start (s)\"",
+      "expect": "caught",
+      "note": "two clip boxes with one name"
+    },
+    {
+      "id": "N8",
+      "file": "src/TmDq.App/Views/Dialogs/ConfigureStreamsWindow.axaml",
+      "old": "AutomationProperties.Name=\"{Binding Label, StringFormat=Process {0}}\"",
+      "new": "AutomationProperties.Name=\"Process\"",
+      "expect": "caught",
+      "note": "every stream row's box named just Process, as the Process button is"
+    },
+    {
+      "id": "N9",
+      "file": "src/TmDq.App/Views/Dialogs/ConfigureStreamsWindow.axaml",
+      "old": "AutomationProperties.Name=\"{Binding Label, StringFormat=Configure {0}}\"",
+      "new": "",
+      "expect": "caught",
+      "note": "the gear, drawn as a symbol, has no name"
+    },
+    {
+      "id": "N10",
+      "file": "src/TmDq.App/Views/Dialogs/ConfigureStreamsWindow.axaml",
+      "old": "AutomationProperties.Name=\"{Binding Label, StringFormat=Mode of {0}}\"",
+      "new": "",
+      "expect": "caught",
+      "note": "a stream row's mode box has no name"
+    },
+    {
+      "id": "N11",
+      "file": "src/TmDq.App/Views/Dialogs/ConfigureStreamsWindow.axaml",
+      "old": "AutomationProperties.Name=\"Time Channel\" ",
+      "new": "",
+      "expect": "caught",
+      "note": "the time channel box has no name"
+    },
+    {
+      "id": "N12",
+      "file": "src/TmDq.App/Views/Plot/CustomizeViewWindow.axaml",
+      "old": "AutomationProperties.Name=\"{Binding Label, StringFormat=Series name of {0}}\"",
+      "new": "",
+      "expect": "caught",
+      "note": "a series name box has no name"
+    },
+    {
+      "id": "N13",
+      "file": "src/TmDq.App/Views/Dialogs/PromptWindows.cs",
+      "old": "        Field = new TextBox { Text = initial, MinWidth = 300 };\n        AutomationProperties.SetName(Field, label.TrimEnd(':', ' '));\n",
+      "new": "        Field = new TextBox { Text = initial, MinWidth = 300 };\n",
+      "expect": "caught",
+      "note": "the text prompt's box has no name"
+    },
+    {
+      "id": "N14",
+      "file": "src/TmDq.App/Views/Dialogs/ChoiceWindow.cs",
+      "old": "        AutomationProperties.SetName(Choices, label.TrimEnd(':', ' '));\n",
+      "new": "        AutomationProperties.SetName(Choices, \"\");\n",
+      "expect": "caught",
+      "note": "the choice prompt's list has no name"
+    }
+  ]
+}

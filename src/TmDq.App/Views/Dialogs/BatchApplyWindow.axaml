@@ -37,8 +37,8 @@
                   Content="Also export a CSV + plot images (Frame Sync Lock and Missed Frames) per file" />
         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
           <TextBlock Text="Output folder:" VerticalAlignment="Center" />
-          <TextBox x:Name="FolderBox" Grid.Column="1" Text="{Binding OutputFolder}" IsEnabled="{Binding ExportPerFile}" />
-          <Button x:Name="BrowseButton" Grid.Column="2" Content="Browse..." Command="{Binding BrowseCommand}" />
+          <TextBox x:Name="FolderBox" AutomationProperties.Name="Output folder" Grid.Column="1" Text="{Binding OutputFolder}" IsEnabled="{Binding ExportPerFile}" />
+          <Button x:Name="BrowseButton" AutomationProperties.Name="Browse for the output folder" Grid.Column="2" Content="Browse..." Command="{Binding BrowseCommand}" />
         </Grid>
       </StackPanel>
     </HeaderedContentControl>

@@ -1192,7 +1192,8 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `StatusBarTests` (the bar's place, colour and hairline, its marks, its trimming), `MenuStyleTests` (no icons, the accent row and white text, the dimmed shortcut, the row height and inset), `DialogAnatomyTests`
   (every window kind's footer band, padding, button widths and spacing, accent and cancel, in both themes; a status text following the theme), `PreferencesTests`
-  (the preferences file, and v2.x's INI file left unread), `MainWindowStartupTests`.
+  (the preferences file, and v2.x's INI file left unread), `MainWindowStartupTests`, `AccessibleNamesTests` (every control a person
+  operates, in every window and in the windows filled with rows, has a name a screen reader can say, and no two in a window share one).
 - **The layers:** `LayerTests` reads every model, view model and service type as compiled, its methods' code
   included. It fails on a model that reaches a view model, a service, a view or `Platform`; on a view model or service
   that reaches a view or `Platform`; on a view that reaches `Platform`; on any model, view model or service that reaches
