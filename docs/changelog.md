@@ -35,7 +35,7 @@ The item 21 of the 2026-11-24 list, the visible half (the names a screen reader 
 
 **Figures:** `eng\build_manual.ps1` re-rendered them; 11 changed, each because a word on it changed (the chip in the lock plots, the Log, the Processing and light-theme figures; the View Mode and Y Axes menus; the receiver setup dialog's button; the Extract Calibration labels and clips; the Plot File menu). Two more differed only by the antialiasing flicker the guide already describes, and were put back, so the diff is words only. I looked at the chip, the log and the extract dialog: the longer chip text and the longer label fit.
 
-How it was checked: the app suite (855 passed, the tests that assert each string changed with it) and the local CI mirror. No mutation list: the chip, the menu, the Export title, the Apply Calibration button and the two dialog titles are each asserted by a test that fails on the old string; the Extract Calibration label is held only by its figure. Nothing here is logic.
+How it was checked: the app suite (858 passed, the tests that assert each string changed with it) and the local CI mirror. No mutation list: the chip, the menu, the Export title, the Apply Calibration button and the two dialog titles are each asserted by a test that fails on the old string; the Extract Calibration label is held only by its figure. Nothing here is logic.
 
 #### A corrupt time stamp can no longer fill the machine with rows: the stream stops with an error
 
