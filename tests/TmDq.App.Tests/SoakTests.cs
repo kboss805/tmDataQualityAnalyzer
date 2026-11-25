@@ -27,7 +27,10 @@ namespace TmDq.App.Tests;
 /// <summary>
 /// The side-by-side soak (plan step 5.2): every run in <c>Soak/soak.json</c> processed as the application processes
 /// it, its CSV export compared byte for byte with what v2.14.2 exported for the same run (the
-/// manifest's <c>qt</c> block, recorded by a throwaway harness that drove v2.14.2's own pieces).
+/// manifest's <c>qt</c> block, recorded by a throwaway harness that drove v2.14.2's own pieces). Since 3.4.0 the
+/// export puts each column on the clock rounded to its sample rate, so the block holds v2.14.2's cells with their
+/// times on that grid: all 34 runs were exported by the core before the change (each identical to v2.14.2's) and
+/// after it, every column compared value for value (40 files), and the hashes re-recorded from the new export.
 /// <para>
 /// Explicit: most runs read recordings that are not committed (the full recordings, gigabytes, and the local ones
 /// under tests/data), so the tests are listed but not run unless asked for, and a missing recording fails rather than

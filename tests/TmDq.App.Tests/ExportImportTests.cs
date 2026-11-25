@@ -46,20 +46,23 @@ public sealed class ExportImportTests
     // ---- the oracle: v2.14.2's export of every committed recording ----------------------------------------------
 
     /// <summary>
-    /// What v2.14.2 wrote for each scenario (its size and SHA-256), recorded by a throwaway case in its own
-    /// suite: the core's job builder over these very settings, a processing run, each stream handed to its plot's
-    /// view model as it finished, then its CSV export. One stream mode a run, as
-    /// Configure Streams allows one row a channel.
+    /// What each scenario exports (its size and SHA-256): the core's job builder over these very settings, a
+    /// processing run, each stream handed to its plot's view model as it finished, then its CSV export. One stream
+    /// mode a run, as Configure Streams allows one row a channel. v2.14.2 wrote these scenarios with every sample on
+    /// a millisecond of its own; the figures are re-recorded for the export that puts each column on the clock rounded
+    /// to its sample rate (3.4.0), after checking against v2.14.2's own export that every cell is the same and in the
+    /// same column, only its time moved to the grid (five of the seven have a single stream, so their rows stay one
+    /// a second; the two-channel PRN's merged from 225 to 116).
     /// </summary>
     public static IEnumerable<object[]> ExportsAsV214WroteThem() => new[]
     {
-        new object[] { "prn", 9479, "1be395481250be54acbd94c95a093be75b166e7e5616abf94895b622a91e305a" },
-        new object[] { "step_cal", 32537, "61d80af27c78596230e299beab5a0be4052761c8a3ed6cac4507037623aacf43" },
-        new object[] { "step_cal_lock", 2617, "b6065e5b3fe5e8d888b8aad4287ee9967821f23155e1696149521d11b7fe74be" },
-        new object[] { "trc", 92308, "b85a3fe76e6ec21f688b8fe4ffe4a96c636e4899338da2a7f3b220799c83a0ea" },
-        new object[] { "trc_lock", 7691, "93f447d7e8d3a032abecf8b70c35c5ff5513e52b907ff67b2326901e888b3387" },
-        new object[] { "rasa", 43697, "997029776bd9b5db8602627c87f5cd06766c8ac95b020a387bfd332549a4d7f4" },
-        new object[] { "safran", 6225, "a190071b0bc89677594aba00eb78a38fad1976f95fa9dcf005d590434c23234f" },
+        new object[] { "prn", 7081, "85efad9242e0bd40a2b7388e8a43ae6de8bc42de7f7af421baf5d15a539615ba" },
+        new object[] { "step_cal", 32537, "11f13b7ce2aa424c7c06741a0c8a4c07c12f051a903f223731c6df00be2433ba" },
+        new object[] { "step_cal_lock", 2617, "361cae751804d29dc0ed197bc7bb29551113ae71a255f441880eab9d4b63ef13" },
+        new object[] { "trc", 92308, "bc0ec38c224bd31559d2f65addf878a2cf0f3c88e79d0a043992dd4abcf9f471" },
+        new object[] { "trc_lock", 7691, "b71ee5e751480f399c989be1879f842fd493989e8358460102881188b84ea649" },
+        new object[] { "rasa", 43697, "75485dfffb681a9137116ccfd00b55bca7b22586bf17b252cad21dc72babd006" },
+        new object[] { "safran", 6225, "0455be38676aed89a6e53ee921845c627beb5096f8d2e8638b53c92c1bf27fa6" },
     };
 
     private static StreamConfig Lock(int channel, string label, string pattern, int bits, bool randomized = false) => new()
@@ -444,8 +447,10 @@ public sealed class ExportImportTests
             Assert.True(imported.LoadCsv(first));
             Assert.Equal(processed.Series.Select(s => (s.Metric, s.Name, s.Visible, s.X.Length)),
                          imported.Series.Select(s => (s.Metric, s.Name, s.Visible, s.X.Length)));
-            Assert.Equal(processed.XMax, imported.XMax, 3);
-            Assert.Equal(processed.FormatTime(0), imported.FormatTime(0));
+            // The file holds each sample on the grid of its rate (every scenario is once a second), so the plot read back
+            // starts on the whole second nearest the run's first sample, and ends within that second of the run's end.
+            Assert.InRange(imported.XMax, processed.XMax - 1.0, processed.XMax + 1.0);
+            Assert.Equal(processed.FormatTime(0.5), imported.FormatTime(0));
             Assert.True(imported.ExportCsv(second));
             Assert.Equal(TempFiles.ReadAllBytes(first), TempFiles.ReadAllBytes(second));
         }

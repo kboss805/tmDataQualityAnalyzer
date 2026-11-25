@@ -29,7 +29,7 @@ themselves). Use the **PowerShell** tool.
 - **Native core tests (doctest):** `powershell -ExecutionPolicy Bypass -File eng\test_native.ps1
   [-Configuration Debug|Release] [-Rebuild] [-NoBuild] [<doctest args>]` builds `tests/core`
   (MSBuild; the framework is the single header in `third_party/doctest`) with **zero warnings and imports only the allow-list**, then runs it.
-  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **542 test cases** (1 skipped: the
+  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **549 test cases** (1 skipped: the
   benchmark below). The suites read `tests/data/test files` (committed recordings) and `tests/fixtures`; in a
   worktree, junction `tests/data` to the main checkout's or the full-recording tests have nothing to read.
   **The throughput guard:** the heavy PRN benchmark ("PipelineRunner throughput", `test_pipelinerunner.cpp`) is
@@ -65,7 +65,7 @@ themselves). Use the **PowerShell** tool.
   app suite. Green baseline **870 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases.
   **The side-by-side soak:** `powershell -ExecutionPolicy Bypass -File eng\run_soak.ps1 [-NoBuild]
   [-Only <run>,...]` runs every run in `tests\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a
-  run) and fails unless each CSV export is byte for byte what v2.14.2 exported (the manifest's `qt` blocks). Most
+  run) and fails unless each CSV export is byte for byte the manifest's `qt` blocks: v2.14.2's cells with their times on each column's sample grid (3.4.0; checked value for value against v2.14.2's own export). Most
   runs read the full and local recordings under `tests\data`, which are not committed, so CI never runs it, and a
   missing recording fails. Run it after a change to processing, the plot's series or the CSV writer.
   **The analyzers are on and every finding breaks the build:** `AnalysisLevel` `latest-recommended` plus the rules in

@@ -38,11 +38,20 @@ struct CsvTimeBase
  * @brief Writes columns as the CSV the importer reads.
  *
  * Layout: a header line "Time (DOY:HH:MM:SS.mmm)" followed by each column's header
- * (`SeriesColumnSchema::columnHeader`), then one line per distinct millisecond of any column,
- * in time order: the stamp, then each column's value to six decimals, or nothing where that column
- * has no sample at that millisecond. A time is rounded to the millisecond with halves away from zero;
- * where one column has several samples in a millisecond the last wins. Lines end in CR LF and the
- * text is UTF-8 without a byte-order mark, as the application has always written it on Windows.
+ * (`SeriesColumnSchema::columnHeader`), then one line per distinct time of any column, in time
+ * order: the stamp, then each column's value to six decimals, or nothing where that column has no
+ * sample at that time.
+ *
+ * Each column is written on its own time grid, the clock rounded to its sample period: the median
+ * gap between its times, snapped to the nearest of 1, 2, 5, 10, 20, 50 ... ms up to 100 s. A
+ * column with no steady rate (under three distinct times, fewer than two thirds of its gaps within
+ * half a median of the median, or a median gap over 100 s) gets 1 ms: its times are kept to the
+ * millisecond. Channels of one recording whose windows end a few milliseconds apart therefore
+ * share one row per period (a 1 s column on whole seconds, a 100 ms one on tenths) instead of one
+ * row each. A time rounds to the nearest multiple of the period, halves away from zero; where one
+ * column has several samples in a slot the last wins. Columns of different rates share a row where
+ * their grids meet. Lines end in CR LF and the text is UTF-8 without a byte-order mark, as the
+ * application has always written it on Windows.
  */
 class CsvSeriesWriter
 {

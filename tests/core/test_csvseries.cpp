@@ -14,6 +14,7 @@
 #include <format>
 #include <functional>
 #include <limits>
+#include <map>
 #include <span>
 #include <string>
 #include <vector>
@@ -24,7 +25,9 @@
 #include "doctest.h"
 #include "processedstreamdata.h"
 #include "seriesbuilder.h"
+#include "seriescolumnschema.h"
 #include "test_support.h"
+#include "textformat.h"
 #include "textparse.h"
 
 using namespace tmdq_test;
@@ -548,17 +551,19 @@ const std::vector<ExportCase>& exportCases()
             "004:07:08:09.002,5.000000,0.000000\\r\\n"
             "004:07:08:09.003,6.000000,0.000000\\r\\n"
             "" },
-        { "milliseconds-that-are-exact-ties-either-side-of-the-base",
+        { "times-either-side-of-the-base-on-the-grid-of-their-rate",
+          // Out of order, steps of 1/16 and 1/8 s: a median step of 125 ms is a 100 ms rate, so each time moves to the
+          // nearest tenth of a second (.8125 to .8, .9375 to .9, 1.0625 to 1.1, 1.1875 to 1.2).
           [](Streams& streams) {
               streams.push_back(lockStream("A", 1, { kBase + 1, kBase + 1 - 0.0625, kBase + 1 - 0.1875, kBase + 1 + 0.0625, kBase + 1 + 0.1875 },
                                           { 1, 2, 3, 4, 5 }, { 0, 0, 0, 0, 0 }));
           },
           -1, "Time (DOY:HH:MM:SS.mmm),A Lock (%),A Accumulated Missed Frames\\r\\n"
-            "004:07:08:09.812,3.000000,0.000000\\r\\n"
-            "004:07:08:09.937,2.000000,0.000000\\r\\n"
+            "004:07:08:09.800,3.000000,0.000000\\r\\n"
+            "004:07:08:09.900,2.000000,0.000000\\r\\n"
             "004:07:08:10.000,1.000000,0.000000\\r\\n"
-            "004:07:08:10.063,4.000000,0.000000\\r\\n"
-            "004:07:08:10.188,5.000000,0.000000\\r\\n"
+            "004:07:08:10.100,4.000000,0.000000\\r\\n"
+            "004:07:08:10.200,5.000000,0.000000\\r\\n"
             "" },
         { "six-decimal-ties-and-extremes",
           [](Streams& streams) {
@@ -914,14 +919,102 @@ std::vector<CsvColumn> columnsOf(const std::vector<GeneratedSeries>& all, int so
 
 }  // namespace
 
-TEST_CASE("csvseries: the core writes every generated series as the code it replaced did")
+namespace {
+
+/// A column's sample rate by the export's rule, written out the slow and plain way (everything sorted, a table of the
+/// steps): the median gap between its distinct times, nearest on a log scale of 1, 2, 5, 10 ... 100,000 ms; 1 ms for a
+/// column with under three distinct times or whose gaps are not steady (two thirds within half a median of the median).
+double referencePeriodMs(std::vector<double> times)
+{
+    times.erase(std::remove_if(times.begin(), times.end(), [](double t) { return !std::isfinite(t); }), times.end());
+    std::sort(times.begin(), times.end());
+    std::vector<double> gaps;
+    for (std::size_t i = 1; i < times.size(); ++i)
+    {
+        if (times[i] > times[i - 1])
+        {
+            gaps.push_back(times[i] - times[i - 1]);
+        }
+    }
+    if (gaps.size() < 2)
+    {
+        return 1.0;
+    }
+    std::sort(gaps.begin(), gaps.end());
+    const double median = gaps[gaps.size() / 2];
+    std::size_t steady = 0;
+    for (const double g : gaps)
+    {
+        steady += g >= 0.5 * median && g <= 1.5 * median;
+    }
+    if (steady * 3 < gaps.size() * 2)
+    {
+        return 1.0;
+    }
+    if (median * 1000.0 > 100000.0)
+    {
+        return 1.0;
+    }
+    static const double steps[] = { 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000 };
+    double best = steps[0];
+    for (const double step : steps)
+    {
+        if (std::fabs(std::log10(median * 1000.0 / step)) < std::fabs(std::log10(median * 1000.0 / best)))
+        {
+            best = step;
+        }
+    }
+    return best;
+}
+
+/// The whole export by the rule above: every sample to the nearest multiple of its column's period on the clock, one row
+/// per distinct time held in a map, the last sample of a column in a slot winning.
+std::string referenceExport(const std::vector<CsvColumn>& columns, const CsvTimeBase& base)
+{
+    std::string out = kTimeHeader;
+    for (const CsvColumn& c : columns)
+    {
+        out += "," + SeriesColumnSchema::columnHeader(c.metricType, c.name, c.sourceId);
+    }
+    out += "\r\n";
+    std::map<std::int64_t, std::map<std::size_t, double>> rows;
+    for (std::size_t i = 0; i < columns.size(); ++i)
+    {
+        const CsvColumn& c = columns[i];
+        const std::size_t n = std::min(c.xValues.size(), c.yValues.size());
+        const double period = referencePeriodMs(std::vector<double>(c.xValues.begin(), c.xValues.begin() + static_cast<std::ptrdiff_t>(n)));
+        for (std::size_t j = 0; j < n; ++j)
+        {
+            const double slots = (base.baseTimeOffset + c.xValues[j]) * 1000.0 / period;
+            const double whole = slots >= 0.0 ? std::floor(slots + 0.5) : -std::floor(-slots + 0.5);
+            rows[static_cast<std::int64_t>(whole * period)][i] = c.yValues[j];
+        }
+    }
+    for (const auto& [ms, cells] : rows)
+    {
+        out += clocktime::formatMilliseconds(base.baseDay, ms);
+        for (std::size_t i = 0; i < columns.size(); ++i)
+        {
+            out += ',';
+            if (const auto cell = cells.find(i); cell != cells.end())
+            {
+                out += textformat::formatFixed(cell->second, 6);
+            }
+        }
+        out += "\r\n";
+    }
+    return out;
+}
+
+}  // namespace
+
+TEST_CASE("csvseries: the core writes every generated series as the plain reference of the grid rule does")
 {
     constexpr int kCases = 500;
     Rng rng(20261023u);
     TempDir dir;
     const fs::path path = dir.file("export.csv");
-    Fnv f;
-    int written = 0, declined = 0, multi_source = 0, with_nonfinite = 0, with_empty_cells = 0, big = 0;
+    int written = 0, declined = 0, multi_source = 0, with_nonfinite = 0, with_empty_cells = 0, big = 0, coarser_grid = 0;
     for (int n = 0; n < kCases; ++n)
     {
         const std::vector<GeneratedSeries> all = generateSeries(rng);
@@ -932,26 +1025,33 @@ TEST_CASE("csvseries: the core writes every generated series as the code it repl
         const std::vector<CsvColumn> columns = columnsOf(all, source_id);
         std::error_code ec;
         fs::remove(path, ec);
-        const bool ok = CsvSeriesWriter::write(path, columns, CsvTimeBase{ base_day, base_offset });
+        const CsvTimeBase base{ base_day, base_offset };
+        const bool ok = CsvSeriesWriter::write(path, columns, base);
         const std::string bytes = readBytes(path);
-        f.byte(ok ? 1 : 0);
-        f.bytes(bytes);
-        f.byte(0x1F);
+        INFO("case " << n);
+        CHECK(ok == !columns.empty());
+        if (ok)
+        {
+            CHECK(escaped(bytes) == escaped(referenceExport(columns, base)));
+        }
 
         (ok ? written : declined)++;
         multi_source += columns.size() > 1 && source_id < 0;
         with_nonfinite += contains(bytes, "nan") || contains(bytes, "inf");
         with_empty_cells += contains(bytes, ",,") || contains(bytes, ",\r\n");
         big += bytes.size() > 400;
+        coarser_grid += std::any_of(columns.begin(), columns.end(), [](const CsvColumn& c) {
+            return referencePeriodMs(std::vector<double>(c.xValues.begin(), c.xValues.end())) > 1.0;
+        });
     }
-    // What v2.14.2's exporter wrote for the same 500 cases (recorded), and the counts of what they were.
-    CHECK(f.h == 16836251510374325251ULL);
+    // What the 500 generated cases were, so the comparison above is known to have reached each kind.
     CHECK(written == 346);
     CHECK(declined == 154);
     CHECK(multi_source == 207);
-    CHECK(with_nonfinite == 129);
+    CHECK(with_nonfinite == 123);
     CHECK(with_empty_cells == 243);
-    CHECK(big == 202);
+    CHECK(big == 193);
+    CHECK(coarser_grid == 165);   // cases with a column the grid moved (the rest stay to the millisecond)
 }
 
 TEST_CASE("csvseries: the clock stamp is what v2.14 wrote, for every generated time")
@@ -1202,4 +1302,149 @@ TEST_CASE("csvseries: export, import and export again is byte for byte the same"
     const fs::path path = dir.file("again.csv");
     REQUIRE(CsvSeriesWriter::write(path, columns, CsvTimeBase{ r.baseDay, r.baseTimeOffset }));
     CHECK(escaped(readBytes(path)) == escaped(canonical));
+}
+
+// ---------------------------------------------------------------------------
+// The time grid: every column on the clock rounded to its own sample rate
+// ---------------------------------------------------------------------------
+
+TEST_CASE("csvseries: channels whose windows end a few milliseconds apart share one row per second")
+{
+    // One recording, three channels each reporting once a second, their windows ending at .946, .961 and .976 of each
+    // second (the first sample is not on a second, as a recording's never is). Each channel's samples used to take a row
+    // of their own, three rows a second with two of the three cells empty; on the grid of their rate they share one.
+    const std::vector<double> a = { kBase + 0.946, kBase + 1.946, kBase + 2.946 };
+    const std::vector<double> b = { kBase + 0.961, kBase + 1.961, kBase + 2.961 };
+    const std::vector<double> c = { kBase + 0.976, kBase + 1.976, kBase + 2.976 };
+    TempDir dir;
+    const Export e = exportOf(dir, { lockStream("A", 1, a, { 1, 4, 7 }, { 0, 0, 0 }), lockStream("B", 2, b, { 2, 5, 8 }, { 0, 0, 1 }),
+                                     lockStream("C", 3, c, { 3, 6, 9 }, { 0, 1, 2 }) }, -1);
+    REQUIRE(e.wrote);
+    CHECK(escaped(e.bytes) ==
+          "Time (DOY:HH:MM:SS.mmm),A Lock (%),A Accumulated Missed Frames,B Lock (%),B Accumulated Missed Frames,"
+          "C Lock (%),C Accumulated Missed Frames\\r\\n"
+          "004:07:08:10.000,1.000000,0.000000,2.000000,0.000000,3.000000,0.000000\\r\\n"
+          "004:07:08:11.000,4.000000,0.000000,5.000000,0.000000,6.000000,1.000000\\r\\n"
+          "004:07:08:12.000,7.000000,0.000000,8.000000,1.000000,9.000000,2.000000\\r\\n");
+}
+
+TEST_CASE("csvseries: a 100 ms column and a 10 ms column are written on tenths and on hundredths of a second")
+{
+    TempDir dir;
+    // Tenths, each time a few milliseconds off its tenth, and a second channel a few more off.
+    const Export tenths = exportOf(
+        dir, { lockStream("A", 1, { kBase, kBase + 0.103, kBase + 0.198, kBase + 0.304, kBase + 0.399 }, { 1, 2, 3, 4, 5 }, {}),
+               lockStream("B", 2, { kBase + 0.012, kBase + 0.111, kBase + 0.213, kBase + 0.309, kBase + 0.412 }, { 6, 7, 8, 9, 10 }, {}) }, -1);
+    REQUIRE(tenths.wrote);
+    CHECK(escaped(tenths.bytes) ==
+          "Time (DOY:HH:MM:SS.mmm),A Lock (%),B Lock (%)\\r\\n"
+          "004:07:08:09.000,1.000000,6.000000\\r\\n"
+          "004:07:08:09.100,2.000000,7.000000\\r\\n"
+          "004:07:08:09.200,3.000000,8.000000\\r\\n"
+          "004:07:08:09.300,4.000000,9.000000\\r\\n"
+          "004:07:08:09.400,5.000000,10.000000\\r\\n");
+
+    const Export hundredths = exportOf(
+        dir, { lockStream("A", 1, { kBase, kBase + 0.0104, kBase + 0.0197, kBase + 0.0303, kBase + 0.0398 }, { 1, 2, 3, 4, 5 }, {}) }, -1);
+    REQUIRE(hundredths.wrote);
+    CHECK(escaped(hundredths.bytes) ==
+          "Time (DOY:HH:MM:SS.mmm),A Lock (%)\\r\\n"
+          "004:07:08:09.000,1.000000\\r\\n"
+          "004:07:08:09.010,2.000000\\r\\n"
+          "004:07:08:09.020,3.000000\\r\\n"
+          "004:07:08:09.030,4.000000\\r\\n"
+          "004:07:08:09.040,5.000000\\r\\n");
+}
+
+TEST_CASE("csvseries: columns of different rates share a row only where their grids meet")
+{
+    // A reports once a second and B ten times a second: B has a row each tenth, A fills the whole seconds.
+    std::vector<double> a = { kBase + 0.003, kBase + 1.002, kBase + 2.001 };
+    std::vector<double> b, bLock;
+    for (int i = 0; i <= 10; ++i)
+    {
+        b.push_back(kBase + 0.004 + i * 0.1);
+        bLock.push_back(100 + i);
+    }
+    TempDir dir;
+    const Export e = exportOf(dir, { lockStream("A", 1, a, { 1, 2, 3 }, {}), lockStream("B", 2, b, bLock, {}) }, -1);
+    REQUIRE(e.wrote);
+    std::string expected = "Time (DOY:HH:MM:SS.mmm),A Lock (%),B Lock (%)\\r\\n";
+    for (int i = 0; i <= 10; ++i)
+    {
+        expected += std::format("004:07:08:{:02}.{:03},{},{}.000000\\r\\n", 9 + i / 10, i % 10 * 100,
+                                i == 0 ? "1.000000" : (i == 10 ? "2.000000" : ""), 100 + i);
+    }
+    expected += "004:07:08:11.000,3.000000,\\r\\n";
+    CHECK(escaped(e.bytes) == expected);
+}
+
+TEST_CASE("csvseries: a column with no steady rate keeps its times to the millisecond")
+{
+    // Gaps of .3, 1.4, .05 and 3.25 s have no rate to read; moving them to a grid would invent one.
+    TempDir dir;
+    const Export e = exportOf(dir, { lockStream("A", 1, { kBase, kBase + 0.3, kBase + 1.7, kBase + 1.75, kBase + 5.0 }, { 1, 2, 3, 4, 5 }, {}) }, -1);
+    REQUIRE(e.wrote);
+    CHECK(escaped(e.bytes) ==
+          "Time (DOY:HH:MM:SS.mmm),A Lock (%)\\r\\n"
+          "004:07:08:09.000,1.000000\\r\\n"
+          "004:07:08:09.300,2.000000\\r\\n"
+          "004:07:08:10.700,3.000000\\r\\n"
+          "004:07:08:10.750,4.000000\\r\\n"
+          "004:07:08:14.000,5.000000\\r\\n");
+}
+
+TEST_CASE("csvseries: a column slower than the longest grid keeps its times to the millisecond")
+{
+    // A sample every ten minutes is past the 100 s grid, and rounding it to that would move a time by up to 50 s; the
+    // same column every 100 s is on the grid, whose multiples of the clock it takes.
+    TempDir dir;
+    const Export slow = exportOf(dir, { lockStream("A", 1, { kBase + 1.25, kBase + 601.25, kBase + 1201.25 }, { 1, 2, 3 }, {}) }, -1);
+    REQUIRE(slow.wrote);
+    CHECK(escaped(slow.bytes) ==
+          "Time (DOY:HH:MM:SS.mmm),A Lock (%)\\r\\n"
+          "004:07:08:10.250,1.000000\\r\\n"
+          "004:07:18:10.250,2.000000\\r\\n"
+          "004:07:28:10.250,3.000000\\r\\n");
+
+    const Export edge = exportOf(dir, { lockStream("A", 1, { kBase + 1.25, kBase + 101.25, kBase + 201.25 }, { 1, 2, 3 }, {}) }, -1);
+    REQUIRE(edge.wrote);
+    CHECK(escaped(edge.bytes) ==
+          "Time (DOY:HH:MM:SS.mmm),A Lock (%)\\r\\n"
+          "004:07:08:20.000,1.000000\\r\\n"
+          "004:07:10:00.000,2.000000\\r\\n"
+          "004:07:11:40.000,3.000000\\r\\n");
+}
+
+TEST_CASE("csvseries: an export read back and exported again is the same bytes, however the first was gridded")
+{
+    // The grid is where a sample sits afterwards, so a second export finds each column's times already on it.
+    TempDir dir;
+    const std::vector<double> a = { kBase + 0.946, kBase + 1.946, kBase + 2.946, kBase + 3.946 };
+    const std::vector<double> b = { kBase + 0.976, kBase + 1.976, kBase + 2.976, kBase + 3.976 };
+    const std::vector<double> c = { kBase + 1.0, kBase + 1.103, kBase + 1.198, kBase + 1.304 };
+    const Export first = exportOf(dir, { lockStream("A", 1, a, { 1, 2, 3, 4 }, { 0, 0, 1, 1 }), lockStream("B", 2, b, { 5, 6, 7, 8 }, { 0, 1, 1, 2 }),
+                                         lockStream("C", 3, c, { 9, 10, 11, 12 }, {}) }, -1);
+    REQUIRE(first.wrote);
+    const CsvParseResult r = parseBytes(dir, first.bytes);
+    REQUIRE(r.success);
+    std::vector<CsvColumn> columns;
+    for (const CsvSeries& s : r.series)
+    {
+        columns.push_back({ s.metricType, s.name, s.sourceId, std::span<const double>(s.xValues), std::span<const double>(s.yValues) });
+    }
+    const fs::path path = dir.file("regridded.csv");
+    REQUIRE(CsvSeriesWriter::write(path, columns, CsvTimeBase{ r.baseDay, r.baseTimeOffset }));
+    CHECK(escaped(readBytes(path)) == escaped(first.bytes));
+}
+
+TEST_CASE("csvseries: the integer clock stamp reads as the floating-point one")
+{
+    for (const std::int64_t ms : { std::int64_t{ 0 }, std::int64_t{ 1 }, std::int64_t{ 999 }, std::int64_t{ 1000 }, std::int64_t{ 86399999 },
+                                   std::int64_t{ 86400000 }, std::int64_t{ 172800001 }, std::int64_t{ 31536000000 }, std::int64_t{ -1 },
+                                   std::int64_t{ -1000 }, std::int64_t{ -86400000 }, std::int64_t{ -86400001 } })
+    {
+        INFO("ms " << ms);
+        CHECK(clocktime::formatMilliseconds(5, ms) == clocktime::format(5, 0.0, static_cast<double>(ms) / 1000.0, true));
+    }
 }

@@ -187,10 +187,10 @@ public sealed class TemplateBatchTests : IDisposable
         Assert.Equal(new[] { (0, one), (1, two) }, vm.Sources.Select(s => (s.SourceId, s.FilePath)));
         Assert.False(vm.IsBusy);
 
-        // The first file's CSV is v2.14.2's export of these settings, byte for byte (4.5's oracle); the
-        // second's columns are qualified by its recording.
+        // The first file's CSV is the export of these settings (4.5's oracle, re-recorded for the sample grid: see
+        // ExportImportTests.ExportsAsV214WroteThem); the second's columns are qualified by its recording.
         byte[] csv = File.ReadAllBytes(Path.Combine(output, "flight 1.csv"));
-        Assert.Equal((9479, "1be395481250be54acbd94c95a093be75b166e7e5616abf94895b622a91e305a"),
+        Assert.Equal((7081, "85efad9242e0bd40a2b7388e8a43ae6de8bc42de7f7af421baf5d15a539615ba"),
                      (csv.Length, Convert.ToHexString(SHA256.HashData(csv)).ToLowerInvariant()));
         Assert.StartsWith("Time (DOY:HH:MM:SS.mmm),S1| CH-01 PRN 15 5M Lock (%)", File.ReadAllLines(Path.Combine(output, "flight 2.csv"))[0]);
     }
