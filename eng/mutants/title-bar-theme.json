@@ -1,0 +1,106 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.TitleBarThemeTests",
+    "-stopOnFail"
+  ],
+  "mutants": [
+    {
+      "id": "B1",
+      "file": "src/TmDq.App/Platform/TitleBarTheme.cs",
+      "old": "public static bool NeedsHelp(int build) => build < AvaloniaSetsItFromBuild;",
+      "new": "public static bool NeedsHelp(int build) => build <= AvaloniaSetsItFromBuild;",
+      "expect": "caught",
+      "note": "Windows 11's first build is told it needs help"
+    },
+    {
+      "id": "B2",
+      "file": "src/TmDq.App/Platform/TitleBarTheme.cs",
+      "old": "public static bool NeedsHelp(int build) => build < AvaloniaSetsItFromBuild;",
+      "new": "public static bool NeedsHelp(int build) => build < AvaloniaSetsItFromBuild - 3000;",
+      "expect": "caught",
+      "note": "Windows 10 22H2 and Server 2022 are told they need none"
+    },
+    {
+      "id": "B3",
+      "file": "src/TmDq.App/Platform/TitleBarTheme.cs",
+      "old": "if (!OperatingSystem.IsWindows() || !NeedsHelp(build)) return Nothing.Instance;",
+      "new": "if (!OperatingSystem.IsWindows()) return Nothing.Instance;",
+      "expect": "caught",
+      "note": "installed on Windows 11 too, over Avalonia's own"
+    },
+    {
+      "id": "B4",
+      "file": "src/TmDq.App/Platform/TitleBarTheme.cs",
+      "old": "window.ActualThemeVariant == ThemeVariant.Dark",
+      "new": "window.ActualThemeVariant != ThemeVariant.Dark",
+      "expect": "caught",
+      "note": "the title bar takes the opposite of the theme"
+    },
+    {
+      "id": "B5",
+      "file": "src/TmDq.App/Platform/TitleBarTheme.cs",
+      "old": "int on = dark ? 1 : 0;",
+      "new": "int on = dark ? 0 : 1;",
+      "expect": "caught",
+      "note": "the request inverted"
+    },
+    {
+      "id": "B6",
+      "file": "src/TmDq.App/Platform/TitleBarTheme.cs",
+      "old": "        if (window.ExtendClientAreaToDecorationsHint) return;\n",
+      "new": "",
+      "expect": "caught",
+      "note": "the main window, which draws its own title bar, is asked for one"
+    },
+    {
+      "id": "B7",
+      "file": "src/TmDq.App/Platform/TitleBarTheme.cs",
+      "old": "        IDisposable themed = Window.ActualThemeVariantProperty.Changed.AddClassHandler<Window>(\n            (window, _) => Follow(window, handleOf, redraw: window.IsVisible));",
+      "new": "        IDisposable themed = Window.ActualThemeVariantProperty.Changed.AddClassHandler<Window>((window, _) => { });",
+      "expect": "caught",
+      "note": "the theme's change is not followed (only the second hook is left)"
+    },
+    {
+      "id": "B8",
+      "file": "src/TmDq.App/Platform/TitleBarTheme.cs",
+      "old": "        IDisposable loaded = Control.LoadedEvent.AddClassHandler<Window>(\n            (window, _) => Follow(window, handleOf, redraw: true), RoutingStrategies.Direct);",
+      "new": "        IDisposable loaded = Control.LoadedEvent.AddClassHandler<Window>((window, _) => { }, RoutingStrategies.Direct);",
+      "expect": "caught",
+      "note": "a window with no handle when its theme was resolved is never set"
+    },
+    {
+      "id": "B9",
+      "file": "src/TmDq.App/Platform/TitleBarTheme.cs",
+      "old": "            first.Dispose();\n            second.Dispose();",
+      "new": "            first.Dispose();\n            _ = second;",
+      "expect": "caught",
+      "note": "one of the two hooks is never stopped"
+    },
+    {
+      "id": "B10",
+      "file": "src/TmDq.App/Platform/TitleBarTheme.cs",
+      "old": "            first.Dispose();\n            second.Dispose();",
+      "new": "            _ = first;\n            second.Dispose();",
+      "expect": "caught",
+      "note": "the other hook is never stopped"
+    },
+    {
+      "id": "B11",
+      "file": "src/TmDq.App/Platform/TitleBarTheme.cs",
+      "old": "                     || DwmSetWindowAttribute(window, UseImmersiveDarkModeBefore2004, ref on, sizeof(int)) == 0;",
+      "new": ";",
+      "expect": "survived",
+      "note": "equivalent on a Windows that has attribute 20 (every build from 2004 on, so this machine and the CI's): only Windows 10 1809 to 1909 takes 19 and cannot be run here"
+    },
+    {
+      "id": "B12",
+      "file": "src/TmDq.App/Platform/TitleBarTheme.cs",
+      "old": "        if (DwmGetWindowAttribute(window, UseImmersiveDarkMode, out int on, sizeof(int)) == 0) return on != 0;\n        return DwmGetWindowAttribute(window, UseImmersiveDarkModeBefore2004, out on, sizeof(int)) == 0 ? on != 0 : null;",
+      "new": "        return DwmGetWindowAttribute(window, UseImmersiveDarkMode, out int on, sizeof(int)) == 0 ? on != 0 : null;",
+      "expect": "survived",
+      "note": "the same, for the reading: equivalent where attribute 20 exists"
+    }
+  ]
+}

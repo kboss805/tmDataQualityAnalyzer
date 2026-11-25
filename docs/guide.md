@@ -559,6 +559,8 @@ profile, so a batch processes with the linear calibration.
   one result line to the file and exits (0 when the stream was processed, 1 when not, 2 when the report could not be
   written: `Startup.RunSmokeAsync`, which `OpenToChartTests` runs): the installer's clean-machine test
   proves the whole path, native core included, with it.
+- **A title bar follows the theme** (`Platform/TitleBarTheme`, installed by `App`): Avalonia asks Windows for a dark title bar only on Windows 11
+  (build 22000+), so on Windows 10 this makes the same DWM request for every window with the system's title bar, as it opens and when the theme changes.
 - **A crash leaves a report** (`CrashHandling`, `Models/Logging/CrashReporter`, `Platform/NativeMessageBox`): `Program.Main`
   installs the handling before anything else can fail, and nothing else does (the tests call what the hooks call).
   An exception left unhandled on any thread (`AppDomain.UnhandledException`) or on the UI thread (the dispatcher's own
