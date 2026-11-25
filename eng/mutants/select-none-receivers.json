@@ -1,0 +1,50 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.CustomizeViewStateTests",
+    "-stopOnFail"
+  ],
+  "mutants": [
+    {
+      "id": "S1",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "foreach (ReceiverGroup r in SelectedSnrStream.Receivers) r.SetAll(value);",
+      "new": "foreach (ReceiverGroup r in SelectedSnrStream.Receivers) r.IsChecked = value;",
+      "expect": "caught",
+      "note": "Select None through the box's click rule again: a partly checked receiver comes out fully checked"
+    },
+    {
+      "id": "S2",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "        foreach (ChannelItem ch in Channels) ch.SetChecked(value);\n        OnPropertyChanged(nameof(IsChecked));",
+      "new": "        foreach (ChannelItem ch in Channels) ch.SetChecked(value);",
+      "expect": "caught",
+      "note": "the receiver's box is not told, so the window keeps its old state"
+    },
+    {
+      "id": "S3",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "        foreach (ChannelItem ch in Channels) ch.SetChecked(value);\n        OnPropertyChanged(nameof(IsChecked));",
+      "new": "        foreach (ChannelItem ch in Channels) ch.SetChecked(!value);\n        OnPropertyChanged(nameof(IsChecked));",
+      "expect": "caught",
+      "note": "Select None checks and Select All clears"
+    },
+    {
+      "id": "S4",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "        foreach (ChannelItem ch in Channels) ch.SetChecked(value);\n        OnPropertyChanged(nameof(IsChecked));",
+      "new": "        foreach (ChannelItem ch in Channels.Skip(1)) ch.SetChecked(value);\n        OnPropertyChanged(nameof(IsChecked));",
+      "expect": "caught",
+      "note": "the first channel of a receiver is left as it was"
+    },
+    {
+      "id": "S5",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "            if (value == false && IsChecked is null) check = true;",
+      "new": "            if (value == false && IsChecked is null) check = false;",
+      "expect": "caught",
+      "note": "the box's own click rule (a click on a partly checked box checks it) lost"
+    }
+  ]
+}

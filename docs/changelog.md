@@ -12,6 +12,14 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Select None on the Receiver SNR tab clears every receiver in one press
+
+Reported by the user: in Customize View, with some receivers partly checked, Select None checked all of them, and a second press was needed to clear them. `SetAllSnr` set each receiver's `IsChecked`, which is the receiver's own checkbox, whose rule is v2.x's: a click on a partly checked box checks it. So for every partly checked receiver, Select None did what a click on its box does. Select All was right (true is true either way), and the existing test of Select None started from receivers that were all checked, which is why it never saw this.
+
+**What changed:** `ReceiverGroup.SetAll(bool)` sets every channel to the value whatever they were and says the group's box changed; Select All and Select None use it. The box keeps v2.x's click rule, which a test still holds.
+
+How it was checked: a new case in `CustomizeViewStateTests` leaves receivers partly checked, unchecked and checked, presses Select None and then Select All, and checks the states, the notification, and that a click on a partly checked box still checks it; `eng/mutants/select-none-receivers.json` (5 mutants, all caught: Select None through the box again, the box not told, the value inverted, the first channel skipped, the click rule lost). App baseline 855 -> 856.
+
 #### The controls a person operates now have names a screen reader can say
 
 Only one control in the application (the Legacy Chapter 10 switch) had an `AutomationProperties.Name`. Asked for its automation name (`ControlAutomationPeer.GetName`), every text box and combo box in every dialog answered nothing, because the label beside it is a separate element that nothing links to it; the five buttons of the title bar (menu, sidebar, minimize, maximize, close) answered the private-use icon-font character they are drawn with; and the per-row controls of Configure Streams (the Process box, the Mode box, the gear, a symbol) and of Customize Plot Series (the color swatch, the name box) were identical from row to row. The item 21 of the 2026-11-24 list.

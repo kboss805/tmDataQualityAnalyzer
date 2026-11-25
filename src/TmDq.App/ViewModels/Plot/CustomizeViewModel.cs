@@ -110,7 +110,9 @@ public sealed class CustomizeViewModel : ObservableObject
     private void SetAllSnr(bool value)
     {
         if (SelectedSnrStream is null) return;
-        foreach (ReceiverGroup r in SelectedSnrStream.Receivers) r.IsChecked = value;
+        // Through SetAll, not IsChecked: a click on a partly checked receiver's box checks it, which is right for a click and
+        // wrong for Select None, which made every partly checked receiver fully checked and needed a second press.
+        foreach (ReceiverGroup r in SelectedSnrStream.Receivers) r.SetAll(value);
     }
 
     private void ToggleExpand()
@@ -266,6 +268,14 @@ public sealed class ReceiverGroup : ObservableObject
             foreach (ChannelItem ch in Channels) ch.SetChecked(check);
             OnPropertyChanged();
         }
+    }
+
+    /// <summary>Checks or clears every channel, whatever they were: what Select All and Select None do, which a click on the
+    /// group's box (<see cref="IsChecked"/>) does not when the group is partly checked.</summary>
+    public void SetAll(bool value)
+    {
+        foreach (ChannelItem ch in Channels) ch.SetChecked(value);
+        OnPropertyChanged(nameof(IsChecked));
     }
 
     public bool IsExpanded
