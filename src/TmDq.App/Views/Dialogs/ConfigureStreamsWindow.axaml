@@ -55,7 +55,7 @@
       </StackPanel>
       <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
         <TextBlock Text="Time Channel:" VerticalAlignment="Center" />
-        <ComboBox x:Name="TimeChannel" MinWidth="200" VerticalAlignment="Center" ItemsSource="{Binding TimeChannelItems}"
+        <ComboBox x:Name="TimeChannel" AutomationProperties.Name="Time Channel" MinWidth="200" VerticalAlignment="Center" ItemsSource="{Binding TimeChannelItems}"
                   SelectedIndex="{Binding TimeChannelIndex}" IsEnabled="{Binding HasTimeChannels}"
                   ToolTip.Tip="IRIG time channel used to timestamp frame samples. Required for calibration extraction." />
       </StackPanel>
@@ -75,13 +75,16 @@
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:StreamRowViewModel">
             <Grid ColumnDefinitions="70,260,12,160,80,60" Height="40">
-              <CheckBox Grid.Column="0" HorizontalAlignment="Center" IsChecked="{Binding Process}" />
+              <CheckBox Grid.Column="0" HorizontalAlignment="Center" IsChecked="{Binding Process}"
+                        AutomationProperties.Name="{Binding Label, StringFormat=Process {0}}" />
               <TextBlock Grid.Column="1" Text="{Binding Label}" ToolTip.Tip="{Binding Label}"
                          TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
               <ComboBox Grid.Column="3" HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                        AutomationProperties.Name="{Binding Label, StringFormat=Mode of {0}}"
                         ItemsSource="{x:Static vm:StreamRowViewModel.Modes}" SelectedIndex="{Binding ModeIndex}"
                         ToolTip.Tip="Analysis mode: Receiver SNR measures channel signal quality; Frame Sync Lock measures synchronization stability." />
               <Button Grid.Column="4" Content="&#x2699;" FontSize="16" Padding="8,0"
+                      AutomationProperties.Name="{Binding Label, StringFormat=Configure {0}}"
                       HorizontalAlignment="Center" VerticalAlignment="Center" Command="{Binding ConfigureCommand}"
                       ToolTip.Tip="Open configuration dialog for this stream's frame sync, data rate, and receiver parameters." />
               <TextBlock Grid.Column="5" Classes="ready" Classes.isReady="{Binding IsReady}"

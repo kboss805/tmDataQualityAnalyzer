@@ -82,7 +82,7 @@
          Windows 11 offer its snap layouts on a hover. -->
     <Grid x:Name="TitleBar" x:FieldModifier="public" DockPanel.Dock="Top" Height="40" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto"
           Margin="2,0,6,0">
-      <Button x:Name="MenuButton" x:FieldModifier="public" Grid.Column="0" Classes="glyph" Content="&#xE700;" ToolTip.Tip="Menu"
+      <Button x:Name="MenuButton" AutomationProperties.Name="Menu" x:FieldModifier="public" Grid.Column="0" Classes="glyph" Content="&#xE700;" ToolTip.Tip="Menu"
               chrome:WindowDecorationProperties.ElementRole="User">
         <!-- The menu: four submenus. File (Open, Recent Files, then Process Multiple Files and Save Template), Import/Export (Import
              from CSV, Export), Settings (the theme: Light and Dark, the one in use checked) and Help (the help, About). Every entry
@@ -117,7 +117,7 @@
         </Button.Flyout>
       </Button>
       <!-- A ToggleButton, which the title bar's Button styles do not reach: it sets their size and centring itself. -->
-      <ToggleButton x:Name="SidebarButton" x:FieldModifier="public" Grid.Column="1" Width="30" Height="26" Padding="0"
+      <ToggleButton x:Name="SidebarButton" AutomationProperties.Name="Toggle sidebar" x:FieldModifier="public" Grid.Column="1" Width="30" Height="26" Padding="0"
                     VerticalAlignment="Center" Background="Transparent" BorderThickness="0" CornerRadius="{DynamicResource ControlCornerRadius}"
                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                     FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15" Content="&#xE89F;"
@@ -125,11 +125,11 @@
                     chrome:WindowDecorationProperties.ElementRole="User" />
       <Border x:Name="Caption" x:FieldModifier="public" Grid.Column="2" Background="Transparent"
               chrome:WindowDecorationProperties.ElementRole="TitleBar" />
-      <Button x:Name="MinimizeButton" x:FieldModifier="public" Grid.Column="3" Classes="caption" Content="&#xE921;" ToolTip.Tip="Minimize"
+      <Button x:Name="MinimizeButton" AutomationProperties.Name="Minimize" x:FieldModifier="public" Grid.Column="3" Classes="caption" Content="&#xE921;" ToolTip.Tip="Minimize"
               Click="OnMinimize" chrome:WindowDecorationProperties.ElementRole="MinimizeButton" />
-      <Button x:Name="MaximizeButton" x:FieldModifier="public" Grid.Column="4" Classes="caption" Content="&#xE922;" ToolTip.Tip="Maximize"
+      <Button x:Name="MaximizeButton" AutomationProperties.Name="Maximize" x:FieldModifier="public" Grid.Column="4" Classes="caption" Content="&#xE922;" ToolTip.Tip="Maximize"
               Click="OnMaximize" chrome:WindowDecorationProperties.ElementRole="MaximizeButton" />
-      <Button x:Name="CloseButton" x:FieldModifier="public" Grid.Column="5" Classes="caption" Content="&#xE8BB;" ToolTip.Tip="Close"
+      <Button x:Name="CloseButton" AutomationProperties.Name="Close" x:FieldModifier="public" Grid.Column="5" Classes="caption" Content="&#xE8BB;" ToolTip.Tip="Close"
               Click="OnClose" chrome:WindowDecorationProperties.ElementRole="CloseButton" />
     </Grid>
     <!-- The hairline between the title bar and what is under it, as VS Code draws it. -->

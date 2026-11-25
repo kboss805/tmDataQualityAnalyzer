@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Linq;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -125,6 +126,8 @@ public sealed partial class MainWindow : Window
         bool maximized = WindowState == WindowState.Maximized;
         MaximizeButton.Content = maximized ? RestoreGlyph : MaximizeGlyph;
         ToolTip.SetTip(MaximizeButton, maximized ? "Restore" : "Maximize");
+        // The glyph is a private-use character a screen reader cannot say, so the button is named in words.
+        AutomationProperties.SetName(MaximizeButton, maximized ? "Restore" : "Maximize");
     }
 
     // ---- drag and drop -------------------------------------------------------------------------------------------

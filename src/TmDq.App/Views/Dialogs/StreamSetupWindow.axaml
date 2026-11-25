@@ -39,28 +39,28 @@
     <!-- Frame sync, both modes -->
     <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" RowDefinitions="Auto,Auto,12,Auto,Auto,Auto" Classes="form">
       <TextBlock Grid.Row="0" Grid.Column="0" Text="Frame Sync" />
-      <TextBox x:Name="SyncPattern" Grid.Row="1" Grid.Column="0" Text="{Binding SyncPattern}" PlaceholderText="{Binding SyncPlaceholder}"
+      <TextBox x:Name="SyncPattern" AutomationProperties.Name="Frame Sync" Grid.Row="1" Grid.Column="0" Text="{Binding SyncPattern}" PlaceholderText="{Binding SyncPlaceholder}"
                ToolTip.Tip="Hex frame synchronization word. Used to detect frame boundaries in the PCM stream." />
       <TextBlock Grid.Row="0" Grid.Column="1" Text="Frame Sync Mask" />
-      <TextBox x:Name="SyncMask" Grid.Row="1" Grid.Column="1" Text="{Binding SyncMask}" PlaceholderText="e.g. FFFFFFFF"
+      <TextBox x:Name="SyncMask" AutomationProperties.Name="Frame Sync Mask" Grid.Row="1" Grid.Column="1" Text="{Binding SyncMask}" PlaceholderText="e.g. FFFFFFFF"
                ToolTip.Tip="Hex mask applied during frame sync comparison. Set bits are compared; cleared bits are ignored." />
       <TextBlock Grid.Row="0" Grid.Column="2" Text="Bits Per Frame" />
-      <TextBox x:Name="BitsPerFrame" Grid.Row="1" Grid.Column="2" Text="{Binding BitsPerFrameText}"
+      <TextBox x:Name="BitsPerFrame" AutomationProperties.Name="Bits Per Frame" Grid.Row="1" Grid.Column="2" Text="{Binding BitsPerFrameText}"
                ToolTip.Tip="Total number of bits in one minor frame, including the frame sync word." />
       <StackPanel Grid.Row="1" Grid.Column="4" Orientation="Horizontal" Spacing="4">
-        <Button x:Name="LoadFrameSync" Content="Load..." Command="{Binding LoadFrameSyncCommand}"
+        <Button x:Name="LoadFrameSync" AutomationProperties.Name="Load frame sync settings" Content="Load..." Command="{Binding LoadFrameSyncCommand}"
                 ToolTip.Tip="Load frame sync fields from a TOML file" />
-        <Button x:Name="SaveFrameSync" Content="Save..." Command="{Binding SaveFrameSyncCommand}"
+        <Button x:Name="SaveFrameSync" AutomationProperties.Name="Save frame sync settings" Content="Save..." Command="{Binding SaveFrameSyncCommand}"
                 ToolTip.Tip="Save frame sync fields to a TOML file" />
       </StackPanel>
 
       <TextBlock Grid.Row="3" Grid.Column="0" Text="Data Rate (Mbps)" />
-      <TextBox x:Name="DataRate" Grid.Row="4" Grid.Column="0" Text="{Binding DataRateText}"
+      <TextBox x:Name="DataRate" AutomationProperties.Name="Data Rate (Mbps)" Grid.Row="4" Grid.Column="0" Text="{Binding DataRateText}"
                ToolTip.Tip="Telemetry data rate in Mbps. Set to 0 (TMATS) to derive the rate from the file metadata." />
       <TextBlock x:Name="DataRateHint" Grid.Row="5" Grid.Column="0" Text="{Binding DataRateHint}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                  FontSize="{DynamicResource CaptionTextBlockFontSize}" />
       <TextBlock Grid.Row="3" Grid.Column="1" Text="Average Period" />
-      <ComboBox x:Name="Period" Grid.Row="4" Grid.Column="1" ItemsSource="{x:Static vm:StreamSetupViewModel.Periods}"
+      <ComboBox x:Name="Period" AutomationProperties.Name="Average Period" Grid.Row="4" Grid.Column="1" ItemsSource="{x:Static vm:StreamSetupViewModel.Periods}"
                 SelectedIndex="{Binding PeriodIndex}"
                 ToolTip.Tip="Integration window for statistics. Shorter periods give finer time resolution; longer periods smooth noise." />
     </Grid>
@@ -78,26 +78,26 @@
       <Separator Margin="0,8" />
       <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto" RowDefinitions="Auto,Auto,12,Auto,Auto" Classes="form">
         <TextBlock Grid.Row="0" Grid.Column="0" Text="Polarity" />
-        <ComboBox x:Name="Polarity" Grid.Row="1" Grid.Column="0" ItemsSource="{x:Static vm:StreamSetupViewModel.Polarities}"
+        <ComboBox x:Name="Polarity" AutomationProperties.Name="Polarity" Grid.Row="1" Grid.Column="0" ItemsSource="{x:Static vm:StreamSetupViewModel.Polarities}"
                   SelectedIndex="{Binding PolarityIndex}"
                   ToolTip.Tip="ADC output polarity. Positive = high voltage maps to highest dB; Negative = inverted." />
         <TextBlock Grid.Row="0" Grid.Column="1" Text="Slope" />
-        <ComboBox x:Name="Slope" Grid.Row="1" Grid.Column="1" ItemsSource="{x:Static vm:StreamSetupViewModel.Slopes}"
+        <ComboBox x:Name="Slope" AutomationProperties.Name="Slope" Grid.Row="1" Grid.Column="1" ItemsSource="{x:Static vm:StreamSetupViewModel.Slopes}"
                   SelectedIndex="{Binding SlopeIndex}"
                   ToolTip.Tip="ADC voltage range. Select the range that matches your receiver's analog output voltage span." />
         <TextBlock Grid.Row="0" Grid.Column="2" Text="Scale (dB/V)" />
-        <TextBox x:Name="Scale" Grid.Row="1" Grid.Column="2" Text="{Binding ScaleText}"
+        <TextBox x:Name="Scale" AutomationProperties.Name="Scale (dB/V)" Grid.Row="1" Grid.Column="2" Text="{Binding ScaleText}"
                  ToolTip.Tip="Calibration scale factor in dB/V. Maps the ADC voltage span to the receiver SNR range in dB." />
         <TextBlock Grid.Row="3" Grid.Column="0" Text="Num Rcvrs" />
-        <TextBox x:Name="NumReceivers" Grid.Row="4" Grid.Column="0" Text="{Binding NumReceiversText}"
+        <TextBox x:Name="NumReceivers" AutomationProperties.Name="Number of receivers" Grid.Row="4" Grid.Column="0" Text="{Binding NumReceiversText}"
                  ToolTip.Tip="Number of individual receiver units contributing channels to this stream." />
         <TextBlock Grid.Row="3" Grid.Column="1" Text="Num Channels" />
-        <TextBox x:Name="ReceiverChannels" Grid.Row="4" Grid.Column="1" Text="{Binding ReceiverChannelsText}"
+        <TextBox x:Name="ReceiverChannels" AutomationProperties.Name="Channels per receiver" Grid.Row="4" Grid.Column="1" Text="{Binding ReceiverChannelsText}"
                  ToolTip.Tip="Number of channels per receiver (e.g. 3 for L/R/C configuration)." />
         <StackPanel Grid.Row="4" Grid.Column="4" Orientation="Horizontal" Spacing="4">
-          <Button x:Name="LoadReceiverParams" Content="Load..." Command="{Binding LoadReceiverParamsCommand}"
+          <Button x:Name="LoadReceiverParams" AutomationProperties.Name="Load receiver parameters" Content="Load..." Command="{Binding LoadReceiverParamsCommand}"
                   ToolTip.Tip="Load receiver parameters from a TOML file" />
-          <Button x:Name="SaveReceiverParams" Content="Save..." Command="{Binding SaveReceiverParamsCommand}"
+          <Button x:Name="SaveReceiverParams" AutomationProperties.Name="Save receiver parameters" Content="Save..." Command="{Binding SaveReceiverParamsCommand}"
                   ToolTip.Tip="Save receiver parameters to a TOML file" />
         </StackPanel>
       </Grid>
