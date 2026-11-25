@@ -22,6 +22,9 @@ namespace TmDq.App.Tests;
 [Collection(NativeCoreCollection.Name)]
 public sealed class CalibrationChannelTests
 {
+    // The dialog reads its step file through the core, so every case needs it loaded, whichever test ran before.
+    public CalibrationChannelTests() => NativeCore.EnsureLoaded();
+
     private static string StepCal => Repo.Recording("step_cal, example.ch10");
 
     /// <summary>step_cal's stream as recorded: time channel 1, PCM channel 26.</summary>
@@ -150,7 +153,6 @@ public sealed class CalibrationChannelTests
     [Fact]
     public async Task TheRealCoreCalibratesOnTheRecordingsOwnChannelWhenTheStreamsIsNotThere()
     {
-        NativeCore.EnsureLoaded();
         // step_cal is recorded on PCM channel 26; the stream was set up on channel 99 of another recording.
         var vm = new ExtractCalibrationViewModel(StepCalBase(time: 77, pcm: 99), Repo.Root, null);
 

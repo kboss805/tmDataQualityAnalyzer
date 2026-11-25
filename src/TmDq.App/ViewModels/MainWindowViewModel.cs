@@ -307,7 +307,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
             bool joins = chosen == CsvKind.PhasedArrayAntenna && Plot.HasData;
             if (!joins) ClearRun();
             NativeCore.EnsureLoaded();
-            if (await Plot.LoadCsvAsync(path, chosen, joins ? BaseName(name) : null) == CsvLoad.Loaded)
+            if (await Plot.LoadCsvAsync(path, chosen, BaseName(name)) == CsvLoad.Loaded)
             {
                 _shell.AddRecentFile(path);
                 if (!joins) Plot.Title = BaseName(name);
@@ -545,26 +545,28 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
                 Report($"Cancelled. {name} was not processed.");
                 return;
             }
-            ClearRun();
+            ClearProcessedRun();
+            // The run is numbered after what the plot keeps, so that a CSV imported before it never shares its source id.
+            RunRequest request = choice.Request with { SourceId = Plot.NextSourceId };
             Report($"Processing {name}...");
-            using RunOutcome outcome = await RunWithDialogAsync(choice.Request);
+            using RunOutcome outcome = await RunWithDialogAsync(request);
             // The core builds each stream's series, in table order, on one shared time axis.
             foreach (StreamResult result in outcome.Results) Plot.AddStream(result);
             Plot.Title = BaseName(name);
             // The recording, as a template is captured from it, named in the Plot File selector.
-            SetSources(new[] { new ProcessedSource(choice.Request.SourceId, path, choice.TimeChannelIndex, choice.Request.SwapBytes, choice.Rows) });
-            Plot.SetSourceLabel(choice.Request.SourceId, BaseName(name));
+            SetSources(new[] { new ProcessedSource(request.SourceId, path, choice.TimeChannelIndex, request.SwapBytes, choice.Rows) });
+            Plot.SetSourceLabel(request.SourceId, BaseName(name));
             Report(Describe(name, outcome), outcome.Errors.Count == 0 ? LogLevel.Success : LogLevel.Warning);
             Log.Success("Processing complete — results plotted from memory.");
         }
         catch (OperationCanceledException)
         {
-            ClearRun();
+            ClearProcessedRun();
             Report($"Cancelled. {name} was not processed.", LogLevel.Warning);
         }
         catch (RecordingException e)
         {
-            ClearRun();
+            ClearProcessedRun();
             Report(e.Message, LogLevel.Error);
             // A run with nothing processed has logged the core's own reasons already.
             if (e is not NothingProcessedException) Log.Error(e.Message);
@@ -572,7 +574,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
         {
             // The native core is missing or does not match this build.
-            ClearRun();
+            ClearProcessedRun();
             string error = CoreNotLoaded + e.Message;
             Report(error, LogLevel.Error);
             Log.Error(error);
@@ -645,6 +647,24 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     private void ClearRun()
     {
         Plot.Clear();
+        SetSources(Array.Empty<ProcessedSource>());
+    }
+
+    /// <summary>
+    /// A new recording to process, or one that failed: the recordings processed before are removed from the plot and from
+    /// <see cref="Sources"/>, and what was imported from CSV files stays, so a recording can be processed beside data
+    /// imported earlier (an antenna's log, an export) and compared with it. With nothing imported this is
+    /// <see cref="ClearRun"/>: the plot starts again, its title and view with it.
+    /// </summary>
+    private void ClearProcessedRun()
+    {
+        var processed = new HashSet<int>(_sources.Select(s => s.SourceId));
+        if (Plot.SourceList().All(s => processed.Contains(s.Id)))
+        {
+            ClearRun();
+            return;
+        }
+        foreach (int id in processed) Plot.RemoveSource(id);
         SetSources(Array.Empty<ProcessedSource>());
     }
 

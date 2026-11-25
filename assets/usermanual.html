@@ -493,10 +493,11 @@ after the commas in the header, as the antenna writes them, are accepted.</p>
 <p><strong>A log joins the plot instead of replacing it.</strong> Imported while the plot shows anything,
 it is added as a recording of its own, named for its file in the <strong>Plot File</strong> selector,
 and placed against what is already shown by its clock time. The plot's title and the recording
-stay. Open or process the recording first and import the log second: opening or processing a recording
-starts a fresh plot, and a log imported into an empty plot is simply what the plot then shows. If the
-log does not overlap what is shown in time, the log says so and the log is added anyway, on the
-same axis with a large gap between them. A telemetry CSV still replaces the plot.</p>
+stay. Import the log before or after processing the recording: processing a recording replaces the recordings
+processed before it, and keeps what was imported (the log, or an exported CSV), so the two can be compared
+either way round. A log imported into an empty plot is simply what the plot then shows. If the log does not
+overlap what is shown in time, the log says so and the log is added anyway, on the same axis with a large gap
+between them. A telemetry CSV still replaces the plot.
 
 <div class="note"><strong>An antenna's log is never exported as data.</strong> The antenna's own system
 writes it, so there is nothing for this application to hand back: <strong>Export → Data (CSV)</strong>
