@@ -10,7 +10,9 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
-### Unreleased
+### v3.4.0 — The CSV export on the clock, a faster start, and the loose ends of the 2026-11-24 list
+
+A minor release (2026-11-25). The visible change is the CSV export, which now writes one row a second for a recording whose channels report once a second (#380, #382); the window is up in half the time (ReadyToRun, #374); a crash leaves a report and each release keeps its symbols; the dialogs' title bars follow the theme on Windows 10 (#379); every control has a name a screen reader can say (#376) and the wording is settled (#377); Select None on the Receiver SNR tab clears every receiver (#378); a corrupt time stamp stops its stream instead of filling the machine with rows (#375). The rest is the repository's own tidying: the app tests in folders by area (#384), the Python helper's requirement written down (#383), `SECURITY.md` (#385), CI's Debug job and local CI script. Baselines at this release: native 551, managed 420 passed, app 836 passed with 34 not run (870 in all).
 
 #### The one Python package the scripts need is written down, and its absence says so
 
