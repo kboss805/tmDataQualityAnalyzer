@@ -1,0 +1,132 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.CalibrationChannelTests",
+    "-class",
+    "TmDq.App.Tests.CalibrationDialogTests",
+    "-stopOnFail"
+  ],
+  "mutants": [
+    {
+      "id": "C1",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "        PcmChannelId = PcmChannelId,",
+      "new": "        PcmChannelId = _base.PcmChannelId,",
+      "expect": "caught",
+      "note": "the extraction ignores the PCM channel chosen in the calibration recording"
+    },
+    {
+      "id": "C2",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "        TimeChannelId = TimeChannelId,",
+      "new": "        TimeChannelId = _base.TimeChannelId,",
+      "expect": "caught",
+      "note": "the extraction ignores the time channel chosen in the calibration recording"
+    },
+    {
+      "id": "C3",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "int pcm = _calPcm.ToList().FindIndex(c => c.Id == _base.PcmChannelId);",
+      "new": "int pcm = -1;",
+      "expect": "caught",
+      "note": "the dialog starts on the recording's first PCM channel, not on the stream's own"
+    },
+    {
+      "id": "C4",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "FindIndex(c => c.Id == channels.DefaultTimeChannel);",
+      "new": "FindIndex(c => c.Id == -1);",
+      "expect": "caught",
+      "note": "a time channel the recording lacks falls back to its first, not to the one it defaults to"
+    },
+    {
+      "id": "C5",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "            if (value < 0 || value >= _calPcm.Count || !SetProperty(ref _calPcmIndex, value)) return;\n            _ = ExtractAsync();",
+      "new": "            if (value < 0 || value >= _calPcm.Count || !SetProperty(ref _calPcmIndex, value)) return;\n            OnPropertyChanged(nameof(PcmChannelId));",
+      "expect": "caught",
+      "note": "choosing another PCM channel does not extract again"
+    },
+    {
+      "id": "C6",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "            if (value < 0 || value >= _calTime.Count || !SetProperty(ref _calTimeIndex, value)) return;\n            _ = ExtractAsync();",
+      "new": "            if (value < 0 || value >= _calTime.Count || !SetProperty(ref _calTimeIndex, value)) return;\n            OnPropertyChanged(nameof(TimeChannelId));",
+      "expect": "caught",
+      "note": "choosing another time channel does not extract again"
+    },
+    {
+      "id": "C7",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "if (value < 0 || value >= _calPcm.Count || !SetProperty(ref _calPcmIndex, value)) return;",
+      "new": "if (value < 0 || !SetProperty(ref _calPcmIndex, value)) return;",
+      "expect": "caught",
+      "note": "an index past the list is taken, and the selected channel reads off the end"
+    },
+    {
+      "id": "C8",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "_calPcm.Count > 0 && pcm < 0",
+      "new": "_calPcm.Count > 0 && pcm >= 0",
+      "expect": "caught",
+      "note": "the note about a channel the recording lacks comes when it has it, and not when it lacks it"
+    },
+    {
+      "id": "C9",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "            SetChannels(null);\n            SetCalibrated(false",
+      "new": "            SetCalibrated(false",
+      "expect": "caught",
+      "note": "a recording that will not open leaves the last recording's channel lists on the dialog"
+    },
+    {
+      "id": "C10",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "        SetChannels(channels);\n        await ExtractAsync();",
+      "new": "        SetChannels(null);\n        await ExtractAsync();",
+      "expect": "caught",
+      "note": "the channels are never listed"
+    },
+    {
+      "id": "C11",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "Math.Max(0, pcm);",
+      "new": "Math.Max(_calPcmIndex, pcm);",
+      "expect": "caught",
+      "note": "another recording keeps the last one's choice instead of starting on the stream's channel"
+    },
+    {
+      "id": "C12",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "public bool HasCalChannels => _calPcm.Count > 0;",
+      "new": "public bool HasCalChannels => _calPcm.Count >= 0;",
+      "expect": "caught",
+      "note": "the selectors show before any recording is chosen"
+    },
+    {
+      "id": "C13",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "channel.Id.ToString(CultureInfo.InvariantCulture) + \" - \" + channel.Name;",
+      "new": "channel.Id.ToString(CultureInfo.InvariantCulture) + \" \" + channel.Name;",
+      "expect": "caught",
+      "note": "the channel text loses its dash"
+    },
+    {
+      "id": "C14",
+      "file": "src/TmDq.App/Views/Dialogs/ExtractCalibrationWindow.axaml",
+      "old": "SelectedIndex=\"{Binding CalPcmIndex}\"",
+      "new": "SelectedIndex=\"{Binding CalTimeIndex}\"",
+      "expect": "caught",
+      "note": "the PCM list is bound to the time channel's selection"
+    },
+    {
+      "id": "C15",
+      "file": "src/TmDq.App/Views/Dialogs/ExtractCalibrationWindow.axaml",
+      "old": "ItemsSource=\"{Binding CalPcmItems}\"",
+      "new": "ItemsSource=\"{Binding CalTimeItems}\"",
+      "expect": "caught",
+      "note": "the PCM list shows the time channels"
+    }
+  ]
+}

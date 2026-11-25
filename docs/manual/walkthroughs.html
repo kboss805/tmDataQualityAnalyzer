@@ -374,6 +374,13 @@ injected.</p>
 soon as it has it: how many steps it parsed, and how many channels it managed to
 calibrate.</p>
 
+<p>A calibration recording is often a different file from the one you are analysing, and its
+step cals can be on another channel of it. Once the recording is chosen, the dialog lists its
+<strong>PCM Channel</strong> and <strong>Time Channel</strong>. They start on the channels of the stream
+you are setting up, when the recording has them; when it has no channel by that number, the
+first PCM channel is selected and a line under the lists says so. Choose another and the
+calibration is extracted again from it.</p>
+
 {{FIG:walk-cal-03-clip-controls.png|Both files chosen and the clip controls set: 6 seconds trimmed from the start of the recording and 2 seconds from its end. The confirmations report eleven steps parsed and twelve of forty-eight channels calibrated.|Extract Calibration dialog populated with default.toml and step_cal, example.ch10, clip start 6 seconds and clip end 2 seconds, reporting 11 steps parsed and 12 of 48 channels calibrated}}
 
 <h3>Step 3 &mdash; Trim the recording, if it needs it</h3>
