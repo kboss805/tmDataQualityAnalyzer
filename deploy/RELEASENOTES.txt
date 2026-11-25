@@ -1,3 +1,59 @@
+tmDataQualityAnalyzer v3.4.0 - What's New
+=================================
+
+  Upgrading from v3.0.0, v3.1.0, v3.2.0, v3.3.0 or v3.3.1 keeps everything:
+  your settings files and your window preferences. Upgrading from v2.x:
+  please read the v3.1.0 notes below about your window preferences.
+
+  Changed:
+
+  - Export Data writes each column on the clock, rounded to its own sample
+    rate. A recording whose channels each report once a second now exports
+    one row a second, with every channel's cell filled, where it used to
+    export four to seven rows a second, each holding one channel's value.
+    Exact times are no longer written: a sample is placed at most half a
+    sample period from where it fell. A column with no steady rate is still
+    written to the millisecond. If something reads your exported files by
+    row, expect fewer, fuller rows.
+
+  Improved:
+
+  - The application starts about twice as fast: its window is up in about
+    0.4 seconds instead of 0.7 seconds. The download is larger as a result
+    (the installer is about 46 MB).
+
+  - The window, its dialogs and the progress window follow the light or dark
+    theme in their title bars on Windows 10 as well as Windows 11.
+
+  - A screen reader can say what every text box, list, button and switch is
+    for: each has a name now, in the dialogs and in the title bar.
+
+  - Wording is the same everywhere: Missed Frames, Export, Apply Calibration,
+    Process Multiple Files and Customize View name the same thing in the
+    menu, in the window's title and in the manual.
+
+  - If the application closes on an unexpected error, it saves a report and
+    tells you where it is, so you can send it with a note of what you were
+    doing. The reports are in %APPDATA%\tmDataQualityAnalyzer\crash-reports\
+    (beside the executable for a portable copy).
+
+  - The cursor's readout on a plot imported from a CSV file whose times are
+    not in order names the nearest sample.
+
+  Fixed:
+
+  - Select None on the Receiver SNR tab of Customize View clears every
+    receiver in one press. It used to check them all, and needed a second
+    press.
+
+  - A recording whose time channel jumps years ahead (a corrupt time stamp)
+    no longer makes a stream write millions of empty rows and run for
+    minutes. That stream stops with an error saying where the time jumped.
+
+  - A CSV column whose samples fall exactly half a period off the grid no
+    longer loses a sample to rounding.
+
+
 tmDataQualityAnalyzer v3.3.1 - What's New
 =================================
 
