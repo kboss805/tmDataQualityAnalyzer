@@ -77,6 +77,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         _appRoot = services.AppRoot ?? AppContext.BaseDirectory;
         _batch = new BatchRunner(this, Plot, Log, _export, _appRoot);
         OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy && _picker is not null);
+        AddRecordingCommand = new AsyncRelayCommand(AddRecordingAsync, () => !IsBusy && _picker is not null);
         ImportCsvCommand = new AsyncRelayCommand(PickAndImportAsync, () => !IsBusy && _files is not null);
         ExportCommand = new AsyncRelayCommand(ExportAsync, () => !IsBusy && Plot.HasData && _exportDialog is not null);
         SaveTemplateCommand = new AsyncRelayCommand(SaveTemplateAsync, () => !IsBusy && _sources.Count > 0 && _templateFiles is not null);
@@ -212,6 +213,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         {
             if (!SetProperty(ref _isBusy, value)) return;
             OpenCommand.NotifyCanExecuteChanged();
+            AddRecordingCommand.NotifyCanExecuteChanged();
             ImportCsvCommand.NotifyCanExecuteChanged();
             ExportCommand.NotifyCanExecuteChanged();
             SaveTemplateCommand.NotifyCanExecuteChanged();
@@ -220,7 +222,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         }
     }
 
-    /// <summary>The recordings processed this session, as a template is captured from them; cleared by a new run. No view
+    /// <summary>The recordings processed this session and still on the plot, as a template is captured from them; Open and a batch replace them, Add Recording appends. No view
     /// reads it: it is kept public as the tests' only window onto what Save Template would capture (a source's id and path
     /// are not written into the template), as audit D8 decided.</summary>
     public IReadOnlyList<ProcessedSource> Sources => _sources;
@@ -249,6 +251,11 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
 
     public IAsyncRelayCommand OpenCommand { get; }
 
+    /// <summary>Add Recording: configures and processes another recording as Open does, but keeps everything already on the
+    /// plot (the recordings processed before and what was imported), each recording its own entry in Plot File and Remove File.
+    /// With an empty plot it is Open.</summary>
+    public IAsyncRelayCommand AddRecordingCommand { get; }
+
     /// <summary>Help &gt; User Manual: the full manual beside the application, else the base one.</summary>
     public IAsyncRelayCommand OpenManualCommand { get; }
 
@@ -272,6 +279,12 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     {
         string? path = await _picker!.PickRecordingAsync();
         if (path is not null) await LoadAsync(path);
+    }
+
+    private async Task AddRecordingAsync()
+    {
+        string? path = await _picker!.PickRecordingAsync();
+        if (path is not null) await LoadAsync(path, add: true);
     }
 
     private async Task PickAndImportAsync()
@@ -522,17 +535,22 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
 
     /// <summary>Opens <paramref name="path"/>, asks what to process, processes it and shows the result or the reason it
     /// failed, logging each step as v2.x did. The progress dialog is up for the run, and its Cancel
-    /// stops every stream. Cancelling Configure Streams leaves the last result on screen. Ignored while busy.</summary>
-    public async Task LoadAsync(string path)
+    /// stops every stream. Cancelling Configure Streams leaves the last result on screen. Ignored while busy. With
+    /// <paramref name="add"/> (Add Recording) and something on the plot, nothing on the plot is removed and the recording is
+    /// added beside it, named in Plot File and Remove File, the plot's title unchanged.</summary>
+    public async Task LoadAsync(string path, bool add = false)
     {
         if (IsBusy) return;
         string name = Path.GetFileName(path);
+        // Add Recording keeps everything on the plot; with nothing on it, there is nothing to keep and it is Open.
+        bool keep = add && Plot.HasData;
+        string verb = keep ? "Adding" : "Opening";
         LastFolder = Path.GetDirectoryName(Path.GetFullPath(path));
         IsBusy = true;
         try
         {
-            Report($"Opening {name}...");
-            Log.Add("Opening: " + name);
+            Report($"{verb} {name}...");
+            Log.Add($"{verb}: {name}");
             Ch10File file = await StreamsRun.OpenAsync(path);
             // A recording joins Recent Files once its channels are read, as in v2.x.
             _shell.AddRecentFile(path);
@@ -545,28 +563,29 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
                 Report($"Cancelled. {name} was not processed.");
                 return;
             }
-            ClearProcessedRun();
+            if (!keep) ClearProcessedRun();
             // The run is numbered after what the plot keeps, so that a CSV imported before it never shares its source id.
             RunRequest request = choice.Request with { SourceId = Plot.NextSourceId };
             Report($"Processing {name}...");
             using RunOutcome outcome = await RunWithDialogAsync(request);
             // The core builds each stream's series, in table order, on one shared time axis.
             foreach (StreamResult result in outcome.Results) Plot.AddStream(result);
-            Plot.Title = BaseName(name);
+            if (!keep) Plot.Title = BaseName(name);   // an added recording leaves the plot's title as it is
             // The recording, as a template is captured from it, named in the Plot File selector.
-            SetSources(new[] { new ProcessedSource(request.SourceId, path, choice.TimeChannelIndex, request.SwapBytes, choice.Rows) });
-            Plot.SetSourceLabel(request.SourceId, BaseName(name));
+            var processed = new ProcessedSource(request.SourceId, path, choice.TimeChannelIndex, request.SwapBytes, choice.Rows);
+            SetSources(keep ? _sources.Append(processed).ToList() : new[] { processed });
+            Plot.SetSourceLabel(request.SourceId, keep ? UniqueSourceLabel(BaseName(name)) : BaseName(name));
             Report(Describe(name, outcome), outcome.Errors.Count == 0 ? LogLevel.Success : LogLevel.Warning);
             Log.Success("Processing complete — results plotted from memory.");
         }
         catch (OperationCanceledException)
         {
-            ClearProcessedRun();
+            if (!keep) ClearProcessedRun();
             Report($"Cancelled. {name} was not processed.", LogLevel.Warning);
         }
         catch (RecordingException e)
         {
-            ClearProcessedRun();
+            if (!keep) ClearProcessedRun();
             Report(e.Message, LogLevel.Error);
             // A run with nothing processed has logged the core's own reasons already.
             if (e is not NothingProcessedException) Log.Error(e.Message);
@@ -574,7 +593,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
         {
             // The native core is missing or does not match this build.
-            ClearProcessedRun();
+            if (!keep) ClearProcessedRun();
             string error = CoreNotLoaded + e.Message;
             Report(error, LogLevel.Error);
             Log.Error(error);
@@ -666,6 +685,19 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         }
         foreach (int id in processed) Plot.RemoveSource(id);
         SetSources(Array.Empty<ProcessedSource>());
+    }
+
+    /// <summary>A recording's name for Plot File and Remove File, made different from every one the plot already holds, for a
+    /// recording added a second time (or two of one name from different folders): "name (2)", "name (3)".</summary>
+    private string UniqueSourceLabel(string label)
+    {
+        HashSet<string> taken = Plot.SourceList().Select(s => s.Label).ToHashSet();
+        if (!taken.Contains(label)) return label;
+        for (int i = 2; ; i++)
+        {
+            string candidate = string.Create(CultureInfo.InvariantCulture, $"{label} ({i})");
+            if (!taken.Contains(candidate)) return candidate;
+        }
     }
 
     /// <summary>The status line after a run: that it finished and how many streams it processed, and how many it could not

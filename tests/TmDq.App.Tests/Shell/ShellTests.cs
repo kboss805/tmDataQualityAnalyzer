@@ -157,7 +157,7 @@ public sealed class ShellTests : IDisposable
         Menus.Open(window);
         // File, Import/Export, Settings, Help: each opens its own list; there is no Exit (the window's close button is it).
         Assert.Equal(new[] { "File", "Import/Export", "Settings", "Help" }, window.MainMenu.Items.Select(Header));
-        Assert.Equal(new[] { "Open...", "Recent Files", "-", "Process Multiple Files...", "Save Template..." }, Menus.Headers(Find(window.MainMenu.Items, "File")));
+        Assert.Equal(new[] { "Open...", "Add Recording...", "Recent Files", "-", "Process Multiple Files...", "Save Template..." }, Menus.Headers(Find(window.MainMenu.Items, "File")));
         Assert.Equal(new[] { "Import from CSV...", "Export..." }, Menus.Headers(Find(window.MainMenu.Items, "Import/Export")));
         Assert.Equal(new[] { "Light Theme", "Dark Theme" }, Menus.Headers(Find(window.MainMenu.Items, "Settings")));
         Assert.Equal(new[] { "User Manual", "-", "About" }, Menus.Headers(Find(window.MainMenu.Items, "Help")));
@@ -167,6 +167,8 @@ public sealed class ShellTests : IDisposable
                       Entry(window, "File", "Save Template...").Command, Entry(window, "Import/Export", "Import from CSV...").Command,
                       Entry(window, "Import/Export", "Export...").Command));
         Assert.Equal(new KeyGesture(Key.O, KeyModifiers.Control), Entry(window, "File", "Open...").InputGesture);
+        Assert.Same(vm.AddRecordingCommand, Entry(window, "File", "Add Recording...").Command);
+        Assert.NotNull(ToolTip.GetTip(Entry(window, "File", "Add Recording...")));
         Assert.Equal(("Import a previously exported CSV file", "Export plot data and images"),
                      ((string)ToolTip.GetTip(Entry(window, "Import/Export", "Import from CSV..."))!, (string)ToolTip.GetTip(Entry(window, "Import/Export", "Export..."))!));
         Assert.NotNull(ToolTip.GetTip(Entry(window, "File", "Save Template...")));
@@ -186,6 +188,9 @@ public sealed class ShellTests : IDisposable
         // Open is the view model's.
         Entry(window, "File", "Open...").Command!.Execute(null);
         Assert.Equal(1, picker.Asked);
+        // Add Recording asks the same picker.
+        Entry(window, "File", "Add Recording...").Command!.Execute(null);
+        Assert.Equal(2, picker.Asked);
         window.Close();
     }
 

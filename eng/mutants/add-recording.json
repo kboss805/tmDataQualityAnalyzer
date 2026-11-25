@@ -1,0 +1,118 @@
+{
+  "suite": "app",
+  "args": [
+    "-class",
+    "TmDq.App.Tests.AddRecordingTests",
+    "-class",
+    "TmDq.App.Tests.ShellTests",
+    "-class",
+    "TmDq.App.Tests.ImportedDataKeptTests",
+    "-stopOnFail"
+  ],
+  "mutants": [
+    {
+      "id": "A1",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "bool keep = add && Plot.HasData;",
+      "new": "bool keep = false;",
+      "expect": "caught",
+      "note": "Add Recording replaces the plot, as Open does"
+    },
+    {
+      "id": "A2",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "bool keep = add && Plot.HasData;",
+      "new": "bool keep = add;",
+      "expect": "caught",
+      "note": "added to an empty plot, the title and the rest are never set"
+    },
+    {
+      "id": "A3",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "            if (!keep) ClearProcessedRun();\n            // The run is numbered",
+      "new": "            ClearProcessedRun();\n            // The run is numbered",
+      "expect": "caught",
+      "note": "the recordings processed before are removed when one is added"
+    },
+    {
+      "id": "A4",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        catch (RecordingException e)\n        {\n            if (!keep) ClearProcessedRun();",
+      "new": "        catch (RecordingException e)\n        {\n            ClearProcessedRun();",
+      "expect": "caught",
+      "note": "a recording that will not open takes the plot's recordings with it"
+    },
+    {
+      "id": "A5",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        catch (OperationCanceledException)\n        {\n            if (!keep) ClearProcessedRun();",
+      "new": "        catch (OperationCanceledException)\n        {\n            ClearProcessedRun();",
+      "expect": "caught",
+      "note": "a run cancelled in the progress dialog takes the plot's recordings with it"
+    },
+    {
+      "id": "A6",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "            if (!keep) Plot.Title = BaseName(name);",
+      "new": "            Plot.Title = BaseName(name);",
+      "expect": "caught",
+      "note": "an added recording renames the plot"
+    },
+    {
+      "id": "A7",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "SetSources(keep ? _sources.Append(processed).ToList() : new[] { processed });",
+      "new": "SetSources(new[] { processed });",
+      "expect": "caught",
+      "note": "Save Template is offered only the last recording"
+    },
+    {
+      "id": "A8",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "keep ? UniqueSourceLabel(BaseName(name)) : BaseName(name));",
+      "new": "BaseName(name));",
+      "expect": "caught",
+      "note": "two recordings of one name cannot be told apart in Plot File and Remove File"
+    },
+    {
+      "id": "A9",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        for (int i = 2; ; i++)",
+      "new": "        for (int i = 3; ; i++)",
+      "expect": "caught",
+      "note": "the second of a name is called (3)"
+    },
+    {
+      "id": "A10",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        if (!taken.Contains(label)) return label;",
+      "new": "        if (taken.Contains(label)) return label;",
+      "expect": "caught",
+      "note": "a name already taken is kept, and a free one is changed"
+    },
+    {
+      "id": "A11",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "AddRecordingCommand = new AsyncRelayCommand(AddRecordingAsync, () => !IsBusy && _picker is not null);",
+      "new": "AddRecordingCommand = new AsyncRelayCommand(AddRecordingAsync, () => !IsBusy);",
+      "expect": "caught",
+      "note": "Add Recording is offered with no picker to ask"
+    },
+    {
+      "id": "A12",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "await LoadAsync(path, add: true);",
+      "new": "await LoadAsync(path, add: false);",
+      "expect": "caught",
+      "note": "the menu entry opens the recording instead of adding it"
+    },
+    {
+      "id": "A13",
+      "file": "src/TmDq.App/Views/MainWindow.axaml",
+      "old": "Command=\"{Binding AddRecordingCommand}\"",
+      "new": "Command=\"{Binding OpenCommand}\"",
+      "expect": "caught",
+      "note": "the menu item is Open"
+    }
+  ]
+}

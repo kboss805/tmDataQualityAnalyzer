@@ -11,7 +11,7 @@
     {
       "id": "K1",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "            ClearProcessedRun();\n            // The run is numbered",
+      "old": "            if (!keep) ClearProcessedRun();\n            // The run is numbered",
       "new": "            ClearRun();\n            // The run is numbered",
       "expect": "caught",
       "note": "processing a recording clears the plot, and with it what was imported"
@@ -27,7 +27,7 @@
     {
       "id": "K3",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "        catch (RecordingException e)\n        {\n            ClearProcessedRun();",
+      "old": "        catch (RecordingException e)\n        {\n            if (!keep) ClearProcessedRun();",
       "new": "        catch (RecordingException e)\n        {\n            ClearRun();",
       "expect": "caught",
       "note": "a recording that fails to open takes the import with it"
