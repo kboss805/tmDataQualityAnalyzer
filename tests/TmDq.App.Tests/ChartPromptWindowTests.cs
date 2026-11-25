@@ -163,7 +163,7 @@ public sealed class ChartPromptWindowTests
         Task<bool> shown = prompts.CustomizeAsync(c);
         Dispatcher.UIThread.RunJobs();
         var w = Assert.IsType<CustomizeViewWindow>(owner.OwnedWindows.Single());
-        Assert.Equal("Customize Plot Series", w.Title);
+        Assert.Equal("Customize View", w.Title);
         Assert.Equal(new[] { "Frame Sync Lock Streams", "Receiver SNR Streams" },
                      w.FindControl<TabControl>("Tabs")!.Items.OfType<TabItem>().Select(t => (string)t.Header!));
         Assert.Contains(w.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == CustomizeViewModel.LockDescription);

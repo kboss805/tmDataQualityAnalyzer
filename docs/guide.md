@@ -167,7 +167,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Before anything is plotted the chart shows its empty grid, as v2.x's did: the left axis's values (0.0 to 100.0) and the time axis's tick marks, with no time labels until there is a time.
 - [x] The main window opens at 1920 x 1080, centred, as v2.x's did (no larger than the screen's working area), with a status bar under the log and the chart (below).
 - [x] The chart occupies the entire plot area: there are no external control rows. Every plot control is reached from a **right-click context menu** on the chart, whose items are disabled until data is loaded.
-- [x] The context menu provides: **Set Plot Title…**, **Plot File** (which processed file to view), **View Mode** (Lock Percentage / Accumulation), **Customize View…**, **Show Legend** (checkable), **Readout** (which series the crosshair reads), **X Axis** (Set Time Window… / Zoom Back / Reset Span), **Y Axes** (Set Left Min… / Set Left Max… / Set Right Min… / Set Right Max… / Reset), and **Reset View**. Export is deliberately not here — it writes a CSV, an image and the log, which is a file operation on the session rather than a plot control, so it lives only in the main menu beside Import CSV.
+- [x] The context menu provides: **Set Plot Title…**, **Plot File** (which processed file to view), **View Mode** (Lock Percentage / Missed Frames), **Customize View…**, **Show Legend** (checkable), **Readout** (which series the crosshair reads), **X Axis** (Set Time Window… / Zoom Back / Reset Span), **Y Axes** (Set Left Min… / Set Left Max… / Set Right Min… / Set Right Max… / Reset), and **Reset View**. Export is deliberately not here — it writes a CSV, an image and the log, which is a file operation on the session rather than a plot control, so it lives only in the main menu beside Import CSV.
 - [x] The user can specify a custom title for the plot (context menu > Set Plot Title…).
 - [x] The left Y axis is labeled with its unit of measure, average framesync lock percent.
 - [x] The right Y axis is labeled with its unit of measure, SNR in decibels.
@@ -188,7 +188,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The legend's height is capped with a vertical scrollbar for dense plots, such as a Receiver SNR file with 48+ channels.
 - [x] Receiver SNR legend rows show a short label (channel id plus receiver/channel code) instead of the full TMATS-derived stream title, though the full name remains available via tooltip and in CSV export headers.
 - [x] The legend is composited into exported PNG, SVG and PDF plot images at its placed position.
-- [x] The user can rename or recolor an individual series from the Customize Plot Series dialog.
+- [x] The user can rename or recolor an individual series from the Customize View dialog.
 - [x] Frame Sync Lock curves are assigned purple, blue, and green primary colors automatically, one per stream.
 - [x] Receiver SNR curves are assigned one of 15 hues automatically, one per stream (a receiver of a processed recording, or a channel of a phased array antenna, US10.0): the first 15 streams are drawn as solid lines and the next 15 as dotted lines in the same 15 hues, and the 31st starts over.
 - [x] Within a stream the combined channel (C) is the strongest: the stream's full hue and a little thicker; its other two channels (L and R, or H and V) are two lighter tints of that hue, so the three read as one stream. The legend's swatch is dotted and as thick as its line.
@@ -281,10 +281,10 @@ The stories below follow the workflow a first-time user takes through the applic
 
 **Acceptance Criteria:**
 
-- [x] The user can enable non-linear step calibration for a specific Receiver SNR stream in the per-stream setup dialog (via the "Apply Cal" button, which opens the Extract Calibration dialog).
+- [x] The user can enable non-linear step calibration for a specific Receiver SNR stream in the per-stream setup dialog (via the "Apply Calibration" button, which opens the Extract Calibration dialog).
 - [x] The user can load a TOML file defining the expected step values (in dB).
 - [x] The user can load a Calibration CH10 file containing the recorded step data.
-- [x] The Extract Calibration dialog (opened by Apply Cal) provides optional Clip Start and Clip End controls to trim leading or trailing seconds from the calibration recording before step detection.
+- [x] The Extract Calibration dialog (opened by Apply Calibration) provides optional Clip Start and Clip End controls to trim leading or trailing seconds from the calibration recording before step detection.
 - [x] The application automatically extracts "ideal" steps from the CAL file.
 - [x] The application evaluates step extraction success independently for each receiver channel (the default is 48: 16 receivers of 3 channels).
 - [x] Channels that successfully map the expected number of steps are assigned a non-linear calibration profile for the session.
@@ -354,7 +354,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Importing a CSV bypasses the Configure Streams dialog and processing pipeline, parsing the file straight into the plot.
 - [x] The importer accepts the application's own export format: a `Time (DOY:HH:MM:SS.mmm)` first column followed by one column per series.
 - [x] Frame Sync Lock (`Lock (%)` suffix), Accumulated Missed Frames (`Accumulated Missed Frames` suffix), and Receiver SNR (`_RCVR<N>`) series are recognized by their column headers and routed to the correct axis, metric type, and color.
-- [x] Imported series populate the plot, the on-plot legend, and the Customize Plot Series dialog the same way processed data does (axis auto-ranging, time window, visibility toggles all apply).
+- [x] Imported series populate the plot, the on-plot legend, and the Customize View dialog the same way processed data does (axis auto-ranging, time window, visibility toggles all apply).
 - [x] Imported data can be re-exported (CSV/image) and the recent-files list records the imported CSV.
 - [x] A CSV that is not in the application's export format (e.g. the legacy `Day,Time,…` layout, a wrong/missing header, or a file with no parseable data rows) is rejected with a clear error in the log rather than producing garbage series.
 - [x] Malformed or short data rows are skipped, and the user is informed how many rows were skipped.
@@ -542,7 +542,7 @@ profile, so a batch processes with the linear calibration.
   2026-11-21; `NoSpinnersTests` fails on one in any source file or window). A number is a plain `TextBox` read with
   `NumberText` (`ViewModels/NumberText.cs`: invariant culture, `ParseInteger`/`ParseNumber`/`ParseDecimal` give null for
   text that is no number, and the `Format*` give it back without losing a digit). Extract Calibration (`ExtractCalibrationViewModel`)
-  behind Apply Cal (US5.3) holds its two clips as `ClipStartText`/`ClipEndText`: text that is a number from 0 to
+  behind Apply Calibration (US5.3) holds its two clips as `ClipStartText`/`ClipEndText`: text that is a number from 0 to
   `ClipMaximum` becomes the clip and extracts again; anything else shows `Clip Start must be a number.`, `... is empty.` or
   `... must be from 0 to 100000 s.` under the fields, holds OK and leaves the clip as it was (`ClipStart`/`ClipEnd` are the
   parsed values, and setting one types it). The plot's number prompt (`NumberPromptWindow`, Set Y-Axis Minimum and
@@ -560,6 +560,8 @@ profile, so a batch processes with the linear calibration.
   one result line to the file and exits (0 when the stream was processed, 1 when not, 2 when the report could not be
   written: `Startup.RunSmokeAsync`, which `OpenToChartTests` runs): the installer's clean-machine test
   proves the whole path, native core included, with it.
+- **A title bar follows the theme** (`Platform/TitleBarTheme`, installed by `App`): Avalonia asks Windows for a dark title bar only on Windows 11
+  (build 22000+), so on Windows 10 this makes the same DWM request for every window with the system's title bar, as it opens and when the theme changes.
 - **A crash leaves a report** (`CrashHandling`, `Models/Logging/CrashReporter`, `Platform/NativeMessageBox`): `Program.Main`
   installs the handling before anything else can fail, and nothing else does (the tests call what the hooks call).
   An exception left unhandled on any thread (`AppDomain.UnhandledException`) or on the UI thread (the dispatcher's own
@@ -1175,7 +1177,7 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   the summary, then each thread's own lines in order, the reader's and the streams' interleaving as they come; a report the observer could not handle, said and not dropped), `SeveralStreamsTests`.
 - **Configure Streams:** `StreamRulesTests` and `StreamFilesTests` (the rules and files without a window),
   `StreamSetupViewModelTests`, `ConfigureStreamsTests`, `StreamWindowsTests`; `CalibrationDialogTests` (Extract
-  Calibration, Apply Cal and the clips' text entry); `NoSpinnersTests` (no up/down control in any
+  Calibration, Apply Calibration and the clips' text entry); `NoSpinnersTests` (no up/down control in any
   source file or window, and `NumberText`).
 - **The plot:** `PlotTests` (series, axes, view mode, the time window and zoom, the readout, the chart's drawing and
   gestures), `PlotDraftTests` (the draft a gesture - the wheel, a drag, a held pan or zoom key - paints on a heavy plot

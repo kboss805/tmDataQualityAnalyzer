@@ -83,7 +83,7 @@ public sealed class PlotCommands : ObservableObject, IDisposable
     public bool IsMissedFramesView => _plot.LockAxisView == LockAxisView.MissedFrames;
 
     /// <summary>The View Mode chip is named for the metric it switches TO.</summary>
-    public string ViewModeChipText => IsLockPercentView ? "Show Accumulation" : "Show Lock %";
+    public string ViewModeChipText => IsLockPercentView ? "Show Missed Frames" : "Show Lock %";
 
     public string ViewModeChipTip => IsLockPercentView
         ? "Switch the left axis to Accumulated Missed Frames"

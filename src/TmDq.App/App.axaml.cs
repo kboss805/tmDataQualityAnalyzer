@@ -14,10 +14,14 @@ namespace TmDq.App;
 
 public sealed class App : Application
 {
+    // Held for the life of the application, which is what the title bars following the theme lasts for.
+    private IDisposable? _titleBars;
+
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
     public override void OnFrameworkInitializationCompleted()
     {
+        _titleBars = TitleBarTheme.Install();   // before the first window: a dialog's title bar follows the theme on Windows 10 too
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var window = new MainWindow();

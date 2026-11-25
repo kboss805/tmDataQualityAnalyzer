@@ -633,7 +633,7 @@ public sealed class ExportImportTests
     {
         var files = new FakeFiles();
         var vm = new ExportViewModel("a.png", "a.csv", "a_log.txt", files);
-        Assert.Equal("Export Data", ExportViewModel.Title);
+        Assert.Equal("Export", ExportViewModel.Title);
         Assert.Equal((true, false, false), (vm.ExportImage, vm.ExportData, vm.ExportLog));
         Assert.Equal(("a.png", "a.csv", "a_log.txt"), (vm.ImagePath, vm.DataPath, vm.LogPath));
         Assert.Equal((true, false, false), (vm.BrowseImageCommand.CanExecute(null), vm.BrowseDataCommand.CanExecute(null), vm.BrowseLogCommand.CanExecute(null)));
@@ -1186,7 +1186,7 @@ public sealed class ExportImportTests
         var window = new ExportWindow { DataContext = vm };
         window.Show();
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal("Export Data", window.Title);
+        Assert.Equal("Export", window.Title);
         Assert.Equal(500, window.MinWidth);
         Assert.Equal(new[] { "Export Plot Image", "Export Data (CSV)", "Export Log (Text)" },
                      window.GetLogicalDescendants().OfType<HeaderedContentControl>().Select(h => (string)h.Header!));

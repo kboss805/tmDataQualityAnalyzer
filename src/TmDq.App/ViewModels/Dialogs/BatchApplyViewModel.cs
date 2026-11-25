@@ -29,7 +29,7 @@ public sealed record BatchFileRow(FileCheck Check)
 /// </summary>
 public sealed class BatchApplyViewModel : DialogViewModel
 {
-    public const string Title = "Batch Process Files";
+    public const string Title = "Process Multiple Files";
 
     private readonly ITemplateFilePicker? _files;
 

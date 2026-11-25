@@ -142,7 +142,7 @@ public sealed class SoakTests
 
     /// <summary>
     /// Configure Streams as the user would leave it for a run: the real dialog's view model over the recording, each
-    /// of the run's channels set up and checked as its setup dialog's OK leaves it (with Apply Cal's calibration,
+    /// of the run's channels set up and checked as its setup dialog's OK leaves it (with Apply Calibration's calibration,
     /// extracted by the real Extract Calibration view model, where the run has one), then Process. What it hands
     /// back is what <see cref="DialogConfigurator"/> hands back.
     /// </summary>
@@ -204,7 +204,7 @@ public sealed class SoakTests
             return new StreamsChoice(dialog.ToRunRequest(), dialog.Setups, dialog.TimeChannelIndex);
         }
 
-        /// <summary>Apply Cal: the Extract Calibration dialog over the setup as it stands, its clips set, the
+        /// <summary>Apply Calibration: the Extract Calibration dialog over the setup as it stands, its clips set, the
         /// calibration recording chosen, and OK keeping what it extracted.</summary>
         private async Task<StreamSetup> CalibratedAsync(StreamSetup s, JsonObject cal, int timeChannelId, bool swapBytes)
         {

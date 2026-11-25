@@ -90,7 +90,7 @@ public sealed class ChartViewTests
         Shown s = Show(plot);
         Button chip = s.View.ViewModeChip;
         Assert.True(chip.IsVisible);
-        Assert.Equal("Show Accumulation", chip.Content);
+        Assert.Equal("Show Missed Frames", chip.Content);
         Assert.Equal("Switch the left axis to Accumulated Missed Frames", ToolTip.GetTip(chip));
 
         s.Click(chip);
@@ -550,7 +550,7 @@ public sealed class ChartViewTests
         Assert.Equal(new[] { "Set Time Window...", "Zoom Back", "Reset Span" }, Headers(Item(menu, "X Axis")));
         Assert.Equal(new[] { "Set Left Min...", "Set Left Max...", "-", "Set Right Min...", "Set Right Max...", "-", "Reset" },
                      Headers(Item(menu, "Y Axes")));
-        Assert.Equal(new[] { "Lock Percentage", "Accumulation" }, Headers(Item(menu, "View Mode  (V)")));
+        Assert.Equal(new[] { "Lock Percentage", "Missed Frames" }, Headers(Item(menu, "View Mode  (V)")));
         Assert.DoesNotContain(Headers(menu), h => h.Contains("Export"));
         // Plot File waits for batch runs (plan step 4.7): one recording has nothing to switch between.
         Assert.False(Item(menu, "Plot File").IsEnabled);
@@ -611,13 +611,13 @@ public sealed class ChartViewTests
         Shown s = Show(plot, prompts: new FakePrompts());
         ContextMenu menu = Menus.Open(s.View);
         MenuItem lockItem = Item(Item(menu, "View Mode  (V)"), "Lock Percentage");
-        MenuItem accum = Item(Item(menu, "View Mode  (V)"), "Accumulation");
+        MenuItem accum = Item(Item(menu, "View Mode  (V)"), "Missed Frames");
         Assert.Equal(MenuItemToggleType.Radio, accum.ToggleType);
         Assert.True(lockItem.IsChecked);
         Assert.False(accum.IsChecked);
         await Choose(accum);
         Assert.Equal(LockAxisView.MissedFrames, plot.LockAxisView);
-        Assert.True(Item(Item(Menus.Open(s.View), "View Mode  (V)"), "Accumulation").IsChecked);
+        Assert.True(Item(Item(Menus.Open(s.View), "View Mode  (V)"), "Missed Frames").IsChecked);
         await Choose(Item(Item(Menus.Open(s.View), "View Mode  (V)"), "Lock Percentage"));
         Assert.Equal(LockAxisView.LockPercent, plot.LockAxisView);
 
@@ -820,7 +820,7 @@ public sealed class ChartViewTests
         Assert.Empty(told);   // the old plot's changes reach nothing
 
         // The chip follows the plot shown, not the one replaced.
-        Assert.Equal("Show Accumulation", s.View.ViewModeChip.Content);
+        Assert.Equal("Show Missed Frames", s.View.ViewModeChip.Content);
         second.SetLockAxisView(LockAxisView.MissedFrames);
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("Show Lock %", s.View.ViewModeChip.Content);
