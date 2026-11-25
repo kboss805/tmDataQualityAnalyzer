@@ -12,6 +12,10 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The app suite's baseline said 870 passed: it is 836, and 870 is the total
+
+xunit's `Total` counts the 34 explicit soak cases that are not run (the soak class alone reports `Total: 34 ... Not Run: 34`), so the green baseline is the total less 34: **836 passed / 0 failed / 0 skipped, 34 not run** (870 in all). `.claude/CLAUDE.md` had said 870 passed since the title bar change (the figure before it, 804, was from an older count), and four entries of this release's section (the names, the wording, Select None and the title bar) called a total 'passed'; they now say total. Found by the CSV session's report, then measured: native 549 passed / 1 skipped and managed 420 passed / 2 skipped locally (1 on CI, which builds the Debug core that its guard test needs) were already right. No code.
+
 #### The CSV export puts each column on the clock rounded to its sample rate: one row a second, not one row a millisecond
 
 **What the user saw.** A single Chapter 10 recording with PCM and Receiver SNR data exported 11,110 rows for 1,588 seconds: four to seven rows a second with the data interleaved, each row holding one stream's cells and the rest empty. Every channel reports once a second, but each channel's window ends at its own offset inside the second (`.946`, `.960`, `.961`, `.965`, `.966`, `.976` for the PCM streams, `.001` for the SNR block), and the writer gave every distinct millisecond a row, as v2.14.2 did.
@@ -29,7 +33,7 @@ Reported by the user: in Customize View, with some receivers partly checked, Sel
 
 **What changed:** `ReceiverGroup.SetAll(bool)` sets every channel to the value whatever they were and says the group's box changed; Select All and Select None use it. The box keeps v2.x's click rule, which a test still holds.
 
-How it was checked: a new case in `CustomizeViewStateTests` leaves receivers partly checked, unchecked and checked, presses Select None and then Select All, and checks the states, the notification, and that a click on a partly checked box still checks it; `eng/mutants/select-none-receivers.json` (5 mutants, all caught: Select None through the box again, the box not told, the value inverted, the first channel skipped, the click rule lost). App baseline 858 -> 859.
+How it was checked: a new case in `CustomizeViewStateTests` leaves receivers partly checked, unchecked and checked, presses Select None and then Select All, and checks the states, the notification, and that a click on a partly checked box still checks it; `eng/mutants/select-none-receivers.json` (5 mutants, all caught: Select None through the box again, the box not told, the value inverted, the first channel skipped, the click rule lost). App suite total 858 -> 859.
 
 #### The controls a person operates now have names a screen reader can say
 
@@ -39,7 +43,7 @@ Only one control in the application (the Legacy Chapter 10 switch) had an `Autom
 
 **Held by** `AccessibleNamesTests` (3 cases): every window kind, and the windows that are filled with rows (Configure Streams on the PRN sample, Customize with a mixed plot, the stream setup dialog of a frame sync stream and of a receiver one), must have no control a person operates without a name that holds a letter or a digit, and none whose name another control in the window has too; and a third case shows the guard can fail (a text box beside a label, a glyph button, two buttons named Go). `ShellTests` also holds the maximize button's name in both states. `eng/mutants/accessible-names.json`: 14 mutants, all caught (a name removed from the close and sidebar buttons, from a text box, a combo box, the gear, a row's mode box, the time channel box, a series name box, a prompt's box and the choice prompt's list; two Browse buttons and two clip boxes sharing a name; every row's box named just Process; the maximize name no longer following the window). Three needed a second try: two removed the last use of a `using` and did not compile, and one used a format string that returns the label, which made it no duplicate at all.
 
-**Not done, on purpose:** the visible wording that disagrees between places (Export... against the Export Data dialog, Apply Cal against Extract Calibration, Accumulation against Missed Frames against Accumulated Missed Frames, abbreviations such as Num Rcvrs) is the user's to choose and is listed for them; and the plot itself, one custom-drawn control, still defines no automation peer of its own, so a screen reader reaches its menu and chips but not the curves. App baseline 855 -> 858 passed (the three cases).
+**Not done, on purpose:** the visible wording that disagrees between places (Export... against the Export Data dialog, Apply Cal against Extract Calibration, Accumulation against Missed Frames against Accumulated Missed Frames, abbreviations such as Num Rcvrs) is the user's to choose and is listed for them; and the plot itself, one custom-drawn control, still defines no automation peer of its own, so a screen reader reaches its menu and chips but not the curves. App suite total 855 -> 858 (the three cases; the total counts the 34 explicit soak cases, which are not run).
 
 #### Four disagreements of wording settled: the second metric, Export, Calibration, and two dialog titles
 
@@ -54,7 +58,7 @@ The item 21 of the 2026-11-24 list, the visible half (the names a screen reader 
 
 **Figures:** `eng\build_manual.ps1` re-rendered them; 11 changed, each because a word on it changed (the chip in the lock plots, the Log, the Processing and light-theme figures; the View Mode and Y Axes menus; the receiver setup dialog's button; the Extract Calibration labels and clips; the Plot File menu). Two more differed only by the antialiasing flicker the guide already describes, and were put back, so the diff is words only. I looked at the chip, the log and the extract dialog: the longer chip text and the longer label fit.
 
-How it was checked: the app suite (858 passed, the tests that assert each string changed with it) and the local CI mirror. No mutation list: the chip, the menu, the Export title, the Apply Calibration button and the two dialog titles are each asserted by a test that fails on the old string; the Extract Calibration label is held only by its figure. Nothing here is logic.
+How it was checked: the app suite (858 in all, 824 of them run and passed, the tests that assert each string changed with it) and the local CI mirror. No mutation list: the chip, the menu, the Export title, the Apply Calibration button and the two dialog titles are each asserted by a test that fails on the old string; the Extract Calibration label is held only by its figure. Nothing here is logic.
 
 #### A corrupt time stamp can no longer fill the machine with rows: the stream stops with an error
 
@@ -192,7 +196,7 @@ Reported by the user: in dark mode the title bar of the progress window was whit
 
 **Not verified on a Windows 10 machine:** none is available here, so the effect on one is from the documented behaviour of the DWM attribute and from the tests below, not from looking at it. The first thing to look at on the other PC: the dialogs' and the progress window's title bars in dark mode, and after switching to Light and back.
 
-How it was checked: 11 cases in `TitleBarThemeTests`: a real window of the machine's own takes the dark and the light request and says which it has; which Windows builds need help (17763 up to 21996 do, 22000 on do not); and the wiring, with a stand-in for the window handle, from a window that opens dark and is switched to light and back, a handle that exists only once the window is loaded, nothing installed on Windows 11, the main window's own title bar and a window with no handle left alone, and stopping. `eng/mutants/title-bar-theme.json`: 12 mutants, 10 caught (the gate off by one build or wrong by three thousand, installed on Windows 11, the opposite theme, the request inverted, the main window asked, either hook missing, either hook never stopped) and 2 survive by reasoning: the fallback to attribute 19 and the reading of it, which only Windows 10 1809 to 1909 uses and which cannot run on a machine that has attribute 20. App baseline +11 passed (the eleven cases).
+How it was checked: 11 cases in `TitleBarThemeTests`: a real window of the machine's own takes the dark and the light request and says which it has; which Windows builds need help (17763 up to 21996 do, 22000 on do not); and the wiring, with a stand-in for the window handle, from a window that opens dark and is switched to light and back, a handle that exists only once the window is loaded, nothing installed on Windows 11, the main window's own title bar and a window with no handle left alone, and stopping. `eng/mutants/title-bar-theme.json`: 12 mutants, 10 caught (the gate off by one build or wrong by three thousand, installed on Windows 11, the opposite theme, the request inverted, the main window asked, either hook missing, either hook never stopped) and 2 survive by reasoning: the fallback to attribute 19 and the reading of it, which only Windows 10 1809 to 1909 uses and which cannot run on a machine that has attribute 20. App suite total +11 (the eleven cases).
 
 ### v3.3.1 — The manual's figures show the right version
 
