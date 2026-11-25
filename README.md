@@ -209,3 +209,5 @@ Kevin Bossoletti
 If the application closes on an unexpected error, it saves a report and tells you where. The reports are in
 `%APPDATA%\tmDataQualityAnalyzer\crash-reports\` (a portable copy keeps them in `tmDataQualityAnalyzer\crash-reports\` beside
 the executable); send the newest one with a note of what you were doing.
+
+To report a security problem, see [SECURITY.md](SECURITY.md): please do so privately, not in a public issue.
