@@ -249,6 +249,7 @@ It is a pure **bit-domain** quantity, counted in `FrameProcessor::scanBits()` wh
 
 - A window that saw bits records `lock_pct` as above, with `n_samples` (the frames locked in it) and the accumulated missed frames so far. A window with bits but no lock records 0.0 here, and its missed frames were already counted by the in-stream rollover in `scanBits()`, so nothing is extrapolated for it.
 - A window that saw **no bits at all** is a genuine recording gap: it records 0.0 and adds the frames the data rate says were lost (`samplePeriodSec × bit rate / bits_in_frame`); this is the only place the data rate enters, and only for missed frames, never for the lock percentage.
+- **A jump of the clock is bounded.** Every window is a row of the result, so one jump that would close more than `PCMConstants::kMaxWindowsPerTimeJump` windows (1,000,000: eleven days at 1 s, sixteen minutes at 1 ms) is not a gap but a corrupt time stamp: `closeElapsedWindows()` refuses it before closing any, and `process()` ends the stream with an error naming the jump and the packet (no success, no further rows; the rows before it are kept). An infinite time is refused the same way (it once ran until memory did).
 - The counters reset and the window advances by one `samplePeriodSec`; the last, partly filled window is flushed when the stream ends.
 
 Time only delimits the averaging window (every bit of the recording is scanned); it does not enter the numerator or the denominator.

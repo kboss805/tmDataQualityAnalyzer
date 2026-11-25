@@ -379,7 +379,19 @@ bool FrameProcessor::process(const ProcessingParams& params, const FrameSetup* f
             }
 
             // Time only delimits the averaging windows: every bit of the recording is counted.
-            closeElapsedWindows(state, time_at(bit_pos), params, enabled_params);
+            const double bit_time = time_at(bit_pos);
+            if (!closeElapsedWindows(state, bit_time, params, enabled_params))
+            {
+                const double leap = bit_time - state.next_time_sample;
+                m_report.error(streamTag(params)
+                               + std::format("the recording's time jumps ahead by {:.0f} s ({:.1f} days) at packet {}, "
+                                             "which is more than {:.0f} windows of {} s: the time channel looks "
+                                             "corrupt, so this stream was stopped.",
+                                             leap, leap / TimeConstants::kSecondsPerDay, total_packets,
+                                             PCMConstants::kMaxWindowsPerTimeJump, state.sample_period));
+                m_report.finished(false);
+                return false;
+            }
 
             // A run ends at the next abort check, the packet's end, or the first bit past this window's end.
             const uint64_t limit = std::min(packet_bits, (bit_pos | kAbortCheckMask) + 1);
@@ -445,10 +457,18 @@ bool FrameProcessor::process(const ProcessingParams& params, const FrameSetup* f
     return reportCompletion(params, diag);
 }
 
-void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
+bool FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
                                          const ProcessingParams& params,
                                          const std::vector<const ParameterInfo*>& enabled_params)
 {
+    // How many windows this closes, asked before the first is: each is a row of the result, so a clock that leaps years
+    // ahead would otherwise write tens of millions of them (and an infinite time would never stop). A time that is not
+    // a number closes none, as it always has.
+    if ((current_time_eval - s.next_time_sample) / s.sample_period > PCMConstants::kMaxWindowsPerTimeJump)
+    {
+        return false;
+    }
+
     while (s.next_time_sample < current_time_eval)
     {
         if (s.total_bits_in_window > 0)
@@ -494,6 +514,7 @@ void FrameProcessor::closeElapsedWindows(ScanState& s, double current_time_eval,
         s.current_time_sample += s.sample_period;
         s.next_time_sample += s.sample_period;
     }
+    return true;
 }
 
 void FrameProcessor::scanBits(ScanState& s, const uint8_t* data, uint64_t from, uint64_t to,

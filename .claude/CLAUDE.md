@@ -29,7 +29,7 @@ themselves). Use the **PowerShell** tool.
 - **Native core tests (doctest):** `powershell -ExecutionPolicy Bypass -File eng\test_native.ps1
   [-Configuration Debug|Release] [-Rebuild] [-NoBuild] [<doctest args>]` builds `tests/core`
   (MSBuild; the framework is the single header in `third_party/doctest`) with **zero warnings and imports only the allow-list**, then runs it.
-  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **540 test cases** (1 skipped: the
+  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **542 test cases** (1 skipped: the
   benchmark below). The suites read `tests/data/test files` (committed recordings) and `tests/fixtures`; in a
   worktree, junction `tests/data` to the main checkout's or the full-recording tests have nothing to read.
   **The throughput guard:** the heavy PRN benchmark ("PipelineRunner throughput", `test_pipelinerunner.cpp`) is
