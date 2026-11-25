@@ -124,14 +124,14 @@ after('<p>Right-click anywhere on the chart. Entries stay disabled until a file 
           'The Y Axes submenu open beside the plot right-click menu, showing Set Left Min, '
           'Set Left Max, Set Right Min, Set Right Max and Reset'))
 
-after('accumulation line.</p>',
+after('stays flat at zero in the Missed Frames view.</p>',
       fig('FrameSync Perctentage Plot with Legend.png',
           'Lock&nbsp;% view. These streams hold near 100% and then drop vertically to zero at loss '
           'of lock — the sharp cliffs are the events worth investigating. The legend names each '
           'stream, and there is no SNR scale on the right because this file carries none.',
           'Frame sync lock percentage plot with two streams near 100 percent, one dropping vertically to zero')
     + fig('Frame Error Accumulation Plot with Legend.png',
-          'The same streams in <strong>Accumulation</strong> view (press <kbd>V</kbd>, or use the '
+          'The same streams in <strong>Missed Frames</strong> view (press <kbd>V</kbd>, or use the '
           'on-chart button, to switch). Each vertical rise is frames lost at one of those cliffs; a '
           'flat line means no frames were missed.',
           'Accumulated missed frames plot showing step increases where lock was lost'))
@@ -172,12 +172,12 @@ after('<h2 id="plot">3. Working with the plot</h2>',
       fig('walk-cust-01-lock-tab.png',
           'Customize View, on the Frame Sync Lock tab: one row per stream with its colour and an '
           'editable name. Hiding a stream here removes it from the plot without reprocessing.',
-          'Customize Plot Series dialog on the Frame Sync Lock Streams tab listing two streams')
+          'Customize View dialog on the Frame Sync Lock Streams tab listing two streams')
     + fig('walk-cust-02-snr-tree.png',
           'The same dialog on the Receiver SNR tab. Channels are grouped under their receiver, '
           'and a group toggle shows a partial state when only some of its channels are visible - '
           'which is how a 48-channel file is narrowed to the few receivers worth looking at.',
-          'Customize Plot Series dialog on the Receiver SNR tab showing a collapsible '
+          'Customize View dialog on the Receiver SNR tab showing a collapsible '
           'receiver and channel tree')
     + fig('walk-cust-03-recolor.png',
           'Choosing a series colour, from its colour in Customize View (on the Receiver SNR tab, a '
@@ -231,7 +231,7 @@ before('<p><strong>A log joins the plot instead of replacing it.</strong>',
      + fig('walk-csv-03-customize.png',
            'Customize View on the log, on the Receiver SNR tab: the antenna\'s SCU, then its streams, one expanded to '
            'its H, V and C series. Only C is shown at first, so the stream\'s box is part-set.',
-           'Customize Plot Series dialog on the Receiver SNR tab showing the SCU1 group with Stream 1 expanded to H, V and C'))
+           'Customize View dialog on the Receiver SNR tab showing the SCU1 group with Stream 1 expanded to H, V and C'))
 
 # Placed immediately before the heading of the section's first subsection, which is where the dialog is described:
 # "Each of the three outputs has its own check box and its own filename" is the paragraph above it. (It was once placed at
@@ -240,7 +240,7 @@ before('<h3>What each output contains</h3>',
        fig('Export Dialog.png',
            'The export dialog. Each output has its own check box and filename, so you can produce '
            'any combination — image, data, log — in a single action.',
-           'Export Data dialog with separate check boxes and filename fields for image, CSV and log output'))
+           'Export dialog with separate check boxes and filename fields for image, CSV and log output'))
 
 io.open(BASE, 'w', encoding='utf-8', newline='\n').write(s)
 print('base manual : %-24s %5.0f KB, %d figures'

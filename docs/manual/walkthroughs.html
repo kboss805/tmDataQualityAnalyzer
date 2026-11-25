@@ -106,7 +106,7 @@ describes the receiver data:</p>
       <td>As above — a linear error through every value.</td></tr>
 </table>
 
-<p>The <strong>Apply Cal</strong> button, and the status text beside it, belong to non-linear
+<p>The <strong>Apply Calibration</strong> button, and the status text beside it, belong to non-linear
 step calibration. Until you attach a profile it reads
 <em>(none — using linear calibration)</em>, meaning values are converted with the slope and
 scale above and nothing else. The calibration walkthrough below covers what that costs
@@ -197,15 +197,15 @@ appears only when something is plotted against it.</p>
 to zero where synchronisation was lost. Their <em>width</em> is how long the outage lasted and
 their <em>position</em> is when.</p>
 
-<h3>Step 5 — Switch to accumulation</h3>
+<h3>Step 5 — Switch to Missed Frames</h3>
 
-<p>Press <kbd>V</kbd>, or use the <strong>Show Accumulation</strong> button on the chart.</p>
+<p>Press <kbd>V</kbd>, or use the <strong>Show Missed Frames</strong> button on the chart.</p>
 
 {{FIG:Frame Error Accumulation Plot with Legend.png|The same streams as accumulated missed frames. Each rise is frames lost at one of the cliffs above; a flat line means nothing was missed.|Accumulated missed frames plot showing step increases where lock was lost}}
 
-<p>Lock&nbsp;% answers "how good was the link at this moment"; accumulation answers "how much
+<p>Lock&nbsp;% answers "how good was the link at this moment"; Missed Frames answers "how much
 data did I actually lose". A stream that dips briefly but often can look worse than one long
-outage on the percentage plot while costing far fewer frames — the accumulation view settles
+outage on the percentage plot while costing far fewer frames — the Missed Frames view settles
 which is which.</p>
 
 <h3>Step 6 — Export</h3>
@@ -281,7 +281,7 @@ fades, and whether channels that should track each other actually do.</p>
 be read at once. Right-click the chart and choose <strong>Customize View&hellip;</strong> to
 show only what you care about.</p>
 
-{{FIG:walk-cust-02-snr-tree.png|The Receiver SNR tab groups channels by receiver, so a whole receiver can be shown or hidden in one click. Here one receiver is expanded with only its combined channel (C) selected, which is how a plot opens.|Customize Plot Series dialog showing the receiver tree with one group partially checked}}
+{{FIG:walk-cust-02-snr-tree.png|The Receiver SNR tab groups channels by receiver, so a whole receiver can be shown or hidden in one click. Here one receiver is expanded with only its combined channel (C) selected, which is how a plot opens.|Customize View dialog showing the receiver tree with one group partially checked}}
 
 <p>A plot opens with only each receiver's <strong>combined</strong> channel shown, which keeps a recording of many receivers readable; tick a receiver's other channels, or the receiver itself, to bring them in.</p>
 
@@ -353,7 +353,7 @@ holds steady, so it does not matter whether a technician left each step for one 
 
 <h3>Step 1 &mdash; Open the calibration dialog</h3>
 
-<p>Configure the receiver stream as usual, then press <strong>Apply Cal</strong> in the Receiver
+<p>Configure the receiver stream as usual, then press <strong>Apply Calibration</strong> in the Receiver
 SNR setup dialog. It is available once the stream's settings are valid and the recording has a time channel;
 until then its tooltip says what is missing. Before any profile is attached, the text beside that button reads
 <em>(none &mdash; using linear calibration)</em>, which is how you can tell at a glance what a

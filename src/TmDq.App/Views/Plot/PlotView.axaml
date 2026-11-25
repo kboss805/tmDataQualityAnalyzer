@@ -62,7 +62,7 @@
           <MenuItem Header="View Mode  (V)" IsEnabled="{Binding CanSwitchViewMode}">
             <MenuItem Header="Lock Percentage" ToggleType="Radio" IsChecked="{Binding IsLockPercentView, Mode=OneWay}"
                       Command="{Binding ShowLockPercentCommand}" />
-            <MenuItem Header="Accumulation" ToggleType="Radio" IsChecked="{Binding IsMissedFramesView, Mode=OneWay}"
+            <MenuItem Header="Missed Frames" ToggleType="Radio" IsChecked="{Binding IsMissedFramesView, Mode=OneWay}"
                       Command="{Binding ShowMissedFramesCommand}" />
           </MenuItem>
           <Separator />

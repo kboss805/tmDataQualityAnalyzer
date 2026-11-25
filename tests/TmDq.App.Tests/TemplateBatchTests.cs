@@ -588,7 +588,7 @@ public sealed class TemplateBatchTests : IDisposable
         var checks = new[] { new FileCheck(@"C:\a\one.ch10", true, ""), new FileCheck(@"C:\a\two.ch10", false, "extra channel(s): 9") };
         var files = new FakeTemplateFiles { Folder = @"D:\out" };
         var vm = new BatchApplyViewModel(checks, @"C:\a", files);
-        Assert.Equal("Batch Process Files", BatchApplyViewModel.Title);
+        Assert.Equal("Process Multiple Files", BatchApplyViewModel.Title);
         Assert.Equal(("1 of 2 selected file(s) match the template and will be processed.", 1), (vm.Summary, vm.MatchCount));
         Assert.Equal(new[] { @"C:\a\one.ch10" }, vm.Matched);
         Assert.Equal(("✓", "one.ch10", @"C:\a\one.ch10"), (vm.Rows[0].Glyph, vm.Rows[0].Text, vm.Rows[0].ToolTip));
@@ -662,7 +662,7 @@ public sealed class TemplateBatchTests : IDisposable
         Dispatcher.UIThread.RunJobs();
         var window = Assert.IsType<BatchApplyWindow>(Assert.Single(owner.OwnedWindows));
         Assert.True(window.IsDialog);
-        Assert.Equal("Batch Process Files", window.Title);
+        Assert.Equal("Process Multiple Files", window.Title);
         Assert.Equal(vm.Summary, window.FindControl<TextBlock>("Summary")!.Text);
         Assert.Equal("Also export a CSV + plot images (Frame Sync Lock and Missed Frames) per file", window.FindControl<CheckBox>("ExportBox")!.Content);
         Assert.Equal("Reuse the template's saved series names and colors", window.FindControl<CheckBox>("ReuseBox")!.Content);

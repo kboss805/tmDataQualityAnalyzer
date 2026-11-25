@@ -168,7 +168,7 @@ void SeriesTimeBase::recomputeClock()
 void assignImportedStreamOrders(std::vector<ImportedSeries>& series)
 {
     // Receiver-SNR series carry the real PCM channel id (recovered from the CSV column name by the parser);
-    // reuse it for a stream's lock/missed siblings so both tabs of the Customize Plot Series dialog show
+    // reuse it for a stream's lock/missed siblings so both tabs of the Customize View dialog show
     // the same "CH <id>" group. Lock-only streams have no SNR counterpart, so allocate fresh ids above any
     // SNR id to avoid collisions.
     std::map<int, std::map<std::string, int>> label_to_stream_order;

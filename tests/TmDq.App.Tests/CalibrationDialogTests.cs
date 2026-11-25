@@ -488,7 +488,7 @@ public sealed class CalibrationDialogTests : IDisposable
                      (Of(CalibrationStatusKind.Ok), Of(CalibrationStatusKind.Warn), Of(CalibrationStatusKind.Fail), Of(CalibrationStatusKind.Pending)));
     }
 
-    // ---- Apply Cal, in the Receiver SNR setup dialog ------------------------------------------------------------------
+    // ---- Apply Calibration, in the Receiver SNR setup dialog ------------------------------------------------------------------
 
     private static StreamSetup StepCalRow(StreamMode mode = StreamMode.ReceiverChannelInfo) => new()
     {
@@ -819,7 +819,7 @@ public sealed class CalibrationDialogTests : IDisposable
         window.Show();
         Dispatcher.UIThread.RunJobs();
         Button apply = window.FindControl<Button>("ApplyCal")!;
-        Assert.Equal("Apply Cal", apply.Content);
+        Assert.Equal("Apply Calibration", apply.Content);
         Assert.Same(vm.ApplyCalCommand, apply.Command);
         Assert.Equal(StreamSetupViewModel.ApplyCalTipText, ToolTip.GetTip(apply));
         Assert.True(apply.IsEffectivelyVisible);
