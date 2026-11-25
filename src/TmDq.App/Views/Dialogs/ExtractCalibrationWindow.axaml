@@ -20,23 +20,23 @@
     <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto,12,Auto,Auto,16,Auto,Auto" ColumnSpacing="12" RowSpacing="4">
       <TextBlock Grid.Row="0" Grid.Column="0" Text="Step Cal File:" VerticalAlignment="Center" />
       <TextBlock x:Name="StepName" Grid.Row="0" Grid.Column="1" Text="{Binding StepName}" MinWidth="260" VerticalAlignment="Center" />
-      <Button x:Name="BrowseStep" Grid.Row="0" Grid.Column="2" Content="Browse..." Command="{Binding BrowseStepCommand}"
+      <Button x:Name="BrowseStep" AutomationProperties.Name="Browse for the step calibration file" Grid.Row="0" Grid.Column="2" Content="Browse..." Command="{Binding BrowseStepCommand}"
               ToolTip.Tip="Browse for the step calibration configuration TOML file that defines the RF signal step levels." />
       <TextBlock x:Name="StepStatus" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding StepStatus}"
                  cv:StatusPaint.Level="{Binding StepKind, Converter={x:Static cv:StatusPaint.Calibration}}" TextWrapping="Wrap" MaxWidth="420" />
 
       <TextBlock Grid.Row="3" Grid.Column="0" Text="Calibration Ch10:" VerticalAlignment="Center" />
       <TextBlock x:Name="CalName" Grid.Row="3" Grid.Column="1" Text="{Binding CalName}" MinWidth="260" VerticalAlignment="Center" />
-      <Button x:Name="BrowseCal" Grid.Row="3" Grid.Column="2" Content="Browse..." Command="{Binding BrowseCalCommand}"
+      <Button x:Name="BrowseCal" AutomationProperties.Name="Browse for the calibration recording" Grid.Row="3" Grid.Column="2" Content="Browse..." Command="{Binding BrowseCalCommand}"
               ToolTip.Tip="Browse for the calibration Chapter 10 recording file. The last folder you used will be remembered." />
       <TextBlock x:Name="CalStatus" Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding CalStatus}"
                  cv:StatusPaint.Level="{Binding CalKind, Converter={x:Static cv:StatusPaint.Calibration}}" TextWrapping="Wrap" MaxWidth="420" />
 
       <TextBlock Grid.Row="6" Grid.Column="0" Text="Clip Start (s):" VerticalAlignment="Center" />
-      <TextBox x:Name="ClipStart" Grid.Row="6" Grid.Column="1" Width="150" HorizontalAlignment="Left" Text="{Binding ClipStartText}"
+      <TextBox x:Name="ClipStart" AutomationProperties.Name="Clip Start (s)" Grid.Row="6" Grid.Column="1" Width="150" HorizontalAlignment="Left" Text="{Binding ClipStartText}"
                ToolTip.Tip="Ignore this many seconds at the START of the calibration recording before detecting steps (skips signal-generator turn-on transients)." />
       <TextBlock Grid.Row="7" Grid.Column="0" Text="Clip End (s):" VerticalAlignment="Center" />
-      <TextBox x:Name="ClipEnd" Grid.Row="7" Grid.Column="1" Width="150" HorizontalAlignment="Left" Text="{Binding ClipEndText}"
+      <TextBox x:Name="ClipEnd" AutomationProperties.Name="Clip End (s)" Grid.Row="7" Grid.Column="1" Width="150" HorizontalAlignment="Left" Text="{Binding ClipEndText}"
                ToolTip.Tip="Ignore this many seconds at the END of the calibration recording before detecting steps." />
     </Grid>
     <TextBlock x:Name="ClipProblems" Text="{Binding ClipProblemText}" IsVisible="{Binding HasClipProblem}" TextWrapping="Wrap" MaxWidth="420"

@@ -1,4 +1,5 @@
 using System;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
@@ -38,6 +39,7 @@ public sealed class TextPromptWindow : PromptWindow<string?>
     public TextPromptWindow(string title, string label, string initial) : base(title)
     {
         Field = new TextBox { Text = initial, MinWidth = 300 };
+        AutomationProperties.SetName(Field, label.TrimEnd(':', ' '));
         var body = new StackPanel { Spacing = 8 };
         body.Children.Add(new TextBlock { Text = label });
         body.Children.Add(Field);
@@ -68,6 +70,7 @@ public sealed class NumberPromptWindow : PromptWindow<double?>
         // A plain text box, no up/down arrows: text that is not a number (a whole number, when there are no decimals) is
         // said so and holds OK. A number outside the range is kept inside it, and rounded to the decimals, by SpinValue.
         Field = new TextBox { Text = NumberText.FormatFixed(PlotCommands.SpinValue(value, min, max, decimals), decimals), MinWidth = 200 };
+        AutomationProperties.SetName(Field, label.TrimEnd(':', ' '));
         Problem = new TextBlock { IsVisible = false };
         Problem[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("SystemFillColorCriticalBrush");
         Field.PropertyChanged += (_, e) =>
@@ -114,6 +117,8 @@ public sealed class TimeWindowPromptWindow : PromptWindow<(string Start, string 
     {
         StartField = new TextBox { Text = start, PlaceholderText = "DDD:HH:MM:SS", MinWidth = 180 };
         StopField = new TextBox { Text = stop, PlaceholderText = "DDD:HH:MM:SS", MinWidth = 180 };
+        AutomationProperties.SetName(StartField, "Start");
+        AutomationProperties.SetName(StopField, "Stop");
         var form = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 8, RowSpacing = 8 };
         Place(form, new TextBlock { Text = "Start:", VerticalAlignment = VerticalAlignment.Center }, 0, 0);
         Place(form, StartField, 0, 1);
