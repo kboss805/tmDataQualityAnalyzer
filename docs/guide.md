@@ -284,6 +284,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can enable non-linear step calibration for a specific Receiver SNR stream in the per-stream setup dialog (via the "Apply Calibration" button, which opens the Extract Calibration dialog).
 - [x] The user can load a TOML file defining the expected step values (in dB).
 - [x] The user can load a Calibration CH10 file containing the recorded step data.
+- [x] The user can choose which PCM and time channel of the calibration recording the step cals are read from; the dialog lists the recording's channels once it is chosen and starts on the stream's own where the recording has them.
 - [x] The Extract Calibration dialog (opened by Apply Calibration) provides optional Clip Start and Clip End controls to trim leading or trailing seconds from the calibration recording before step detection.
 - [x] The application automatically extracts "ideal" steps from the CAL file.
 - [x] The application evaluates step extraction success independently for each receiver channel (the default is 48: 16 receivers of 3 channels).
