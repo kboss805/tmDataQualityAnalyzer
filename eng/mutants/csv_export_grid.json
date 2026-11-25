@@ -1,6 +1,8 @@
 {
   "suite": "native",
-  "args": ["-tc=csvseries*"],
+  "args": [
+    "-tc=csvseries*"
+  ],
   "mutants": [
     {
       "id": "G1",
@@ -77,10 +79,10 @@
     {
       "id": "G10",
       "file": "src/core/src/csvserieswriter.cpp",
-      "old": "periods >= 0.0 ? static_cast<std::int64_t>(periods + 0.5) : static_cast<std::int64_t>(periods - 0.5)",
-      "new": "static_cast<std::int64_t>(periods + 0.5)",
+      "old": "static_cast<std::int64_t>(periods - 0.5 - kTieTolerance)",
+      "new": "static_cast<std::int64_t>(periods - 0.5 + kTieTolerance)",
       "expect": "caught",
-      "note": "a time before midnight of the base day rounded the wrong way"
+      "note": "a time before midnight of the base day: the tie tolerance on the wrong side, so a time just before halfway goes the other way"
     },
     {
       "id": "G11",
@@ -97,6 +99,38 @@
       "new": "rest / 60'000 % 59",
       "expect": "caught",
       "note": "minutes of the hour wrong"
+    },
+    {
+      "id": "G13",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "static_cast<std::int64_t>(periods + 0.5 + kTieTolerance)",
+      "new": "static_cast<std::int64_t>(periods + 0.5)",
+      "expect": "caught",
+      "note": "no tolerance for the times from midnight on: a column half a period off the grid loses samples to the noise of its sums"
+    },
+    {
+      "id": "G14",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "constexpr double kTieTolerance = 1e-4;",
+      "new": "constexpr double kTieTolerance = 1e-12;",
+      "expect": "caught",
+      "note": "a tolerance below the noise of the sums is none"
+    },
+    {
+      "id": "G15",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "constexpr double kTieTolerance = 1e-4;",
+      "new": "constexpr double kTieTolerance = 0.01;",
+      "expect": "caught",
+      "note": "a tolerance wide enough to round a time a hundredth of a period before halfway as halfway"
+    },
+    {
+      "id": "G16",
+      "file": "src/core/src/csvserieswriter.cpp",
+      "old": "static_cast<std::int64_t>(periods + 0.5 + kTieTolerance)",
+      "new": "static_cast<std::int64_t>(periods + 0.5 - kTieTolerance)",
+      "expect": "caught",
+      "note": "the tolerance the wrong way: halfway rounds down by a hair and the noise still splits it"
     }
   ]
 }
