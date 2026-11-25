@@ -1168,7 +1168,11 @@ The five managed tests that read the process's private memory before and after a
 and `RunTests` hold them) share `ProcessMemoryCollection`, which runs alone: the number is the whole process's, so another test
 allocating beside one (xunit runs classes in parallel) is counted as its leak.
 
-**The application** (`tests/TmDq.App.Tests`, on the headless platform with Skia drawing):
+**The application** (`tests/TmDq.App.Tests`, on the headless platform with Skia drawing). The files are in folders by area:
+`Plot/` (the chart, its menu, Customize View, the draft), `Streams/` (Configure Streams, the setup dialogs, calibration, processing),
+`Files/` (export, import, templates, Open to the chart), `Shell/` (the window, menus, title bar, names, preferences, the layers),
+`Build/` (version, manifest, licences, the manual's figures, the icon), `Soak/` (the soak's tests and its manifest) and `Support/`
+(the helpers they share). Every class is in the namespace `TmDq.App.Tests` whichever folder it is in, so a `-class` filter does not change.
 
 - **The run:** `OpenToChartTests` (Open to the drawn chart on the PRN sample, failures, the smoke report),
   `CompositionRootTests` (`App.Compose`: every service the menu needs wired, the window's view model and the plot's prompts, the preferences read from their folder, beside the exe for a portable copy, and the theme following them and the menu; the smoke test keeping nothing and running the defaults end to end; the session log handed to the crash report),
