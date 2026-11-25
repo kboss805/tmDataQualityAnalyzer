@@ -20,7 +20,7 @@ each suite has its house style and helpers. Build and run with the **build-and-t
 | --- | --- | --- |
 | The core (`src/core/include/`, `src/core/src/`) and the C ABI (`src/core/abi/`) | doctest | `tests/core/test_<name>.cpp` |
 | The C# binding (`src/TmDq.Core`) | xunit v3 | `tests/TmDq.Core.Tests/<Name>Tests.cs` |
-| The application (`src/TmDq.App`) | xunit v3 on `Avalonia.Headless.XUnit` | `tests/TmDq.App.Tests/<Name>Tests.cs` |
+| The application (`src/TmDq.App`) | xunit v3 on `Avalonia.Headless.XUnit` | `tests/TmDq.App.Tests/<Area>/<Name>Tests.cs` (`Plot`, `Streams`, `Files`, `Shell` or `Build`; the namespace stays `TmDq.App.Tests`) |
 
 ## The native suite (doctest)
 
