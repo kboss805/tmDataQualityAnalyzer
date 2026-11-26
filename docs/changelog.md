@@ -12,6 +12,10 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### A new application icon
+
+The icon is a PCM bit stream (a stepped teal wave, solid) over the Receiver SNR trace (dotted amber) on a navy tile: the two things the plot shows, drawn the way it draws them. `eng\gen_app_icon.py` now **draws** `assets/icon.ico` (the artwork is its geometry, supersampled and box-reduced) instead of resizing `docs/design/icon_image.png`, which is removed. Two drawings: 48 px and up carry the full mark; 16, 24 and 32 px a simplified one (three steps over three square dots) whose every edge is a whole pixel, so a title bar at 100 % and 200 % is crisp. Same sizes as before (16, 24, 32, 48, 64, 256), so `IconTests` and the packaging check hold unchanged. Checked: the script run, the small sizes read back magnified; the suites below. No code of the application.
+
 #### The installer is a per-machine MSI; the Inno Setup installer is gone
 
 **What the user asked for.** Many users are in defense and aerospace, on workstations that are being locked down and installed silently (Group Policy, SCCM, Intune), so an MSI to deploy. The user chose MSI over MSIX (Group Policy installs only MSI; MSIX fixes its options at build time and puts the install in a versioned, read-only folder, which would also move `settings\` to a writable place), WiX 6.0.2 (the Open Source Maintenance Fee applies to organizations with more than about $10,000 a year in revenue; the project has none), per-machine only (a user without admin rights has the portable ZIP, which is unchanged), no upgrade path from an Inno install (there are few installs), and the removal of the Inno installer once the MSI passed signed.
