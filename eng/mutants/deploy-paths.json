@@ -92,6 +92,14 @@
       "new": "Condition=\"WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed\" Order=\"0\"",
       "expect": "caught",
       "note": "the launch runs before the path is set"
+    },
+    {
+      "id": "D12",
+      "file": "deploy/tmDataQualityAnalyzer.wxs",
+      "old": "    <WixVariable Id=\"WixUIBannerBmp\" Value=\"$(RepoRoot)\\assets\\installer_banner.bmp\" />\n",
+      "new": "",
+      "expect": "caught",
+      "note": "the wizard's banner is WiX's stock one again"
     }
   ]
 }

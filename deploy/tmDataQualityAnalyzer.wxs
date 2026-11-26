@@ -163,6 +163,10 @@
 
     <!-- Interactive install: welcome, licence, feature tree (with the folder), ready, progress, finish with "launch". -->
     <WixVariable Id="WixUILicenseRtf" Value="$(LicenseRtf)" />
+    <!-- The wizard's pictures, drawn from the icon's artwork by eng\gen_installer_images.py: the Welcome and Finish pages' panel
+         (493 x 312) and the other pages' banner (493 x 58), in place of WiX's own. -->
+    <WixVariable Id="WixUIDialogBmp" Value="$(RepoRoot)\assets\installer_dialog.bmp" />
+    <WixVariable Id="WixUIBannerBmp" Value="$(RepoRoot)\assets\installer_banner.bmp" />
     <ui:WixUI Id="WixUI_Advanced" />
 
     <!-- The dialog set builds its per-machine folder from [ProgramFilesFolder], which is the 32-bit "Program Files (x86)" even for an

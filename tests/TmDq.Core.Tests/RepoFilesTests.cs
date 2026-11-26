@@ -165,6 +165,24 @@ public class RepoFilesTests
         Assert.Matches(@"Value=""LaunchApplication""[^>]*Order=""2""", wxs);
     }
 
+    [Theory]
+    [InlineData("WixUIDialogBmp", "installer_dialog.bmp", 493, 312)]
+    [InlineData("WixUIBannerBmp", "installer_banner.bmp", 493, 58)]
+    public void TheWizardsPicturesAreOursAtTheSizesItDraws(string variable, string file, int width, int height)
+    {
+        // The MSI wizard's Welcome/Finish picture and its banner are drawn from the icon's artwork (eng\gen_installer_images.py).
+        // Windows Installer stretches a bitmap of another size to the control, so a wrong size is a distorted picture, not an
+        // error; and an image it cannot read is the stock WiX picture again. Both are 24-bit, bottom-up BMPs of the control's size.
+        string wxs = File.ReadAllText(Path.Combine(RepoPaths.Root, "deploy", "tmDataQualityAnalyzer.wxs"));
+        Assert.Contains($@"<WixVariable Id=""{variable}"" Value=""$(RepoRoot)\assets\{file}"" />", wxs, StringComparison.Ordinal);
+        byte[] bmp = File.ReadAllBytes(Path.Combine(RepoPaths.Root, "assets", file));
+        Assert.Equal((byte)'B', bmp[0]);
+        Assert.Equal((byte)'M', bmp[1]);
+        Assert.Equal(width, BitConverter.ToInt32(bmp, 18));
+        Assert.Equal(height, BitConverter.ToInt32(bmp, 22));
+        Assert.Equal(24, BitConverter.ToInt16(bmp, 28));
+    }
+
     [Fact]
     public void EveryDotnetProjectKeepsItsOutputWhereItAlwaysIs()
     {

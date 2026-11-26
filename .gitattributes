@@ -4,6 +4,7 @@
 # Binary files
 *.ico binary
 *.png binary
+*.bmp binary
 *.exe binary
 *.dll binary
 
