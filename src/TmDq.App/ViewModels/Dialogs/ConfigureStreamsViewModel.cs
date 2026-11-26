@@ -41,7 +41,7 @@ public sealed class ConfigureStreamsViewModel : DialogViewModel
         _calibrationFiles = calibrationFiles;
         _lastCalFolder = lastCalFolder;
         _timeChannels = file.TimeChannels;
-        TimeChannelItems = _timeChannels.Select(StreamRules.TimeChannelText).ToList();
+        TimeChannelItems = _timeChannels.Select(StreamRules.ChannelText).ToList();
         _timeChannelIndex = Math.Max(0, _timeChannels.ToList().FindIndex(c => c.Id == file.DefaultTimeChannel));
         Rows = new ObservableCollection<StreamRowViewModel>(file.PcmChannels.Select(c => new StreamRowViewModel(this, StreamDefaults.NewStream(c))));
         ProcessCommand = new RelayCommand(Process, () => CanProcess);

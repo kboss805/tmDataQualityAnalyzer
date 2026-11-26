@@ -385,7 +385,7 @@ public sealed class StreamRulesTests
     [Fact]
     public void TheTimeChannelListShowsTheNumberAndTheName()
     {
-        Assert.Equal("1 - TIME", StreamRules.TimeChannelText(new ChannelInfo(1, "TIME", 0)));
+        Assert.Equal("1 - TIME", StreamRules.ChannelText(new ChannelInfo(1, "TIME", 0)));
     }
 
     // --- defaults ---

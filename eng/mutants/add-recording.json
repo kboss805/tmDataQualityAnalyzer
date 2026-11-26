@@ -29,15 +29,15 @@
     {
       "id": "A3",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "            if (!keep) ClearProcessedRun();\n            // The run is numbered",
-      "new": "            ClearProcessedRun();\n            // The run is numbered",
+      "old": "            if (!keep) ClearProcessedRun();\n        }",
+      "new": "            ClearProcessedRun();\n        }",
       "expect": "caught",
       "note": "the recordings processed before are removed when one is added"
     },
     {
       "id": "A4",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "        catch (RecordingException e)\n        {\n            if (!keep) ClearProcessedRun();",
+      "old": "        catch (RecordingException e)\n        {\n            ClearUnlessAdding();",
       "new": "        catch (RecordingException e)\n        {\n            ClearProcessedRun();",
       "expect": "caught",
       "note": "a recording that will not open takes the plot's recordings with it"
@@ -45,7 +45,7 @@
     {
       "id": "A5",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "        catch (OperationCanceledException)\n        {\n            if (!keep) ClearProcessedRun();",
+      "old": "        catch (OperationCanceledException)\n        {\n            ClearUnlessAdding();",
       "new": "        catch (OperationCanceledException)\n        {\n            ClearProcessedRun();",
       "expect": "caught",
       "note": "a run cancelled in the progress dialog takes the plot's recordings with it"

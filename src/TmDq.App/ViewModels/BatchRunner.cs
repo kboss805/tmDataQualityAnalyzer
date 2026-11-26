@@ -18,8 +18,6 @@ internal interface IRunHost
 {
     void SetStatus(string status);
 
-    void SetRunningFile(string name);
-
     Task<RunOutcome> RunWithDialogAsync(RunRequest request);
 }
 
@@ -83,7 +81,6 @@ internal sealed class BatchRunner
                     continue;
                 }
                 _host.SetStatus($"Processing {name}...");
-                _host.SetRunningFile(name);
                 using RunOutcome outcome = await _host.RunWithDialogAsync(TemplateBatch.ToRunRequest(template, path, file, sourceId, _appRoot));
                 foreach (StreamResult result in outcome.Results) _plot.AddStream(result);
                 processed++;

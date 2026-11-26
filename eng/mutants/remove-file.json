@@ -11,16 +11,16 @@
     {
       "id": "R1",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "        _series.RemoveAll(s => s.SourceId == sourceId);\n        _sourceLabels.Remove(sourceId);",
-      "new": "        _series.RemoveAll(s => s.SourceId != sourceId);\n        _sourceLabels.Remove(sourceId);",
+      "old": "            _series.RemoveAll(s => gone.Contains(s.SourceId));",
+      "new": "            _series.RemoveAll(s => !gone.Contains(s.SourceId));",
       "expect": "caught",
       "note": "keeps the recording asked to go and drops the others"
     },
     {
       "id": "R2",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "        _series.RemoveAll(s => s.SourceId == sourceId);\n        _sourceLabels.Remove(sourceId);",
-      "new": "        _series.RemoveAll(s => s.SourceId == sourceId);\n        _ = _sourceLabels.Count;",
+      "old": "            foreach (int id in removing) _sourceLabels.Remove(id);",
+      "new": "            _ = removing.Count;",
       "expect": "caught",
       "note": "the recording's name stays, and a later recording by the same id carries it"
     },
@@ -35,7 +35,7 @@
     {
       "id": "R4",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "bool drawnChanged = _visibleSource < 0 || _visibleSource == sourceId;",
+      "old": "bool drawnChanged = _visibleSource < 0 || gone.Contains(_visibleSource);",
       "new": "bool drawnChanged = true;",
       "expect": "caught",
       "note": "removing a recording that is not shown refits the view the operator zoomed"
@@ -43,7 +43,7 @@
     {
       "id": "R5",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "        if (_visibleSource == sourceId) _visibleSource = -1;\n",
+      "old": "            if (gone.Contains(_visibleSource)) _visibleSource = -1;\n",
       "new": "",
       "expect": "caught",
       "note": "the recording shown alone is removed and the plot still names it as the one shown"
@@ -51,8 +51,8 @@
     {
       "id": "R6",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "        if (!_series.Any(s => s.SourceId == sourceId)) return false;",
-      "new": "        if (!_series.Any(s => s.SourceId == sourceId)) return true;",
+      "old": "        if (removing.Count == 0) return false;",
+      "new": "        if (removing.Count == 0) return true;",
       "expect": "caught",
       "note": "a recording that is not there is said to have been removed"
     },
@@ -67,7 +67,7 @@
     {
       "id": "R8",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "        if (_series.All(s => s.SourceId == sourceId))\n        {\n            Clear();",
+      "old": "        if (_series.All(s => gone.Contains(s.SourceId)))\n        {\n            Clear();",
       "new": "        if (_series.Count == 99)\n        {\n            Clear();",
       "expect": "caught",
       "note": "the only recording's removal does not leave the plot as a new one"

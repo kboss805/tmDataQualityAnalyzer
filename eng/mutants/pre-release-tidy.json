@@ -13,8 +13,8 @@
     {
       "id": "P1",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "        _runningFile = name;   // the recording a \"does not overlap\" warning names",
-      "new": "        _ = name;   // the recording a \"does not overlap\" warning names",
+      "old": "        _lastRunFile = Path.GetFileName(request.FileName);\n",
+      "new": "",
       "expect": "caught",
       "note": "an added recording's non-overlap warning names no file"
     },
@@ -29,16 +29,16 @@
     {
       "id": "P3",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "            Clear();\n            SourceRemoved?.Invoke(this, sourceId);",
-      "new": "            Clear();",
+      "old": "        foreach (int id in removing) SourceRemoved?.Invoke(this, id);",
+      "new": "        foreach (int id in removing.Skip(1)) SourceRemoved?.Invoke(this, id);",
       "expect": "caught",
-      "note": "removing the last recording is not told, and Save Template keeps it"
+      "note": "the first recording removed is not told, and Save Template keeps it"
     },
     {
       "id": "P4",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "if (removed.Length > 0 && Title == removed) Title = SourceList()[0].Label;",
-      "new": "if (removed.Length > 0 && Title != removed) Title = SourceList()[0].Label;",
+      "old": "if (removedLabels.Contains(Title)) Title = SourceList()[0].Label;",
+      "new": "if (!removedLabels.Contains(Title)) Title = SourceList()[0].Label;",
       "expect": "caught",
       "note": "a title the operator wrote is replaced, and one that named the removed recording stays"
     },

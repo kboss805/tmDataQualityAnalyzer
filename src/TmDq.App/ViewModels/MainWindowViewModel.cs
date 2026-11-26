@@ -51,8 +51,10 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     private readonly BatchRunner _batch;
     private readonly string _appRoot;
     private readonly List<ProcessedSource> _sources = new();
+    // The recording the last run read, which a "does not overlap" warning names: set where every run goes (RunWithDialogAsync),
+    // Open, Add Recording and a batch alike, so no caller has to remember it.
+    private string _lastRunFile = string.Empty;
     private List<MenuChoice>? _recentMenu;
-    private string _runningFile = string.Empty;
     private string _status = "Open a Chapter 10 recording.";
     private LogLevel _statusLevel = LogLevel.Info;
     private bool _isBusy;
@@ -110,7 +112,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         // A batch's recordings share one time axis; one that does not overlap the rest is said so, in v2.14.2's
         // words.
         Plot.NonOverlappingSource += (_, _) => Log.Warning(
-            "The most recently added source's recording time ('" + _runningFile + "') does not overlap the data already loaded. " +
+            "The most recently added source's recording time ('" + _lastRunFile + "') does not overlap the data already loaded. " +
             "They will share one time axis with a large gap between them.");
         Plot.PropertyChanged += (_, e) =>
         {
@@ -549,8 +551,12 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         string name = Path.GetFileName(path);
         // Add Recording keeps everything on the plot; with nothing on it, there is nothing to keep and it is Open.
         bool keep = add && Plot.HasData;
-        _runningFile = name;   // the recording a "does not overlap" warning names, as a batch's files do
         string verb = keep ? "Adding" : "Opening";
+        // What the run, and a failure or a cancel, clear: the recordings processed before, unless this one is added to them.
+        void ClearUnlessAdding()
+        {
+            if (!keep) ClearProcessedRun();
+        }
         LastFolder = Path.GetDirectoryName(Path.GetFullPath(path));
         IsBusy = true;
         try
@@ -569,7 +575,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
                 Report($"Cancelled. {name} was not processed.");
                 return;
             }
-            if (!keep) ClearProcessedRun();
+            ClearUnlessAdding();
             // The run is numbered after what the plot keeps, so that a CSV imported before it never shares its source id.
             RunRequest request = choice.Request with { SourceId = Plot.NextSourceId };
             Report($"Processing {name}...");
@@ -586,12 +592,12 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         }
         catch (OperationCanceledException)
         {
-            if (!keep) ClearProcessedRun();
+            ClearUnlessAdding();
             Report($"Cancelled. {name} was not processed.", LogLevel.Warning);
         }
         catch (RecordingException e)
         {
-            if (!keep) ClearProcessedRun();
+            ClearUnlessAdding();
             Report(e.Message, LogLevel.Error);
             // A run with nothing processed has logged the core's own reasons already.
             if (e is not NothingProcessedException) Log.Error(e.Message);
@@ -599,7 +605,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
         {
             // The native core is missing or does not match this build.
-            if (!keep) ClearProcessedRun();
+            ClearUnlessAdding();
             string error = CoreNotLoaded + e.Message;
             Report(error, LogLevel.Error);
             Log.Error(error);
@@ -612,13 +618,12 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
 
     void IRunHost.SetStatus(string status) => Report(status);
 
-    void IRunHost.SetRunningFile(string name) => _runningFile = name;
-
     Task<RunOutcome> IRunHost.RunWithDialogAsync(RunRequest request) => RunWithDialogAsync(request);
 
     /// <summary>Runs <paramref name="request"/> with the progress dialog up until it has stopped.</summary>
     private async Task<RunOutcome> RunWithDialogAsync(RunRequest request)
     {
+        _lastRunFile = Path.GetFileName(request.FileName);
         using var processing = new ProcessingViewModel();
         _processingDialog?.Show(processing);
         try
@@ -689,7 +694,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
             ClearRun();
             return;
         }
-        foreach (int id in processed) Plot.RemoveSource(id);
+        Plot.RemoveSources(processed);   // one redraw for all of them
         SetSources(Array.Empty<ProcessedSource>());
     }
 

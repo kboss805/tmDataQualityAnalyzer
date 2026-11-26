@@ -106,7 +106,7 @@
     },
     {
       "id": "C13",
-      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "file": "src/TmDq.App/Models/Streams/StreamRules.cs",
       "old": "channel.Id.ToString(CultureInfo.InvariantCulture) + \" - \" + channel.Name;",
       "new": "channel.Id.ToString(CultureInfo.InvariantCulture) + \" \" + channel.Name;",
       "expect": "caught",

@@ -223,6 +223,24 @@ public sealed class RemoveFileTests : IDisposable
     // ---- what keeps a record of the recordings, the title, and what Remove File starts on ----------------------------------
 
     [Fact]
+    public void SeveralRecordingsRemovedAtOnceAreRedrawnOnceAndEachIsTold()
+    {
+        PlotViewModel plot = ThreeRecordings();
+        int redrawn = 0;
+        var told = new List<int>();
+        plot.SeriesChanged += (_, _) => redrawn++;
+        plot.SourceRemoved += (_, id) => told.Add(id);
+
+        Assert.True(plot.RemoveSources(new[] { 1, 0, 1, 99 }));   // a repeat and one that is not there are passed over
+
+        Assert.Equal(1, redrawn);                                 // one redraw for both, not one each
+        Assert.Equal(new[] { 1, 0 }, told);
+        Assert.Equal(new[] { (2, "imported") }, plot.SourceList());
+        Assert.Equal((0.0, 20.0), (plot.XViewMin, plot.XViewMax));
+        Assert.False(plot.RemoveSources(new[] { 98, 99 }));
+    }
+
+    [Fact]
     public void ThePlotTellsWhichRecordingWasRemovedOnlyWhenOneWas()
     {
         PlotViewModel plot = ThreeRecordings();
