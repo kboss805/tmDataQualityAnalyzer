@@ -102,6 +102,11 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         // A time window entered outside the recording is clamped, and says so in the log, in goldenrod; so are the rows
         // an imported CSV skipped.
         Plot.Warning += (_, message) => Log.Warning(message);
+        // A recording taken out of the plot by Remove File is no longer one Save Template can capture.
+        Plot.SourceRemoved += (_, id) =>
+        {
+            if (_sources.RemoveAll(s => s.SourceId == id) > 0) SaveTemplateCommand.NotifyCanExecuteChanged();
+        };
         // A batch's recordings share one time axis; one that does not overlap the rest is said so, in v2.14.2's
         // words.
         Plot.NonOverlappingSource += (_, _) => Log.Warning(
@@ -544,6 +549,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         string name = Path.GetFileName(path);
         // Add Recording keeps everything on the plot; with nothing on it, there is nothing to keep and it is Open.
         bool keep = add && Plot.HasData;
+        _runningFile = name;   // the recording a "does not overlap" warning names, as a batch's files do
         string verb = keep ? "Adding" : "Opening";
         LastFolder = Path.GetDirectoryName(Path.GetFullPath(path));
         IsBusy = true;

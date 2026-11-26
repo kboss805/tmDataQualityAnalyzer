@@ -84,12 +84,12 @@ internal static class AroundTheChartSupport
             return Task.FromResult(((string, string)?)Next());
         }
 
-        public (string Title, string Label, IReadOnlyList<string> Choices) LastChoice;
+        public (string Title, string Label, IReadOnlyList<string> Choices, int Selected) LastChoice;
 
-        public Task<int?> ChooseAsync(string title, string label, IReadOnlyList<string> choices)
+        public Task<int?> ChooseAsync(string title, string label, IReadOnlyList<string> choices, int selected = 0)
         {
             Asked.Add(title);
-            LastChoice = (title, label, choices);
+            LastChoice = (title, label, choices, selected);
             return Task.FromResult((int?)Next());
         }
 

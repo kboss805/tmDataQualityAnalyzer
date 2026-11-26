@@ -1206,10 +1206,12 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   layer), `ChartMenuCommandTests` (the right-click menu's commands, asked through a fake of the prompts),
   `CustomizeViewStateTests` (Customize View's rows and what a choice in it does), `ChartViewTests` (the legend and what
   rebuilds it, the zoom rule, chips, menu, keys, read from the controls and from rendered frames) and
-  `ChartPromptWindowTests` (each prompt's window: OK answers, Cancel does not).
+  `ChartPromptWindowTests` (each prompt's window: OK answers, Cancel does not), and `RemoveFileTests` (Remove File: a recording's series, name and CSV columns go and the others stay, what is refitted, the notice that keeps Save Template honest, the title that follows, and what the dialog starts on).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV), `PhasedArrayImportTests` (the kind question every import asks, an antenna's log as 90 series read H, V and C, and none of it exported),
-  `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing).
+  `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing),
+  `ImportedDataKeptTests` (processing a recording keeps what was imported, the run numbered apart from it, an import named for its file) and
+  `AddRecordingTests` (File > Add Recording: the plot kept, the new recording beside it, names told apart, a failed or cancelled add changes nothing, Open still replaces).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `StatusBarTests` (the bar's place, colour and hairline, its marks, its trimming), `MenuStyleTests` (no icons, the accent row and white text, the dimmed shortcut, the row height and inset), `DialogAnatomyTests`
   (every window kind's footer band, padding, button widths and spacing, accent and cancel, in both themes; a status text following the theme), `PreferencesTests`
   (the preferences file, and v2.x's INI file left unread), `MainWindowStartupTests`, `AccessibleNamesTests` (every control a person

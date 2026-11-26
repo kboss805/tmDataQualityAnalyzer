@@ -48,6 +48,7 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
     private string? _clipStartProblem, _clipEndProblem;
     private IReadOnlyList<ChannelInfo> _calPcm = Array.Empty<ChannelInfo>(), _calTime = Array.Empty<ChannelInfo>();
     private int _calPcmIndex = -1, _calTimeIndex = -1;
+    private int _loadVersion;   // the latest recording chosen: an earlier one whose channels arrive late is dropped
 
     /// <param name="initialStepPath">The step file the stream last used; it is loaded if it exists, else the shipped
     /// default.</param>
@@ -263,11 +264,16 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
         OnPropertyChanged(nameof(CalPath));
         OnPropertyChanged(nameof(CalName));
 
+        int version = ++_loadVersion;
         // The recording's channels first (its TMATS only, off the UI thread): the extraction below reads the ones chosen.
         RecordingChannels channels;
         try
         {
             channels = await Task.Run(() => ReadChannels(path));
+        }
+        catch (RecordingException) when (version != _loadVersion)
+        {
+            return;   // another recording was chosen meanwhile: this one's failure is of no interest
         }
         catch (RecordingException e)
         {
@@ -276,6 +282,7 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
             SetCal(CalibrationStatusKind.Fail, e.Message);
             return;
         }
+        if (version != _loadVersion) return;   // another recording was chosen while this one's channels were read
         SetChannels(channels);
         await ExtractAsync();
     }
@@ -290,12 +297,17 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
         CalTimeItems = _calTime.Select(ChannelText).ToList();
         int pcm = _calPcm.ToList().FindIndex(c => c.Id == _base.PcmChannelId);
         int time = _calTime.ToList().FindIndex(c => c.Id == _base.TimeChannelId);
+        bool timeLacking = time < 0 && _calTime.Count > 0;
         if (time < 0 && channels is not null) time = _calTime.ToList().FindIndex(c => c.Id == channels.DefaultTimeChannel);
         _calPcmIndex = _calPcm.Count == 0 ? -1 : Math.Max(0, pcm);
         _calTimeIndex = _calTime.Count == 0 ? -1 : Math.Max(0, time);
-        ChannelNote = _calPcm.Count > 0 && pcm < 0
-            ? string.Create(CultureInfo.InvariantCulture, $"The recording has no channel {_base.PcmChannelId}: channel {_calPcm[_calPcmIndex].Id} is selected.")
-            : string.Empty;
+        // Each channel the stream names that the recording does not have is said, with the one selected in its place.
+        var notes = new List<string>();
+        if (_calPcm.Count > 0 && pcm < 0)
+            notes.Add(string.Create(CultureInfo.InvariantCulture, $"The recording has no channel {_base.PcmChannelId}: channel {_calPcm[_calPcmIndex].Id} is selected."));
+        if (timeLacking)
+            notes.Add(string.Create(CultureInfo.InvariantCulture, $"The recording has no time channel {_base.TimeChannelId}: time channel {_calTime[_calTimeIndex].Id} is selected."));
+        ChannelNote = string.Join(" ", notes);
         OnPropertyChanged(nameof(CalPcmItems));
         OnPropertyChanged(nameof(CalTimeItems));
         OnPropertyChanged(nameof(CalPcmIndex));

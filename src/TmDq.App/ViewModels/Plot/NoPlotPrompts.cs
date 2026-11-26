@@ -17,7 +17,7 @@ public sealed class NoPlotPrompts : IPlotPrompts
     public Task<(string Start, string Stop)?> AskTimeWindowAsync(string start, string stop) =>
         Task.FromResult<(string Start, string Stop)?>(null);
 
-    public Task<int?> ChooseAsync(string title, string label, IReadOnlyList<string> choices) => Task.FromResult<int?>(null);
+    public Task<int?> ChooseAsync(string title, string label, IReadOnlyList<string> choices, int selected = 0) => Task.FromResult<int?>(null);
 
     public Task<Color?> PickColorAsync(Color initial) => Task.FromResult<Color?>(null);
 

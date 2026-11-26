@@ -8,9 +8,12 @@ namespace TmDq.App.Views.Dialogs;
 /// OK and Cancel. Closes with the index chosen, or null on Cancel.</summary>
 public sealed class ChoiceWindow : PromptWindow<int?>
 {
-    public ChoiceWindow(string title, string label, IReadOnlyList<string> choices) : base(title)
+    /// <param name="selected">The index that starts chosen: the first by default; -1 for none, and OK is held until one is.</param>
+    public ChoiceWindow(string title, string label, IReadOnlyList<string> choices, int selected = 0) : base(title)
     {
-        Choices = new ComboBox { ItemsSource = choices, SelectedIndex = choices.Count > 0 ? 0 : -1, MinWidth = 320 };
+        Choices = new ComboBox { ItemsSource = choices, SelectedIndex = selected < choices.Count ? selected : -1, MinWidth = 320 };
+        OkButton.IsEnabled = Choices.SelectedIndex >= 0;
+        Choices.SelectionChanged += (_, _) => OkButton.IsEnabled = Choices.SelectedIndex >= 0;
         AutomationProperties.SetName(Choices, label.TrimEnd(':', ' '));
         var body = new StackPanel { Spacing = 8 };
         body.Children.Add(new TextBlock { Text = label });

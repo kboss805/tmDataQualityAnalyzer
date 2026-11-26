@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using TmDq.App.Models.Export;
 using TmDq.App.Models.Processing;
+using TmDq.App.Models.Streams;
 using TmDq.App.Services;
 using TmDq.App.ViewModels;
 using TmDq.App.ViewModels.Plot;
@@ -217,6 +218,52 @@ public sealed class AddRecordingTests : System.IDisposable
         {
             Asked++;
             return Task.FromResult(Answers.Count > 0 ? Answers.Dequeue() : null);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task ARecordingTakenOutWithRemoveFileIsNoLongerOneSaveTemplateCaptures()
+    {
+        var vm = new MainWindowViewModel();
+        await vm.LoadAsync(Prn);
+        await vm.LoadAsync(Second, add: true);
+        Assert.Equal(2, vm.Sources.Count);
+
+        vm.Plot.RemoveSource(vm.Sources[1].SourceId);
+        Assert.Equal(new[] { Prn }, vm.Sources.Select(s => s.FilePath));
+
+        vm.Plot.RemoveSource(vm.Sources[0].SourceId);
+        Assert.Empty(vm.Sources);
+    }
+
+    [AvaloniaFact]
+    public async Task TheWarningThatARecordingDoesNotOverlapNamesTheRecordingAdded()
+    {
+        string safran = Repo.Recording("safran_testfile, sample.ch10");
+        var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new SafranOrDefault(), AppRoot = Repo.Root });
+        await vm.LoadAsync(Prn);
+
+        await vm.LoadAsync(safran, add: true);
+
+        Assert.Equal(2, vm.Sources.Count);
+        // The two recordings are from different days: the warning names the one just added, not nothing or a batch's last file.
+        Assert.Contains(vm.Log.Entries, e => e.Text.Contains("does not overlap", System.StringComparison.Ordinal)
+                                             && e.Text.Contains(Path.GetFileName(safran), System.StringComparison.Ordinal));
+    }
+
+    /// <summary>Safran's channel 13, as 4.5's oracle runs it (its own byte order); the defaults for everything else.</summary>
+    private sealed class SafranOrDefault : IStreamConfigurator
+    {
+        public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file)
+        {
+            if (!Path.GetFileName(path).StartsWith("safran", System.StringComparison.Ordinal)) return new FirstChannelRun().ConfigureAsync(path, file);
+            var stream = new StreamConfig
+            {
+                PcmChannelId = 13, Label = "PCM03", Mode = StreamMode.FrameSyncLock, SyncPattern = "334AABBF", SyncMask = "FFFFFFFF",
+                BitsInMinorFrame = 32767, SamplePeriod = FrameSyncDefaults.Period,
+            };
+            var request = new RunRequest(path, file.DefaultTimeChannel, new[] { stream }) { SwapBytes = false };
+            return Task.FromResult<StreamsChoice?>(new StreamsChoice(request, System.Array.Empty<StreamSetup>(), 0));
         }
     }
 }
