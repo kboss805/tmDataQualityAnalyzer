@@ -51,6 +51,8 @@ public sealed class WindowStreamDialogs : IStreamDialogs
         // The extraction's progress sits over this dialog, modal to it, as in v2.x.
         vm.ProgressDialog = new WindowProcessingDialog(window);
         await Modal.ShowAsync(window, vm, Top);
+        // Closed (OK, Cancel or its title bar) while a typed clip waited to be extracted: nothing may start over a window that is gone.
+        vm.CancelExtraction();
     }
 
     public Task ShowReportAsync(string title, string text) => new ReportWindow(title, text).ShowDialog(Top);

@@ -1,3 +1,4 @@
+using System;
 using Avalonia.Media;
 using TmDq.Core;
 
@@ -20,16 +21,25 @@ public sealed class PlotSeries
     /// H, V and C, and it is never exported (the third party's system writes that log).</summary>
     public bool IsPhasedArray { get; init; }
 
-    /// <summary>Seconds from the shared base; one array per stream, shared by its series, and moved in place when
-    /// the base moves.</summary>
-    public required double[] X { get; init; }
+    private double[] _x = Array.Empty<double>();
+
+    /// <summary>Seconds from the shared base; one array per stream, shared by its series, moved in place when a run or an
+    /// import moves the base earlier, and replaced (<see cref="MoveTimes"/>) when Remove File moves it later.</summary>
+    public required double[] X { get => _x; init => _x = value; }
+
+    /// <summary>Gives the series <paramref name="x"/> as its times, the same samples on a moved base, and says they moved.</summary>
+    internal void MoveTimes(double[] x)
+    {
+        _x = x;
+        Version++;
+    }
 
     public required double[] Y { get; init; }
     public double YMin { get; init; }
     public double YMax { get; init; }
     public Color Color { get; set; }
 
-    /// <summary>Whether the line is drawn dotted: the second 15 of a run of streams (see <see cref="PlotColors.Assign"/>).</summary>
+    /// <summary>Whether the line is drawn dotted: the second 15 of a run of streams (see <see cref="PlotColors.Assign(System.Collections.Generic.IEnumerable{PlotSeries})"/>).</summary>
     public bool Dotted { get; set; }
 
     /// <summary>Whether the line is drawn a little thicker, the strongest of a stream's polarizations: the combined one.</summary>

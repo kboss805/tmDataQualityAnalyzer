@@ -32,14 +32,16 @@ namespace TmDq.App.Tests;
 /// CSV v2.14.2 wrote, and the windows.
 /// </summary>
 [Collection(NativeCoreCollection.Name)]
-public sealed class TemplateBatchTests : IDisposable
+public sealed class TemplateBatchTests : IDisposable, IClassFixture<ShortRecordings>
 {
     private readonly string _dir = TempFiles.NewPath("batch");
+    private readonly ShortRecordings _short;
 
-    public TemplateBatchTests()
+    public TemplateBatchTests(ShortRecordings recordings)
     {
         NativeCore.EnsureLoaded();
         Directory.CreateDirectory(_dir);
+        _short = recordings;
     }
 
     public void Dispose() => TempFiles.DeleteDirectory(_dir, recursive: true);
@@ -61,6 +63,14 @@ public sealed class TemplateBatchTests : IDisposable
     {
         string path = Path.Combine(_dir, name);
         File.Copy(Prn, path);
+        return path;
+    }
+
+    /// <summary>A copy of the short PRN recording (<see cref="ShortRecordings"/>) under <paramref name="name"/>: it processes as the sample does, in a fraction of its time.</summary>
+    private string CopyShort(string name)
+    {
+        string path = Path.Combine(_dir, name);
+        File.Copy(_short.First, path);
         return path;
     }
 
@@ -340,6 +350,103 @@ public sealed class TemplateBatchTests : IDisposable
         Assert.Equal(86400.0, StartOf(1), 6);
         Assert.Equal(2 * 86400.0, StartOf(0), 6);
         Assert.Equal(StartOf(0) + vm.Plot.Series.First(s => s.SourceId == 2).X[^1], vm.Plot.XMax, 6);
+    }
+
+    [Fact]
+    public async Task RemovingTheEarliestRecordingStartsTheAxisAtTheNextAndKeepsEverySamplesClockTime()
+    {
+        // step_cal as recorded, then a day later: elapsed zero is the first's start, and the second's samples a day on.
+        Ch10File file = StreamsRun.Open(StepCal);
+        StreamSetup row = StreamRules.ForEditing(StreamRules.WithMode(StreamDefaults.NewStream(file.PcmChannels[0]), StreamMode.ReceiverChannelInfo), Repo.Root)
+            with { Process = true, Configured = true };
+        var template = new ProcessingTemplate("v", "step", 1, true, new[] { new TemplateEntry(row, Array.Empty<SeriesAppearance>()) });
+        string oneDay = ADayLater(StepCal, "a day later.ch10");
+        var vm = new MainWindowViewModel(new MainWindowServices { AppRoot = Repo.Root });
+        await vm.RunBatchAsync(template, new[] { StepCal, oneDay }, null, false);
+        PlotSeries later = vm.Plot.Series.First(s => s.SourceId == 1);
+        Assert.Equal(86400.0, later.X[0], 6);
+        string[] clock = later.X.Select(vm.Plot.FormatTime).ToArray();
+        int version = later.Version;
+        double[] held = later.X;   // as an export being written holds it
+        string before = Path.Combine(_dir, "before.csv"), after = Path.Combine(_dir, "after.csv");
+        Assert.True(vm.Plot.ExportCsv(before, sourceId: 1));
+
+        Assert.True(vm.Plot.RemoveSource(0));
+
+        Assert.Equal(0.0, later.X[0], 9);                                    // the axis starts at the earliest sample left
+        Assert.Equal(clock, later.X.Select(vm.Plot.FormatTime));             // each sample at the clock time it was taken
+        Assert.True(later.Version > version);                                // moved, so the chart draws it again
+        Assert.NotSame(held, later.X);                                       // in new arrays: what an export holds is not moved under it
+        Assert.Equal(86400.0, held[0], 6);
+        Assert.Equal((0.0, later.X[^1]), (vm.Plot.XViewMin, vm.Plot.XViewMax));
+        Assert.Equal(later.X[^1], vm.Plot.XMax, 6);
+        Assert.True(vm.Plot.ExportCsv(after));
+        Assert.Equal(TempFiles.ReadAllBytes(before), TempFiles.ReadAllBytes(after));   // to the millisecond, as the CSV gives it
+    }
+
+    [Fact]
+    public async Task ReusingTheTemplatesLooksKeepsEveryFilesNamesAndColoursNotOnlyTheLasts()
+    {
+        // Each file's series were recoloured to the template's once it ran; the next file's run used to colour every series again.
+        string one = CopyShort("flight 1.ch10"), two = CopyShort("flight 2.ch10");
+        var vm = new MainWindowViewModel(new MainWindowServices { AppRoot = Repo.Root });
+
+        await vm.RunBatchAsync(PrnTemplate(), new[] { one, two }, null, reuseAppearance: true);
+
+        Assert.Equal(new[] { 0, 1 }, vm.Plot.SourceList().Select(s => s.Id));
+        foreach (int source in new[] { 0, 1 })
+        {
+            PlotSeries[] series = vm.Plot.Series.Where(s => s.SourceId == source).ToArray();
+            Assert.Equal(new[] { "Fifteen", "Fifteen", "Eleven", "Eleven" }, series.Select(s => s.Name));
+            Assert.Equal(new[] { Color.Parse("#ff6a0dad"), Color.Parse("#ff6a0dad"), Color.Parse("#ff1f77b4"), Color.Parse("#ff1f77b4") },
+                         series.Select(s => s.Color));
+        }
+    }
+
+    [Fact]
+    public async Task ABatchColoursItsStreamsAfreshNotAfterThoseOfThePlotItReplaced()
+    {
+        var vm = new MainWindowViewModel(new MainWindowServices { AppRoot = Repo.Root });
+        await vm.LoadAsync(CopyShort("before.ch10"));   // CH-01, in the first Frame Sync Lock colour
+        ProcessingTemplate t = PrnTemplate();
+        ProcessingTemplate thirdOnly = t with
+        {
+            Entries = t.Entries.Select(e => e.Config.PcmChannelId == 13 ? e with { Config = e.Config with { Process = false } } : e).ToList(),
+        };
+
+        await vm.RunBatchAsync(thirdOnly, new[] { CopyShort("batch.ch10") }, null, reuseAppearance: false);
+
+        PlotSeries lockSeries = Assert.Single(vm.Plot.Series, s => s.Metric == MetricType.FrameSyncLock);
+        Assert.NotEqual(13, lockSeries.StreamOrder);
+        Assert.Equal(PlotColors.FrameSyncLock[0], lockSeries.Color);   // the plot started again: its first stream, its first colour
+    }
+
+    [Fact]
+    public async Task FilesOfOneBaseNameAreNamedApartAndNoneOfTheirExportsOverwritesAnother()
+    {
+        // Named up to the first dot, as v2.x named them, both of these were "2024": the second's CSV and images replaced the first's.
+        string one = CopyShort("2024.11.05_run1.ch10"), two = CopyShort("2024.11.05_run2.ch10"), output = Path.Combine(_dir, "out");
+        Directory.CreateDirectory(output);
+        var images = new FakeImages();
+        var vm = new MainWindowViewModel(new MainWindowServices { ImageExporter = images, AppRoot = Repo.Root });
+        images.Plot = vm.Plot;
+
+        await vm.RunBatchAsync(PrnTemplate(), new[] { one, two }, output, reuseAppearance: false);
+
+        Assert.Equal(new[] { (0, "2024"), (1, "2024 (2)") }, vm.Plot.SourceList());
+        Assert.Equal("2024", vm.Plot.Title);
+        Assert.Equal(new[] { "2024 (2).csv", "2024.csv" }, Directory.GetFiles(output).Select(f => Path.GetFileName(f)).Order(StringComparer.Ordinal));
+        Assert.Equal(new[] { "2024_framesync_lock.png", "2024_missed_frames.png", "2024 (2)_framesync_lock.png", "2024 (2)_missed_frames.png" },
+                     images.Asked.Select(a => Path.GetFileName(a.Path)));
+        Assert.StartsWith("Time (DOY:HH:MM:SS.mmm),S1| ", File.ReadAllLines(Path.Combine(output, "2024 (2).csv"))[0], StringComparison.Ordinal);   // the second's own
+
+        // Windows does not tell "Flight" from "flight" in a file name, so neither does the batch.
+        string upper = CopyShort("Flight.a.ch10"), lower = CopyShort("flight.b.ch10"), output2 = Path.Combine(_dir, "out2");
+        Directory.CreateDirectory(output2);
+        var vm2 = new MainWindowViewModel(new MainWindowServices { AppRoot = Repo.Root });
+        await vm2.RunBatchAsync(PrnTemplate(), new[] { upper, lower }, output2, reuseAppearance: false);
+        Assert.Equal(new[] { "Flight", "flight (2)" }, vm2.Plot.SourceList().Select(s => s.Label));
+        Assert.Equal(new[] { "Flight.csv", "flight (2).csv" }, Directory.GetFiles(output2).Select(f => Path.GetFileName(f)).Order(StringComparer.Ordinal));
     }
 
     [Fact]

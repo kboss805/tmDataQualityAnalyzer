@@ -348,14 +348,19 @@ public sealed class StreamSetupViewModel : DialogViewModel
     private Task SaveReceiverParamsAsync() => SaveAsync("Save Receiver Parameters", StreamFiles.SaveReceiverParams);
 
     /// <summary>The two Load buttons' shared body: ask for a file (opening in the settings subfolder, then wherever the
-    /// last one was), put what it holds on the dialog, and say so. A file that cannot be read is the caller's to see.</summary>
+    /// last one was), put what it holds on the dialog, and say so; or, when it set nothing the dialog did not already hold (a
+    /// file that is empty, unreadable or of other settings, or one that says what is shown), say that instead. A file that
+    /// cannot be read is the caller's to see.</summary>
     private async Task LoadAsync(string title, string folder, Func<StreamSetup, string, StreamSetup> load)
     {
         string? path = await _files!.OpenAsync(title, StreamFiles.LoadFolder(_appRoot, folder, _lastFolder));
         if (path is null) return;
         _lastFolder = Path.GetDirectoryName(path);
-        Show(load(ToSetup(), path));
-        FileMessage = "Loaded " + Path.GetFileName(path) + ".";
+        StreamSetup shown = ToSetup(), loaded = load(shown, path);
+        Show(loaded);
+        FileMessage = loaded == shown
+            ? "Nothing changed: " + Path.GetFileName(path) + " holds no setting that differs from these."
+            : "Loaded " + Path.GetFileName(path) + ".";
     }
 
     /// <summary>The two Save buttons' shared body: ask where, write the dialog's fields there, and say what was written, or

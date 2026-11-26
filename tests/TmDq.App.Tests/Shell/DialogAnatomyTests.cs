@@ -114,6 +114,24 @@ public class DialogAnatomyTests
     }
 
     [AvaloniaFact]
+    public void TheFootersButtonsTakeTheirLeastWidthFromTheApplicationsResource()
+    {
+        // One source: App.axaml's ContentDialogButtonMinWidth (Fluent's 96), which the footer reads rather than a width of its own.
+        Assert.True(Application.Current!.TryFindResource("ContentDialogButtonMinWidth", out object? width));
+        var ok = new Button { Content = "OK" };
+        var window = new Window { Content = DialogFooter.Compose(new TextBlock { Text = "Body" }, ok), SizeToContent = SizeToContent.WidthAndHeight };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(96.0, width);
+        Assert.Equal(96.0, ok.MinWidth);
+
+        window.Resources["ContentDialogButtonMinWidth"] = 150.0;   // a window that asks for wider buttons gets them
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(150.0, ok.MinWidth);
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void ATextShowsItsStatusInTheThemesColourAndFollowsAChangeOfTheme()
     {
         var app = (App)Application.Current!;

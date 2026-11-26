@@ -55,13 +55,13 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can batch-process multiple `.ch10` files in one action by applying a saved template (the hamburger menu's **File > Process Multiple Files…**): pick a template, then multi-select the files.
 - [x] The per-stream processing is configured **once** when the template is created (**File > Open** a file → configure in the Configure Streams dialog → **File > Save Template…**); that configuration is applied to every selected file.
 - [x] Files are matched to the template by PCM channel ID; a file whose channel-ID set differs is skipped and the user is told which channels are missing/extra.
-- [x] All processed files are retained in memory; the user can optionally also export a CSV + Frame Sync Lock and Missed Frames images per file to a chosen folder, auto-named from each source file.
+- [x] All processed files are retained in memory; the user can optionally also export a CSV + Frame Sync Lock and Missed Frames images per file to a chosen folder, auto-named from each source file (up to its first dot; a file whose name another file of the batch already has is named apart, "2024 (2)", so no file's export overwrites another's).
 - [x] Progress is shown while the batch runs, and a summary reports how many files were processed vs. skipped.
 - [x] A saved template round-trips the same per-stream settings the Configure Streams dialog captures (frame-sync, SNR, calibration references), and — optionally — per-series names/colors.
   - **Scope:** Matching is **exact channel-ID set** (a file must have the same PCM channel IDs as the template, no more/fewer). This story is orthogonal to US2.2 (apply-to-all *within* one file). Templates carry **no file paths** — settings only, applied to whatever files the user picks. The only batch entry point is **File > Process Multiple Files…** (the template batch; there is no direct multi-file open, and no Add/Remove Source); templates are the sole way to configure a batch.
   - **Config application:** each file's run feeds the template's `StreamConfig`s through unchanged (`TemplateBatch.ToRunRequest`); the reader dispatches each stream by `pcmChannelId`, which is safe precisely because of the exact-set match. **Non-linear calibration:** a template stores only the calibration *input references* (not the extracted profile), so **all batch files process with the linear slope/offset fallback**. Non-linear step calibration is available for single-file processing only; re-extraction on template apply is a possible future add.
-  - **Custom names/colors:** captured only when **saving a template** from an already-processed, customized plot (`PlotTemplates.Build`), and reapplied per file after each run (`PlotTemplates.ApplyAppearance`, matched by channel id + metric/receiver/channel). Every file's copy of a channel intentionally shares the same name/color (they are the same channel across recordings); use the **Plot File** selector to view one file at a time when per-file distinction matters.
-  - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot's right-click **Plot File** submenu chooses which file to view; a batch leaves the plot on the first file (`BatchRunner`), and "All files (overlaid)" is there for comparison; the right-click **Remove File...** asks which recording, batch file or imported CSV to drop and `PlotViewModel.RemoveSource` removes every series of it (the plot, Customize View, the readout and the next CSV export no longer have it, its name goes from Plot File, and the view is fitted again only when what is drawn changed; the only recording left empties the plot as a new one starts), `PlotCommands.RemoveFileAsync` asking through `IPlotPrompts.ChooseAsync`. The filter is a `PlotViewModel` source gate (`SetVisibleSource`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`BatchRunner` shows each source alone, then writes its CSV, and a `_framesync_lock.png` and `_missed_frames.png`, through `SessionExport`).
+  - **Custom names/colors:** captured only when **saving a template** from an already-processed, customized plot (`PlotTemplates.Build`), and reapplied per file after each run (`PlotTemplates.ApplyAppearance`, matched by channel id + metric/receiver/channel); a later file's run colours only its own series, so every file keeps the template's colours. Every file's copy of a channel intentionally shares the same name/color (they are the same channel across recordings); use the **Plot File** selector to view one file at a time when per-file distinction matters.
+  - **Retain-all + file selector:** a batch always keeps every processed file in memory; the plot's right-click **Plot File** submenu chooses which file to view; a batch leaves the plot on the first file (`BatchRunner`), and "All files (overlaid)" is there for comparison; the right-click **Remove File...** asks which recording, batch file or imported CSV to drop and `PlotViewModel.RemoveSource` removes every series of it (the plot, Customize View, the readout and the next CSV export no longer have it, its name goes from Plot File, elapsed zero moves up to the earliest sample left when it held the earliest, every sample keeping its clock time, and the view is fitted again only when what is drawn changed; the only recording left empties the plot as a new one starts), `PlotCommands.RemoveFileAsync` asking through `IPlotPrompts.ChooseAsync`. The filter is a `PlotViewModel` source gate (`SetVisibleSource`) orthogonal to per-series visibility and the **View Mode** (lock %/accumulation) selector. Optional per-file export runs as a post-pass (`BatchRunner` shows each source alone, then writes its CSV, and a `_framesync_lock.png` and `_missed_frames.png`, through `SessionExport`), each named with the file's name in Plot File: its base name, made different from the batch's others (`MainWindowViewModel.UniqueName`, compared as Windows compares file names).
   - **Status: implemented** (Save/Apply Template, one `BatchRunner` batch loop, retain-all + Plot File selector), every part tested in `TemplateTests` and `TemplateBatchTests`, the batch over copies of the committed PRN sample. See `docs/design/processing-template-design.md`.
 
 ### US2.0: Define the key parameters required to process the framesync lock statistics and frame sync error accumulation — Complete
@@ -410,7 +410,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The menus (the main menu and the plot's) are drawn as VS Code's are: a row is 28 px high with 12 px of text padding at the sides and sits inset 4 px from the menu's edges; the row under the pointer, or reached by the keys, or whose submenu is open, is the accent (`AccentFillColorDefault`) with its text, its shortcut and its chevron white (`TextOnAccentFillColorPrimary`); the shortcut is the secondary text until then. They are the `MenuFlyoutItem*` brushes as aliases of the tokens, the paddings as resources, and a margin on every `MenuItem`.
 - [x] The application is themed as VS Code's Dark Modern and Light Modern: the main window's chrome (under its title bar, and the log sidebar) is #181818 / #F8F8F8, not black, and the content (the chart, and every dialog) a shade lighter than it, #1F1F1F / white; the title bar, the log and the chart are flush, with no gaps, borders or rounded corners, divided by one-pixel lines (#2B2B2B / #E5E5E5, one under the title bar and one between the log and the chart). Text is #CCCCCC / #3B3B3B, the accent #0078D4 / #005FB8, and the controls Fluent draws (inputs, dropdowns, secondary buttons, checkboxes, menus, tooltips) take VS Code's fills and borders.
 - [x] The theme is written in Fluent's vocabulary, so it can be extended the way Fluent is: the colours are Fluent's semantic tokens (`SolidBackgroundFillColorBase`, `LayerFillColorDefault`, `ControlFillColorDefault`, the strokes, the text and accent ones) as a Color and a Brush each, and every brush Fluent's controls are looked up under is an alias of the token for its job, never a colour of its own. The font is Segoe UI Variable, the type scale Fluent's with VS Code's body size (caption 12, body 13: the size every control Fluent draws takes its text at, `ControlContentThemeFontSize`, and our own body text, held equal), and the corners Fluent's (4 px for a control, 8 for an overlay), each a resource that the application's own text and shapes use.
-- [x] Every dialog has Fluent's ContentDialog anatomy: its content in 24 px of padding (`ContentDialogPadding`) above one footer band (`DialogFooter`: the base colour under a divider) with its buttons at the right, in equal widths of at least 96 px, 8 px apart; the default button (Enter) is the accent and Escape cancels (the progress dialog alone has no cancel key, since a run must not be stopped by one). What belongs to the choice and not to the answer ("Apply to all", "All") is at the footer's left. The dialogs built in code (`ChoiceWindow`, the prompts, `ReportWindow`) use the same footer through `DialogFooter.Compose`, so no dialog lays its own buttons out.
+- [x] Every dialog has Fluent's ContentDialog anatomy: its content in 24 px of padding (`ContentDialogPadding`) above one footer band (`DialogFooter`: the base colour under a divider) with its buttons at the right, in equal widths of at least 96 px (`ContentDialogButtonMinWidth`), 8 px apart; the default button (Enter) is the accent and Escape cancels (the progress dialog alone has no cancel key, since a run must not be stopped by one). What belongs to the choice and not to the answer ("Apply to all", "All") is at the footer's left. The dialogs built in code (`ChoiceWindow`, the prompts, `ReportWindow`) use the same footer through `DialogFooter.Compose`, so no dialog lays its own buttons out.
 - [x] A setting that is on or off (Derandomize, Invert Data, Legacy Chapter 10) is Fluent's toggle switch; a choice among several (a stream to process, "Apply to all", "All", what to export) is a check box.
 - [x] A status bar sits under the log and the chart, in the chrome's colour under a hairline, and says in one short sentence the last thing that happened, so there is an answer with the log hidden: what is under way ("Processing x.ch10..."), what finished ("Finished processing x.ch10: 3 streams.", "Imported x.csv.", "Saved template t.json.", "Exported data, plot image and log file.", "Batch complete: 2 processed, 1 skipped."), what was cancelled, or what went wrong. A success, a warning (finished with something left out) or an error is marked (a tick, a warning sign, a cross) in Fluent's status colour; what is under way, and the first prompt, is not. The sentence is the bar's alone: every path, stream and reason is in the log, and where an action failed the bar says so and points there ("Could not read the template. See the log."). The version is the log's first line and in Help > About, not in the bar. A sentence longer than the bar is cut with an ellipsis and whole in its tooltip.
 - [x] A status is painted by what it means, in Fluent's status colours for the theme: success, caution (a warning), critical, or neutral (pending). The log's lines, Configure Streams' ready marks, the setup dialog's problems and calibration label, the batch confirmation's glyphs and Extract Calibration's two status lines all take them (`SystemFillColorSuccess`, `Caution`, `Critical`, `Neutral`), and follow a change of theme; none has a colour of its own.
@@ -520,8 +520,8 @@ profile, so a batch processes with the linear calibration.
   (`ClearProcessedRun`: `Plot.RemoveSources` with the ids in `Sources`, the window and chart redrawn once for all) and keeps what was imported from CSV files, numbering
   the run `Plot.NextSourceId` so it never shares a source id with an import; with nothing imported it is `ClearRun`, a plot
   started again. Add Recording (`AddRecordingCommand`, `LoadAsync(path, add: true)`) is the same run with nothing removed: with
-  something on the plot it appends to `Sources`, names the recording apart from the plot's others (`UniqueSourceLabel`: "name
-  (2)") and leaves the plot's title; failing or cancelling it changes nothing. With an empty plot it is Open. An import that
+  something on the plot it appends to `Sources`, names the recording apart from the plot's others (`UniqueSourceLabel`, through
+  `UniqueName`: "name (2)"), its series coloured without recolouring what is shown, and leaves the plot's title; failing or cancelling it changes nothing. With an empty plot it is Open. An import that
   replaces the plot, and a batch, still clear everything. Its dialogs, pickers, configurator, clock and preferences are handed in as
   one `MainWindowServices`; each service left out has the effect its property states. The hamburger menu is declared
   in `MainWindow.axaml` and bound to it, every entry a command, Help's two too (through `IHelpActions`).
@@ -550,7 +550,8 @@ profile, so a batch processes with the linear calibration.
   `NumberText` (`ViewModels/NumberText.cs`: invariant culture, `ParseInteger`/`ParseNumber`/`ParseDecimal` give null for
   text that is no number, and the `Format*` give it back without losing a digit). Extract Calibration (`ExtractCalibrationViewModel`)
   behind Apply Calibration (US5.3) holds its two clips as `ClipStartText`/`ClipEndText`: text that is a number from 0 to
-  `ClipMaximum` becomes the clip and extracts again; anything else shows `Clip Start must be a number.`, `... is empty.` or
+  `ClipMaximum` becomes the clip and extracts again once the typing stops (`ClipSettle`: `ClipSettleTime` after the last
+  keystroke, which each keystroke restarts; setting `ClipStart`/`ClipEnd` extracts at once); anything else shows `Clip Start must be a number.`, `... is empty.` or
   `... must be from 0 to 100000 s.` under the fields, holds OK and leaves the clip as it was (`ClipStart`/`ClipEnd` are the
   parsed values, and setting one types it). The plot's number prompt (`NumberPromptWindow`, Set Y-Axis Minimum and
   Maximum) is a text box too: text that is not a number (a whole one when the prompt has no decimals) is said so and
@@ -561,7 +562,11 @@ profile, so a batch processes with the linear calibration.
   stream's own channels where the recording has them, else its first PCM channel and its default time channel (`ChannelNote`
   says so), and `CalPcmIndex`/`CalTimeIndex` extract again; `ToRequest` carries `PcmChannelId`/`TimeChannelId`, the selected
   ones. The choice is the dialog's alone (session-only, like the calibration profiles): it is not kept in the stream's
-  setup or a template.
+  setup or a template. **One extraction at a time, the latest:** an extraction asked for (a clip, a channel, a step file, a
+  recording) cancels the one waiting or running and drops its result (`_extractVersion`), and starts once that one has
+  stopped, so there is never a second run nor a second progress dialog; the host calls `CancelExtraction` once the window has
+  closed, so a clip still waiting is never extracted over a window that is gone; and a failure no one planned for is a cross
+  in the recording's status line ("The calibration could not be extracted: ..."), never a "Processing..." that does not end.
 - **The run** (`Models/Processing`: `StreamsRun`, `NativeCore`; `ViewModels/Dialogs/ProcessingViewModel` and its window;
   `Models/Logging/SessionLog` and `Views/Controls/LogView`): the core's run on its own threads, the modal progress dialog whose
   Cancel stops every stream, and the log. A run's outcome (`RunOutcome`) holds the core's own result of each stream that
@@ -569,7 +574,8 @@ profile, so a batch processes with the linear calibration.
   counts: what the log line and the status line say); no stream's arrays are copied to managed memory (`ToProcessed` is the
   binding's, for tests, and `LayerTests` fails if the app calls it).
 - **Startup and the smoke report** (`Startup`, `Models/Processing/FirstChannelRun`): a recording path on the command
-  line opens that recording, as a file association does. With `TMDQ_SMOKE_REPORT=<file>` set as well, the application skips
+  line opens that recording, as a file association does, and an exported CSV is imported (`Startup.OpenAsync`, through
+  `OpenPathAsync` as Recent Files and a drop). With `TMDQ_SMOKE_REPORT=<file>` set as well, the application skips
   Configure Streams, runs the recording's first PCM channel with the Frame Sync Lock defaults (`FirstChannelRun`), writes
   one result line to the file and exits (0 when the stream was processed, 1 when not, 2 when the report could not be
   written: `Startup.RunSmokeAsync`, which `OpenToChartTests` runs): the installer's clean-machine test
@@ -585,7 +591,9 @@ profile, so a batch processes with the linear calibration.
   failed. The report holds the version, the time, where it was raised, Windows and .NET, the exception with its inner ones, each
   frame's IL offset (the release has no symbols, so the trace has no line numbers: the release's symbols ZIP turns a method
   and an offset into one) and the last 200 lines of the session's log (`App.Compose` hands it over). The newest ten are
-  kept; the same exception reaching both hooks is one report; writing never throws. The installer's smoke run installs it
+  kept; the same exception reaching both hooks is one report; writing never throws. The message says the report holds the
+  full paths of the files and folders used (which can name the user) and to read it before sending it; what is collected is
+  not cut. The installer's smoke run installs it
   with no message box (it has no one to dismiss one). An exception no task observes does not end the process in .NET, so it is
   not a crash and is not reported.
 - **Windows:** every window with a view model is XAML (`MainWindow`, `ConfigureStreamsWindow`, `StreamSetupWindow`,
@@ -603,10 +611,12 @@ profile, so a batch processes with the linear calibration.
   members that name a recording, `SourceList`, `SetSourceLabel`, `VisibleSource`, `NextSourceId`, are it),
   `PlotTimeWindow` (the span, the window and its zoom history, the gestures and keys that move it), `PlotReadout` (what
   the readout says: the nearest sample, found by binary search in a series whose times are sorted and by looking at every sample in one whose
-  times are not, as an imported CSV's can be: `PlotSeries.SortedX` says which), `PlotCsv` (the series to and from the core's CSV), `PlotColors` (the colours), `PlotCommands` (below),
+  times are not, as an imported CSV's can be: `PlotSeries.SortedX` says which), `PlotCsv` (the series to and from the core's CSV), `PlotColors` (the colours: a run's stream or an import's series are coloured as they arrive, the plot keeping the Frame Sync Lock colour each stream order was given until it starts again, so the series already shown keep theirs, the user's or a template's), `PlotCommands` (below),
   `PlotTemplates` (under Templates) and `CustomizeViewModel`
-  (Customize View's state, edited as a copy of the plot and applied only on OK). `PlotChart` draws it (from the core's
-  geometry, each long series' envelope looked up in its `SeriesIndex`, a cached data layer, a draft while a gesture
+  (Customize View's state, edited as a copy of the plot and applied only on OK; its rows and groups are each of one
+  recording's stream, named for the recording when the plot holds more than one). `PlotChart` draws it (from the core's
+  geometry, each long series' envelope looked up in its `SeriesIndex`, a cached data layer in one bitmap painted again in
+  place until the chart's size in pixels changes, the layout's text measured once until the font, the theme or the scaling changes, a draft while a gesture
   moves a plot that is slow to paint, the gestures), and `PlotView` holds what is over it (the legend, `PlotLegend`, the chip bar, the
   right-click menu, the keys, Customize View). The menu, the chips and the keys are declared in `PlotView.axaml` and
   bound to `PlotCommands`, which the view makes for its plot with its prompts: a command for each item, chip and key
@@ -1226,7 +1236,7 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   the summary, then each thread's own lines in order, the reader's and the streams' interleaving as they come; a report the observer could not handle, said and not dropped), `SeveralStreamsTests`.
 - **Configure Streams:** `StreamRulesTests` and `StreamFilesTests` (the rules and files without a window),
   `StreamSetupViewModelTests`, `ConfigureStreamsTests`, `StreamWindowsTests`; `CalibrationDialogTests` (Extract
-  Calibration, Apply Calibration and the clips' text entry), `CalibrationChannelTests` (the calibration recording's own PCM and time channels: listed, started on the stream's, re-extracted on a change); `NoSpinnersTests` (no up/down control in any
+  Calibration, Apply Calibration and the clips' text entry), `CalibrationChannelTests` (the calibration recording's own PCM and time channels: listed, started on the stream's, re-extracted on a change; one extraction at a time, the latest, a typed clip once the typing stops); `NoSpinnersTests` (no up/down control in any
   source file or window, and `NumberText`).
 - **The plot:** `PlotTests` (series, axes, view mode, the time window and zoom, the readout, the chart's drawing and
   gestures), `PlotDraftTests` (the draft a gesture - the wheel, a drag, a held pan or zoom key - paints on a heavy plot
@@ -1235,12 +1245,12 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   released when the chart leaves the window), and five classes around the chart, which share `Support\AroundTheChartSupport`:
   `ChartPlotStateTests` (the plot's state the legend, chips and menu read, and which notifications repaint the data
   layer), `ChartMenuCommandTests` (the right-click menu's commands, asked through a fake of the prompts),
-  `CustomizeViewStateTests` (Customize View's rows and what a choice in it does), `ChartViewTests` (the legend and what
+  `CustomizeViewStateTests` (Customize View's rows and what a choice in it does, each recording's streams on their own), `ChartViewTests` (the legend and what
   rebuilds it, the zoom rule, chips, menu, keys, read from the controls and from rendered frames) and
   `ChartPromptWindowTests` (each prompt's window: OK answers, Cancel does not), `PlotSourcesTests` (the recordings' names, the one shown, the list and the next id, and what removing some does, on their own), and `RemoveFileTests` (Remove File: a recording's series, name and CSV columns go and the others stay, what is refitted, the notice that keeps Save Template honest, the title that follows, and what the dialog starts on).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV), `PhasedArrayImportTests` (the kind question every import asks, an antenna's log as 90 series read H, V and C, and none of it exported),
-  `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing),
+  `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, named apart and keeping each file's colours, Apply Template with the core missing),
   `ImportedDataKeptTests` (processing a recording keeps what was imported, the run numbered apart from it, an import named for its file) and
   `AddRecordingTests` (File > Add Recording: the plot kept, the new recording beside it, names told apart, a failed or cancelled add changes nothing, Open still replaces).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `StatusBarTests` (the bar's place, colour and hairline, its marks, its trimming), `MenuStyleTests` (no icons, the accent row and white text, the dimmed shortcut, the row height and inset), `DialogAnatomyTests`

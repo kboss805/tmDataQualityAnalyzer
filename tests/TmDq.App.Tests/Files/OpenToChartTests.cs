@@ -363,6 +363,37 @@ public sealed class OpenToChartTests
         Assert.Equal(expected, Startup.RecordingFromArguments(args));
     }
 
+    [AvaloniaFact]
+    public async Task AnExportedCsvOnTheCommandLineIsImportedAsRecentFilesAndADropImportIt()
+    {
+        // The kind dialog is what every import asks first; a cancel there imports nothing, which is all this needs to see.
+        var kinds = new FakeCsvKinds();
+        var vm = new MainWindowViewModel(new MainWindowServices { CsvKinds = kinds });
+
+        await Startup.OpenAsync(vm, @"C:\exports\flight.csv");
+
+        Assert.Equal(new[] { "flight.csv" }, kinds.Asked);
+        Assert.DoesNotContain(vm.Log.Entries, e => e.Text.StartsWith("Opening: ", StringComparison.Ordinal));
+
+        // A recording is opened as one.
+        string missing = Path.Combine(Path.GetTempPath(), "no such recording.ch10");
+        await Startup.OpenAsync(vm, missing);
+        Assert.Single(kinds.Asked);
+        Assert.Contains(vm.Log.Entries, e => e.Text == "Opening: no such recording.ch10");
+    }
+
+    [Fact]
+    public void ARecordingThatCannotBeReadForItsSizeIsTheRecordingThatFailedNotTheCore()
+    {
+        // Read after the core opened it: a file gone (or locked) since is a FileNotFoundException, which the window took for the
+        // core missing ("The processing core could not be loaded").
+        string gone = Path.Combine(Path.GetTempPath(), "gone since it was opened.ch10");
+        RecordingException e = Assert.Throws<RecordingException>(() => StreamsRun.FileSize(gone));
+        Assert.StartsWith("gone since it was opened.ch10 could not be read: ", e.Message, StringComparison.Ordinal);
+        Assert.IsType<FileNotFoundException>(e.InnerException);
+        Assert.Equal(new FileInfo(Prn).Length, StreamsRun.FileSize(Prn));
+    }
+
     [Fact]
     public void TheSmokeReportSaysWhatHappenedInOneLine()
     {

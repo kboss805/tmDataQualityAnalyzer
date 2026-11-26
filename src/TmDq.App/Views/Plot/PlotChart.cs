@@ -75,6 +75,7 @@ public sealed class PlotChart : Control
     private readonly Dictionary<PlotSeries, SeriesIndex> _indexes = new();
     private RenderTargetBitmap? _backing;
     private bool _backingValid;
+    private (FontFamily Family, double Scale, double TextHeight, double LabelWidth)? _metrics;
     private PlotViewModel? _watched;
 
     private bool _moving;          // a gesture is moving the plot, and the plot is heavy enough to draft
@@ -98,6 +99,7 @@ public sealed class PlotChart : Control
         ActualThemeVariantChanged += (_, _) =>
         {
             _backingValid = false;
+            _metrics = null;   // a theme may bring another font
             InvalidateVisual();
         };
     }
@@ -116,6 +118,9 @@ public sealed class PlotChart : Control
 
     /// <summary>How many of those paints were drafts.</summary>
     public int DraftLayerRenders { get; private set; }
+
+    /// <summary>How many bitmaps the data layer has been painted into: a new one only when the chart's size in pixels changes.</summary>
+    public int BackingBitmapsMade { get; private set; }
 
     /// <summary>Whether the data layer on screen is a draft.</summary>
     public bool DraftShown => _draftShown;
@@ -146,7 +151,28 @@ public sealed class PlotChart : Control
             bold ? new Typeface(Typeface.FontFamily, FontStyle.Normal, FontWeight.Bold) : Typeface,
             FontSize, new ImmutableSolidColorBrush(color));
 
-    private double TextHeight => Math.Ceiling(Text("Xg", Palette.Foreground).Height);
+    private double TextHeight => Metrics.TextHeight;
+
+    /// <summary>How many times the text the layout is measured with has been measured: once until the font, the theme or the
+    /// scaling changes, however often the layout is asked for (each mouse move asks several times).</summary>
+    public int TextMeasurements { get; private set; }
+
+    /// <summary>The height of a line of the chart's text and the width of the widest axis label, which the gutters are made
+    /// of: measured once, and again only when the font family or the scaling changes, or the theme (<see cref="PlotChart()"/>).</summary>
+    private (double TextHeight, double LabelWidth) Metrics
+    {
+        get
+        {
+            FontFamily family = TextElement.GetFontFamily(this);
+            double scale = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
+            if (_metrics is { } m && m.Family.Equals(family) && m.Scale.Equals(scale)) return (m.TextHeight, m.LabelWidth);
+            double height = Math.Ceiling(Text("Xg", Palette.Foreground).Height);
+            double width = Math.Ceiling(Text("-000.0", Palette.Foreground).Width);
+            _metrics = (family, scale, height, width);
+            TextMeasurements++;
+            return (height, width);
+        }
+    }
 
     /// <summary>The rectangle the data is drawn in: the control less the axes' gutters (a hidden axis reserves none),
     /// the title and the headroom kept for the overlays at the top.</summary>
@@ -172,7 +198,7 @@ public sealed class PlotChart : Control
     {
         PlotViewModel? vm = Plot;
         bool leftVisible = vm?.LeftAxisVisible ?? true, rightVisible = vm?.RightAxisVisible ?? false;
-        double textH = TextHeight, labelW = Math.Ceiling(Text("-000.0", Palette.Foreground).Width);
+        (double textH, double labelW) = Metrics;
         double left = OuterMargin;
         if (leftVisible) left += labelW + TickLength + textH + AxisLabelGap;
         double right = OuterMargin;
@@ -280,10 +306,17 @@ public sealed class PlotChart : Control
         double scale = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1.0;
         var pixels = new PixelSize(Math.Max(1, (int)Math.Ceiling(size.Width * scale)),
                                    Math.Max(1, (int)Math.Ceiling(size.Height * scale)));
-        if (!_backingValid || _backing is null || _backing.PixelSize != pixels)
+        var dpi = new Vector(96 * scale, 96 * scale);
+        if (!_backingValid || _backing is null || _backing.PixelSize != pixels || _backing.Dpi != dpi)
         {
-            _backing?.Dispose();
-            _backing = new RenderTargetBitmap(pixels, new Vector(96 * scale, 96 * scale));
+            // A bitmap of the same size is painted again, not made again: a full-window bitmap a repaint was costly to
+            // allocate and free. Its drawing context clears it to transparent first, so nothing of the last paint shows.
+            if (_backing is null || _backing.PixelSize != pixels || _backing.Dpi != dpi)
+            {
+                _backing?.Dispose();
+                _backing = new RenderTargetBitmap(pixels, dpi);
+                BackingBitmapsMade++;
+            }
             bool draft = _moving;
             long started = Stopwatch.GetTimestamp();
             using (DrawingContext into = _backing.CreateDrawingContext())

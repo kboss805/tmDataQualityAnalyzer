@@ -159,6 +159,87 @@
       "new": "        int version = _loadVersion++;",
       "expect": "caught",
       "note": "the version taken is one behind the counter, so every choice looks stale and none is ever listed"
+    },
+    {
+      "id": "EX1",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "            if (afterTyping) await ClipSettle(cancel);",
+      "new": "            if (afterTyping && cancel.IsCancellationRequested) await ClipSettle(cancel);",
+      "args": [ "-class", "TmDq.App.Tests.CalibrationChannelTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "a typed clip is extracted at every keystroke, with no wait for the typing to stop"
+    },
+    {
+      "id": "EX2",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "            // Asked for again meanwhile: this one's result is of settings the dialog no longer holds.\r\n            if (version != _extractVersion) return;",
+      "new": "            // Asked for again meanwhile: this one's result is of settings the dialog no longer holds.\r\n            if (version < 0) return;",
+      "args": [ "-class", "TmDq.App.Tests.CalibrationChannelTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "a superseded run's result is read and shown, over the latest's settings"
+    },
+    {
+      "id": "EX3",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "            if (version != _extractVersion) return;\r\n            Task run = RunAsync(version, cancel);",
+      "new": "            if (version < 0) return;\r\n            Task run = RunAsync(version, cancel);",
+      "args": [ "-class", "TmDq.App.Tests.CalibrationChannelTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "an extraction asked for and superseded while it waited for the one running starts anyway, beside the latest"
+    },
+    {
+      "id": "EX4",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "                using (cancel.Register(run.Cancel))\r\n",
+      "new": "",
+      "args": [ "-class", "TmDq.App.Tests.CalibrationChannelTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "a run superseded by another is left to run to its end before the new one may start"
+    },
+    {
+      "id": "EX5",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "            await _running;",
+      "new": "            await Task.CompletedTask;",
+      "args": [ "-class", "TmDq.App.Tests.CalibrationChannelTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "the next run starts while the one it superseded is still stopping: two at once, two progress dialogs"
+    },
+    {
+      "id": "EX6",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "            if (version == _extractVersion) SetCal(CalibrationStatusKind.Fail, \"The calibration could not be extracted: \" + e.Message);",
+      "new": "            _ = e;",
+      "args": [ "-class", "TmDq.App.Tests.CalibrationChannelTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "an unexpected failure leaves the status at Processing, with nothing running"
+    },
+    {
+      "id": "EX7",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "        _extractCancel?.Cancel();\r\n        _extractCancel?.Dispose();",
+      "new": "        _extractCancel?.Dispose();",
+      "args": [ "-class", "TmDq.App.Tests.CalibrationChannelTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "a new extraction asked for does not cancel the one waiting or running"
+    },
+    {
+      "id": "EX8",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "        _extractVersion++;\r\n        _extractCancel?.Cancel();\r\n    }",
+      "new": "        _extractVersion++;\r\n    }",
+      "args": [ "-class", "TmDq.App.Tests.CalibrationChannelTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "a typed clip still waiting when the dialog closes is extracted over a window that is gone"
+    },
+    {
+      "id": "EX9",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "is extracted once its channels are listed.\r\n        CancelExtraction();",
+      "new": "is extracted once its channels are listed.\r\n        _ = _extractVersion;",
+      "args": [ "-class", "TmDq.App.Tests.CalibrationChannelTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "a clip typed for the last recording, still waiting, is extracted against the recording chosen since"
     }
   ]
 }

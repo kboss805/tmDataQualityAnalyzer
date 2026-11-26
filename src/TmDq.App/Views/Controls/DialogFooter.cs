@@ -31,9 +31,9 @@ public sealed class DialogFooter : Border
         Grid.SetColumn(_buttons, 1);
         _row.Children.Add(_buttons);
         Child = _row;
-        // The buttons' widths are the footer's: equal, and not narrower than Fluent's.
+        // The buttons' widths are the footer's: equal, and not narrower than Fluent's (App.axaml's ContentDialogButtonMinWidth).
         var button = new Style(x => x.OfType<Button>());
-        button.Setters.Add(new Setter(MinWidthProperty, 96.0));
+        button.Setters.Add(new Setter(MinWidthProperty, new DynamicResourceExtension("ContentDialogButtonMinWidth")));
         button.Setters.Add(new Setter(Button.HorizontalContentAlignmentProperty, HorizontalAlignment.Center));
         Styles.Add(button);
         _buttons.Children.CollectionChanged += (_, _) => AccentTheDefault();

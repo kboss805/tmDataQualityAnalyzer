@@ -127,8 +127,8 @@
     {
       "id": "A10",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "        if (!taken.Contains(label)) return label;",
-      "new": "        if (taken.Contains(label)) return label;",
+      "old": "        if (!taken.Contains(name)) return name;",
+      "new": "        if (taken.Contains(name)) return name;",
       "expect": "caught",
       "note": "a name already taken is kept, and a free one is changed"
     },
@@ -171,6 +171,78 @@
       "new": "_sources.RemoveAll(s => s.SourceId != id) > 0",
       "expect": "caught",
       "note": "Remove File takes out every recording but the one removed from what Save Template captures"
+    },
+    {
+      "id": "BN1",
+      "file": "src/TmDq.App/ViewModels/BatchRunner.cs",
+      "old": "            string label = MainWindowViewModel.UniqueName(baseName, taken);",
+      "new": "            string label = baseName;",
+      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.FilesOfOneBaseNameAreNamedApartAndNoneOfTheirExportsOverwritesAnother" ],
+      "expect": "caught",
+      "note": "two files of one base name (2024.11.05_run1, _run2) both write 2024.csv"
+    },
+    {
+      "id": "BN2",
+      "file": "src/TmDq.App/ViewModels/BatchRunner.cs",
+      "old": "new HashSet<string>(StringComparer.OrdinalIgnoreCase);",
+      "new": "new HashSet<string>(StringComparer.Ordinal);",
+      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.FilesOfOneBaseNameAreNamedApartAndNoneOfTheirExportsOverwritesAnother" ],
+      "expect": "caught",
+      "note": "Flight and flight are told apart, and write one file on Windows"
+    },
+    {
+      "id": "BN3",
+      "file": "src/TmDq.App/ViewModels/BatchRunner.cs",
+      "old": "                taken.Add(label);",
+      "new": "                _ = label;",
+      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.FilesOfOneBaseNameAreNamedApartAndNoneOfTheirExportsOverwritesAnother" ],
+      "expect": "caught",
+      "note": "a name given is not kept as taken, so the next file of that base name takes it again"
+    },
+    {
+      "id": "BN4",
+      "file": "src/TmDq.App/ViewModels/BatchRunner.cs",
+      "old": "            string baseName = names[source.SourceId];",
+      "new": "            string baseName = MainWindowViewModel.BaseName(Path.GetFileName(source.FilePath));",
+      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.FilesOfOneBaseNameAreNamedApartAndNoneOfTheirExportsOverwritesAnother" ],
+      "expect": "caught",
+      "note": "Plot File names the files apart, but their exports are named by the base name again"
+    },
+    {
+      "id": "SM1",
+      "file": "src/TmDq.App/Startup.cs",
+      "old": "    public static Task OpenAsync(MainWindowViewModel vm, string path) => vm.OpenPathAsync(path);",
+      "new": "    public static Task OpenAsync(MainWindowViewModel vm, string path) => vm.LoadAsync(path);",
+      "args": [ "-method", "TmDq.App.Tests.OpenToChartTests.AnExportedCsvOnTheCommandLineIsImportedAsRecentFilesAndADropImportIt" ],
+      "expect": "caught",
+      "note": "a CSV on the command line is opened as a recording"
+    },
+    {
+      "id": "SM2",
+      "file": "src/TmDq.App/Models/Processing/StreamsRun.cs",
+      "old": "            return new FileInfo(path).Length;",
+      "new": "            return new FileInfo(path).Exists ? new FileInfo(path).Length : 0;",
+      "args": [ "-method", "TmDq.App.Tests.OpenToChartTests.ARecordingThatCannotBeReadForItsSizeIsTheRecordingThatFailedNotTheCore" ],
+      "expect": "caught",
+      "note": "a recording gone since it was opened is read as empty rather than said to be the recording that could not be read"
+    },
+    {
+      "id": "SM3",
+      "file": "src/TmDq.App/Views/Controls/DialogFooter.cs",
+      "old": "new Setter(MinWidthProperty, new DynamicResourceExtension(\"ContentDialogButtonMinWidth\"))",
+      "new": "new Setter(MinWidthProperty, 96.0)",
+      "args": [ "-method", "TmDq.App.Tests.DialogAnatomyTests.TheFootersButtonsTakeTheirLeastWidthFromTheApplicationsResource" ],
+      "expect": "caught",
+      "note": "the footer's least width is its own number again, beside a resource nothing reads"
+    },
+    {
+      "id": "SM4",
+      "file": "src/TmDq.App/CrashHandling.cs",
+      "old": "\"It is a text file that contains the full paths of the files and folders you used, which can include your user \" +",
+      "new": "\"\" +",
+      "args": [ "-method", "TmDq.App.Tests.CrashReportTests.TheMessageSaysWhereTheReportIsOrThatItCouldNotBeSavedAndWhere" ],
+      "expect": "caught",
+      "note": "the message asks for the report without saying it holds the user's file paths"
     }
   ]
 }

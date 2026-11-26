@@ -347,6 +347,23 @@ public sealed class StreamSetupViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task AFileThatChangesNothingSaysSoAndNotThatItWasLoaded()
+    {
+        string prn11 = Path.Combine(Repo.Root, "settings", "framesync_patterns", "framesync_PRN11.toml");
+        string empty = Path.Combine(_dir, "empty.toml");
+        File.WriteAllText(empty, "# says nothing\n");
+        StreamSetupViewModel vm = Dialog(Row() with { Inverted = false }, new FakeFilePicker(empty, prn11, prn11));
+
+        await vm.LoadFrameSyncCommand.ExecuteAsync(null);
+        Assert.Equal("Nothing changed: empty.toml holds no setting that differs from these.", vm.FileMessage);
+
+        await vm.LoadFrameSyncCommand.ExecuteAsync(null);
+        Assert.Equal("Loaded framesync_PRN11.toml.", vm.FileMessage);
+        await vm.LoadFrameSyncCommand.ExecuteAsync(null);   // the same file again: it is what is shown now
+        Assert.Equal("Nothing changed: framesync_PRN11.toml holds no setting that differs from these.", vm.FileMessage);
+    }
+
+    [Fact]
     public async Task SavingAPatternFileWritesWhatIsShown()
     {
         string target = Path.Combine(_dir, "mine");

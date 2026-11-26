@@ -8,24 +8,24 @@
     {
       "id": "L1",
       "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
-      "old": "        _lastFolder = Path.GetDirectoryName(path);\n        Show(load(",
-      "new": "        Show(load(",
+      "old": "        _lastFolder = Path.GetDirectoryName(path);\n        StreamSetup shown = ToSetup(), loaded",
+      "new": "        StreamSetup shown = ToSetup(), loaded",
       "expect": "caught",
       "note": "a Load does not remember its folder"
     },
     {
       "id": "L2",
       "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
-      "old": "        Show(load(ToSetup(), path));",
-      "new": "        _ = load(ToSetup(), path);",
+      "old": "        Show(loaded);",
+      "new": "        _ = loaded;",
       "expect": "caught",
       "note": "a Load shows nothing"
     },
     {
       "id": "L3",
       "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
-      "old": "FileMessage = \"Loaded \" + Path.GetFileName(path) + \".\";",
-      "new": "FileMessage = \"Saved \" + Path.GetFileName(path) + \".\";",
+      "old": ": \"Loaded \" + Path.GetFileName(path) + \".\";",
+      "new": ": \"Saved \" + Path.GetFileName(path) + \".\";",
       "expect": "caught",
       "note": "a Load says Saved"
     },
@@ -100,6 +100,14 @@
       "new": "LoadAsync(\"Load Receiver Parameters\"",
       "expect": "caught",
       "note": "the frame sync Load carries the other title"
+    },
+    {
+      "id": "SS1",
+      "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
+      "old": "        FileMessage = loaded == shown",
+      "new": "        FileMessage = loaded != shown",
+      "expect": "caught",
+      "note": "a file that set nothing still says it was loaded"
     }
   ]
 }
