@@ -28,7 +28,7 @@ A minor release (2026-11-26). What the user sees: nothing replaces the plot any 
 
 **What it does.** `eng\gen_installer_images.py` (new) draws `assets\installer_dialog.bmp` (493 x 312: the Welcome and Finish pages, a navy panel at the left in the icon's tile colour with the full mark drawn large, white where the wizard writes) and `assets\installer_banner.bmp` (493 x 58: the other pages' strip, white with the icon at the right, at 48 px, the smallest size that carries the full mark) from `gen_app_icon.py`'s own drawing, so they follow the icon. The MSI source sets them as `WixUIDialogBmp` and `WixUIBannerBmp`. `.gitattributes` marks `*.bmp` binary; `gen_app_icon.py`'s header no longer names Inno's `SetupIconFile`.
 
-**How it was checked.** `RepoFilesTests.TheWizardsPicturesAreOursAtTheSizesItDraws` (both variables, both files 24-bit BMPs of the control's size: Windows Installer stretches another size rather than failing); `eng/mutants/deploy-paths.json` D12 (the stock banner back) caught. Managed suite 440 in all, 439 passed. The pictures were previewed in a mock-up of the wizard's layout and seen in the real wizard by the user.
+**How it was checked.** `RepoFilesTests.TheWizardsPicturesAreOursAtTheSizesItDraws` (both variables, both files 24-bit BMPs of the control's size: Windows Installer stretches another size rather than failing); `eng/mutants/deploy-paths.json` D12 (the stock banner back) caught. Managed suite 440 in all, 439 passed. The pictures were previewed in a mock-up of the wizard's layout.
 
 #### A new application icon
 
