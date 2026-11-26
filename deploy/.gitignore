@@ -1,7 +1,7 @@
 # Ignore everything in deploy/ except tracked scripts, config and notes
 *
 !.gitignore
-# The installer's "What's New" page and the portable ZIP's README.txt.
+# The release notes (the MSI installs them beside the application and the GitHub release carries them) and the portable ZIP's README.txt.
 !RELEASENOTES.txt
 !README_portable.txt
 
@@ -10,13 +10,14 @@
 !sandbox/
 !sandbox/**
 
-# The release package's script, the installer script and the signing helpers.
+# The release package's script, the MSI's source and script, and the signing helpers.
 !build_package.ps1
 !signing.ps1
-!tmDataQualityAnalyzer.iss
+!tmDataQualityAnalyzer.wxs
+!build_msi.ps1
 
 # What the two produce, ignored again after the re-includes above (a later rule wins): the
 # sandbox payload run_sandbox_test.ps1 stages (and the .wsb, which carries absolute host paths).
-# The package's staged layout (staging/) and the packages themselves (*.zip, *_setup.exe) are
+# The package's staged layout (staging/) and the packages themselves (*.zip, *_setup.msi) are
 # ignored by the "*" at the top: nothing above re-includes them.
 sandbox/.work/
