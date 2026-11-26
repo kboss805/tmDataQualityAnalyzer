@@ -108,7 +108,10 @@
                 ToolTip.Tip="Restore the full time span and automatic axis scaling (or double-click the chart)"
                 Command="{Binding ResetViewCommand}" />
       </StackPanel>
-      <pv:PlotLegend x:Name="Legend" x:FieldModifier="public" />
+      <!-- Two legends, one for each metric, so that which entry is which is never a guess: Frame Sync Lock (and missed frames) at
+           the top left, Receiver SNR at the top right. -->
+      <pv:PlotLegend x:Name="FrameSyncLegend" x:FieldModifier="public" Title="Framesync Series" Side="Left" />
+      <pv:PlotLegend x:Name="SnrLegend" x:FieldModifier="public" Title="SNR Series" Side="Right" />
     </Canvas>
     <!-- While a CSV is read for the plot (plan step 4.5); it takes no input. -->
     <Border x:Name="LoadingLabel" x:FieldModifier="public" IsVisible="{Binding IsLoading, FallbackValue=False}" IsHitTestVisible="False"

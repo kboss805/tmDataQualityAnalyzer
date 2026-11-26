@@ -8,7 +8,8 @@ namespace TmDq.App.ViewModels.Plot;
 /// The series colours of US4.0. One palette of 15 hues serves both metrics, and the line tells them apart: a Frame Sync Lock
 /// stream (a PCM channel, its lock percentage and its missed frames alike) is drawn solid in its hue, and a Receiver SNR stream
 /// (a receiver, or a channel of a phased array antenna) dotted, with its combined channel in the full hue and a little thicker
-/// and its other two channels lighter tints of it. Streams beyond the 15th take the hues again from the first.
+/// and its other two channels lighter tints of it. The lock streams take the hues from the first, the SNR streams from the last,
+/// so stream 1 of the two is not one colour; streams beyond the 15th take the hues again from where their own run began.
 /// <para>A shade is made in 16-bit HSV, converted in <c>float</c> and rounded half away from zero: the arithmetic
 /// of the colour class v2.x drew with, step for step, so every shade is the very colour v2.x drew.
 /// <c>PlotTests</c> holds it to 84 shades v2.14.2 printed, round the whole hue wheel.</para>
@@ -18,7 +19,8 @@ public static class PlotColors
     /// <summary>
     /// The 15 hues, each a saturated colour so that its two lighter tints (an SNR stream's other channels, see
     /// <see cref="Assign(IEnumerable{PlotSeries})"/>) stay different from it and from each other. Frame Sync Lock streams take
-    /// them in stream order and SNR streams by receiver (or antenna channel); the 16th stream of either takes the first again.
+    /// them in stream order from the first and SNR streams by receiver (or antenna channel) from the last, see <see cref="SnrHue"/>;
+    /// the 16th stream of either takes its first hue again.
     /// </summary>
     public static readonly IReadOnlyList<Color> StreamHues = new[]
     {
@@ -74,13 +76,20 @@ public static class PlotColors
                 s.Strong = false;
                 continue;
             }
-            // Receiver SNR, of a recording or an antenna's log: always dotted, so it never reads as a lock curve of the same hue.
+            // Receiver SNR, of a recording or an antenna's log: always dotted, so it never reads as a lock curve of the same hue,
+            // and in the hues from the last end, so receiver 1 is not the colour of PCM channel 1 either.
             int stream = Math.Max(0, s.ReceiverIndex - 1);
-            s.Color = Shade(StreamHues[stream % StreamHues.Count], Weakness(s.ChannelIndex));
+            s.Color = Shade(SnrHue(stream), Weakness(s.ChannelIndex));
             s.Dotted = true;
             s.Strong = s.ChannelIndex == CombinedChannelIndex;
         }
     }
+
+    /// <summary>The hue of a Receiver SNR stream (counted from 0): the palette taken from its last hue back, the 16th stream the
+    /// last again. A Frame Sync Lock stream takes the hues from the first on, so stream 1 of the two (and every stream number
+    /// but the 8th, which is the middle hue of both) is told apart by its colour as well as its line. A lock stream k and an SNR
+    /// stream 16 - k do share a hue; a plot of fewer than eight of each never shows it.</summary>
+    public static Color SnrHue(int stream) => StreamHues[StreamHues.Count - 1 - (stream % StreamHues.Count)];
 
     /// <summary>How many times lighter a channel is than its stream's hue: the combined channel (index 2) none, the first
     /// (L or H) once and the second (R or V) twice, then one more for each channel beyond them.</summary>

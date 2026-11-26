@@ -120,6 +120,112 @@
       "new": "_ = 0;",
       "expect": "caught",
       "note": "the chart does not hear the window move"
+    },
+    {
+      "id": "G1",
+      "file": "src/TmDq.App/Views/Plot/PlotView.axaml.cs",
+      "old": "all.Where(e => !e.IsSnr).ToList()",
+      "new": "all.ToList()",
+      "expect": "caught",
+      "note": "the Framesync legend lists the SNR series too"
+    },
+    {
+      "id": "G2",
+      "file": "src/TmDq.App/Views/Plot/PlotView.axaml.cs",
+      "old": "all.Where(e => e.IsSnr).ToList()",
+      "new": "all.ToList()",
+      "expect": "caught",
+      "note": "the SNR legend lists the Framesync series too"
+    },
+    {
+      "id": "G3",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "s.Strong, s.Metric == MetricType.Snr));",
+      "new": "s.Strong, false));",
+      "expect": "caught",
+      "note": "no entry is marked SNR: every series is in the Framesync legend"
+    },
+    {
+      "id": "G4",
+      "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
+      "old": "public double LegendTop(Size size) => AreaFor(size).Top + PlotLegend.EdgeMargin;",
+      "new": "public double LegendTop(Size size) => AreaFor(size).Top * 0 + PlotLegend.EdgeMargin;",
+      "expect": "caught",
+      "note": "the legends start above the plot area, over the chips"
+    },
+    {
+      "id": "G5",
+      "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
+      "old": "public double LegendLeftEdge(Size size) => AreaFor(size).Left;",
+      "new": "public double LegendLeftEdge(Size size) => AreaFor(size).Left * 0;",
+      "expect": "caught",
+      "note": "the left legend covers the left axis's labels"
+    },
+    {
+      "id": "G6",
+      "file": "src/TmDq.App/Views/Plot/PlotLegend.cs",
+      "old": "Side == Corner.Left ? Math.Max",
+      "new": "Side == Corner.Right ? Math.Max",
+      "expect": "caught",
+      "note": "each legend sits in the other one's corner"
+    },
+    {
+      "id": "G7",
+      "file": "src/TmDq.App/Views/Plot/PlotLegend.cs",
+      "old": "Math.Ceiling(title.Height + content.Height) + frame",
+      "new": "Math.Ceiling(content.Height) + frame",
+      "expect": "caught",
+      "note": "the title takes room the rows were counted for: the last row scrolls under it"
+    },
+    {
+      "id": "G8",
+      "file": "src/TmDq.App/Views/Plot/PlotImageExport.cs",
+      "old": "await DrawLegendAsync(canvas, view.SnrLegend);",
+      "new": "_ = 0;",
+      "args": ["-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "an exported image leaves out the SNR legend"
+    },
+    {
+      "id": "G9",
+      "file": "src/TmDq.App/Views/Plot/PlotImageExport.cs",
+      "old": "await DrawLegendAsync(canvas, view.FrameSyncLegend);",
+      "new": "_ = 0;",
+      "args": ["-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "an exported image leaves out the Framesync legend"
+    },
+    {
+      "id": "G10",
+      "file": "src/TmDq.App/Views/Plot/PlotView.axaml.cs",
+      "old": "bool wanted = vm?.LegendVisible ?? true;",
+      "new": "bool wanted = true;",
+      "expect": "caught",
+      "note": "Show Legend no longer hides them"
+    },
+    {
+      "id": "G11",
+      "file": "src/TmDq.App/Views/Plot/PlotView.axaml.cs",
+      "old": "SnrLegend.HostResized(e.NewSize, Chart.LegendRightEdge(e.NewSize), Chart.LegendTop(e.NewSize));",
+      "new": "_ = 0;",
+      "expect": "caught",
+      "note": "the SNR legend does not follow its corner when the chart is resized"
+    },
+    {
+      "id": "G12",
+      "file": "src/TmDq.App/Views/Plot/PlotView.axaml",
+      "old": "Title=\"SNR Series\"",
+      "new": "Title=\"SNR Legend\"",
+      "expect": "caught",
+      "note": "the SNR legend is not titled \"SNR Series\""
+    },
+    {
+      "id": "G13",
+      "file": "src/TmDq.App/Views/Plot/PlotView.axaml",
+      "old": "Title=\"Framesync Series\"",
+      "new": "Title=\"Framesync\"",
+      "expect": "caught",
+      "note": "the Framesync legend is not titled \"Framesync Series\""
     }
   ]
 }

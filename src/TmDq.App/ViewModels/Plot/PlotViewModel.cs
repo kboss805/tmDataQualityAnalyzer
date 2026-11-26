@@ -761,7 +761,8 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         return entered - (b.BaseDay * 86400.0 + b.BaseTimeOffset);
     }
 
-    /// <summary>The rows the legend lists: each series shown, of the left-axis metric in view, in plot order.</summary>
+    /// <summary>The rows the legends list: each series shown, of the left-axis metric in view, in plot order. A Receiver SNR
+    /// series is marked <see cref="LegendEntry.IsSnr"/>: the view lists it in the SNR legend, and the rest in the Framesync one.</summary>
     public IReadOnlyList<LegendEntry> LegendEntries()
     {
         var entries = new List<LegendEntry>();
@@ -770,7 +771,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
             if (!EffectiveVisible(s)) continue;
             if (s.Metric == MetricType.FrameSyncLock && _lockAxisView != LockAxisView.LockPercent) continue;
             if (s.Metric == MetricType.AccumulatedMissedFrames && _lockAxisView != LockAxisView.MissedFrames) continue;
-            entries.Add(new LegendEntry(s.Id, LegendLabel(s), s.Name, s.Color, s.Dotted, s.Strong));
+            entries.Add(new LegendEntry(s.Id, LegendLabel(s), s.Name, s.Color, s.Dotted, s.Strong, s.Metric == MetricType.Snr));
         }
         return entries;
     }
@@ -862,4 +863,4 @@ public enum CsvLoad
 }
 
 /// <summary>One legend row: the series it stands for, its label, its full name (the row's tooltip) and its colour.</summary>
-public sealed record LegendEntry(int Id, string Label, string FullName, Color Color, bool Dotted = false, bool Strong = false);
+public sealed record LegendEntry(int Id, string Label, string FullName, Color Color, bool Dotted = false, bool Strong = false, bool IsSnr = false);

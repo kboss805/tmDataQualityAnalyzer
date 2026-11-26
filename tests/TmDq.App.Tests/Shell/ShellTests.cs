@@ -717,10 +717,11 @@ public sealed class ShellTests : IDisposable
             window.RequestedThemeVariant = theme;
             Dispatcher.UIThread.RunJobs();
             Assert.Same(palette, view.Chart.Palette);
-            Assert.Same(palette, view.Legend.Palette);
-            Assert.Equal(palette.LegendBackground, ((ISolidColorBrush)view.Legend.Background!).Color);
-            Assert.Equal(palette.LegendBorder, ((ISolidColorBrush)view.Legend.BorderBrush!).Color);
-            Assert.All(view.Legend.Rows, r => Assert.Equal(palette.LegendText,
+            Assert.Same(palette, view.FrameSyncLegend.Palette);
+            Assert.Same(palette, view.SnrLegend.Palette);
+            Assert.Equal(palette.LegendBackground, ((ISolidColorBrush)view.FrameSyncLegend.Background!).Color);
+            Assert.Equal(palette.LegendBorder, ((ISolidColorBrush)view.FrameSyncLegend.BorderBrush!).Color);
+            Assert.All(view.FrameSyncLegend.Rows, r => Assert.Equal(palette.LegendText,
                 ((ISolidColorBrush)((Panel)r).Children.OfType<TextBlock>().Single().Foreground!).Color));
             // Drawn, not only chosen: the chart's own background, read from a rendered frame, before anything but the
             // theme has changed (the layer painted in the other theme is not reused).
@@ -737,7 +738,7 @@ public sealed class ShellTests : IDisposable
             vm.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "a", 1, 0, new[] { 0.0, 1.0 }, new[] { 50.0, 60.0 }) });
             vm.Plot.SetXViewByUser(0.2, 0.8);
             Dispatcher.UIThread.RunJobs();
-            Assert.All(view.Legend.Rows, r => Assert.Equal(palette.LegendText,
+            Assert.All(view.FrameSyncLegend.Rows, r => Assert.Equal(palette.LegendText,
                 ((ISolidColorBrush)((Panel)r).Children.OfType<TextBlock>().Single().Foreground!).Color));
         }
         window.Close();
@@ -900,7 +901,7 @@ public sealed class ShellTests : IDisposable
         PlotView view = window.FindControl<PlotView>("PlotView")!;
         Assert.Equal((4, 4, 4, 4), (view.ResetChip.CornerRadius.TopLeft, window.MinimizeButton.CornerRadius.TopLeft, window.MenuButton.CornerRadius.TopLeft,
                                    window.SidebarButton.CornerRadius.TopLeft));
-        Assert.Equal((8, 8), (view.Legend.CornerRadius.TopLeft, view.LoadingLabel.CornerRadius.TopLeft));
+        Assert.Equal((8, 8), (view.FrameSyncLegend.CornerRadius.TopLeft, view.LoadingLabel.CornerRadius.TopLeft));
         Assert.Equal(PlotLegend.CornerRadiusPx, Radius("OverlayCornerRadius").TopLeft);
         Assert.Equal(PlotChart.FontSize, Double("CaptionTextBlockFontSize"));
         Assert.Equal(Double("CaptionTextBlockFontSize"), view.ResetChip.FontSize);
