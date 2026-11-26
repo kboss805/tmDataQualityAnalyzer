@@ -64,6 +64,14 @@ The icon is a PCM bit stream (a stepped teal wave, solid) over the Receiver SNR 
 
 **How it was checked.** Seven new cases in `CalibrationChannelTests` (a stand-in for the core's listing and a runner that records its requests; one case runs the real core, on a stream whose channel the recording lacks; one the window), and two existing cases in `CalibrationDialogTests` moved with the change (the time channel reaches the request only when the recording has it; a file that is not a recording names itself). Mutation check `eng/mutants/calibration-channel.json`: 15 mutants, 15 caught, none survived (the three window ones run again after the layout moved). App suite 877 in all, 34 not run, 0 failed: **843 passed** (836 before).
 
+#### The project's settings let the session turn on Auto-fix for a pull request
+
+**What the user asked for.** To be able to have CI failures, merge conflicts and review comments on a pull request handed back to the session that opened it, without each request being refused. The app's `set_monitor` call, which switches that on for one PR, was denied by the permission check every time it was tried (#364-#366 and #407); the denial said a permission rule for it would allow it.
+
+**What it does now.** `.claude/settings.json` has a `permissions.allow` list holding `mcp__ccd_pr__set_monitor`, beside the existing `deny` rules for `third_party/irig106`. There is no global setting for Auto-fix: it is switched on for one PR at a time, so the session makes the call right after opening each PR. The rule lets the call through; whether the app's separate safety check still asks for approval is not something the file controls. Auto-fix wakes the session on failures, conflicts and comments and never merges: a merge still waits for the user's word.
+
+**How it was checked.** The file parses as JSON and keeps both `deny` rules. No test reads it. No code or baseline changed.
+
 #### US5.3 has a criterion for choosing the calibration recording's channels
 
 The wording suggested with #387 and approved by the user on 2026-11-25: "The user can choose which PCM and time channel of the calibration recording the step cals are read from", with the half sentence that says what the dialog does (lists the recording's channels once it is chosen, starts on the stream's own where it has them). It follows the criterion for loading the Calibration CH10 file. The stories are the user's, and this is the one line added; nothing else of US5.3 changed. Documentation only: no code, no baseline moved, no test (the criterion's test is `CalibrationChannelTests`, from #387).
