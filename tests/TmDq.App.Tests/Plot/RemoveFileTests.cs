@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -217,5 +218,84 @@ public sealed class RemoveFileTests : IDisposable
         await commands.RemoveFileAsync();   // asked directly, it still asks nothing
 
         Assert.Empty(prompts.Asked);
+    }
+
+    // ---- what keeps a record of the recordings, the title, and what Remove File starts on ----------------------------------
+
+    [Fact]
+    public void ThePlotTellsWhichRecordingWasRemovedOnlyWhenOneWas()
+    {
+        PlotViewModel plot = ThreeRecordings();
+        var told = new List<int>();
+        plot.SourceRemoved += (_, id) => told.Add(id);
+
+        plot.RemoveSource(99);
+        Assert.Empty(told);
+
+        plot.RemoveSource(1);
+        plot.RemoveSource(0);
+        plot.RemoveSource(2);   // the last one: the plot is cleared, and it is told as well
+
+        Assert.Equal(new[] { 1, 0, 2 }, told);
+    }
+
+    [Fact]
+    public void TheTitleThatNamedARemovedRecordingNamesTheFirstOneLeftAndAWrittenTitleStays()
+    {
+        PlotViewModel plot = ThreeRecordings();
+        plot.Title = "flight 2";   // as a recording's title is: its name
+
+        plot.RemoveSource(1);
+
+        Assert.Equal("flight 1", plot.Title);
+
+        plot.Title = "my own title";
+        plot.RemoveSource(0);
+
+        Assert.Equal("my own title", plot.Title);
+        Assert.Equal("imported", Assert.Single(plot.SourceList()).Label);
+    }
+
+    [Fact]
+    public async Task RemoveFileStartsOnNothingChosenWithSeveralOverlaidOnTheOneShownAndOnTheOnlyOne()
+    {
+        PlotViewModel plot = ThreeRecordings();
+        var prompts = new FakePrompts();
+        prompts.Answers.Enqueue(null);
+        prompts.Answers.Enqueue(null);
+        prompts.Answers.Enqueue(null);
+        using var commands = new PlotCommands(plot, prompts);
+
+        await commands.RemoveFileCommand.ExecuteAsync(null);
+        Assert.Equal(-1, prompts.LastChoice.Selected);          // Enter must not remove the first by accident
+
+        plot.SetVisibleSource(1);
+        await commands.RemoveFileCommand.ExecuteAsync(null);
+        Assert.Equal(1, prompts.LastChoice.Selected);           // the one being looked at
+
+        var single = new PlotViewModel();
+        single.SetSeries(new[] { PlotFixtures.Make(0, "a", MetricType.Snr, 1, 0, new[] { 0.0, 2.0 }, new[] { 10.0, 20.0 }) });
+        var singlePrompts = new FakePrompts();
+        singlePrompts.Answers.Enqueue(null);
+        using var singleCommands = new PlotCommands(single, singlePrompts);
+        await singleCommands.RemoveFileCommand.ExecuteAsync(null);
+        Assert.Equal(0, singlePrompts.LastChoice.Selected);     // the only choice there is
+    }
+
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public void TheChoiceWindowHoldsOkUntilSomethingIsChosenWhenNothingStartsChosen()
+    {
+        var none = new TmDq.App.Views.Dialogs.ChoiceWindow("Remove File", "Which?", new[] { "a", "b" }, -1);
+        Assert.Equal(-1, none.Choices.SelectedIndex);
+        Assert.False(none.OkButton.IsEnabled);
+        none.Choices.SelectedIndex = 1;
+        Assert.True(none.OkButton.IsEnabled);
+
+        var first = new TmDq.App.Views.Dialogs.ChoiceWindow("Import CSV", "Which?", new[] { "a", "b" });   // as every other use
+        Assert.Equal(0, first.Choices.SelectedIndex);
+        Assert.True(first.OkButton.IsEnabled);
+
+        var empty = new TmDq.App.Views.Dialogs.ChoiceWindow("Nothing", "Which?", System.Array.Empty<string>());
+        Assert.False(empty.OkButton.IsEnabled);
     }
 }

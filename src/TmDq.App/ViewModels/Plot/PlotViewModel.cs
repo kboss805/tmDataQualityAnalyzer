@@ -67,6 +67,10 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// time axis with a gap between them).</summary>
     public event EventHandler<int>? NonOverlappingSource;
 
+    /// <summary>Raised with the id of a recording whose series <see cref="RemoveSource"/> has taken out of the plot, once it is
+    /// out, so that what keeps a record of the recordings (the main window's, for Save Template) does not keep this one.</summary>
+    public event EventHandler<int>? SourceRemoved;
+
     /// <summary>Raised with a warning for the log: a time window entered outside the recording, and clamped.</summary>
     public event EventHandler<string>? Warning;
 
@@ -406,14 +410,19 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     public bool RemoveSource(int sourceId)
     {
         if (!_series.Any(s => s.SourceId == sourceId)) return false;
+        string removed = _sourceLabels.GetValueOrDefault(sourceId, string.Empty);
         if (_series.All(s => s.SourceId == sourceId))
         {
             Clear();
+            SourceRemoved?.Invoke(this, sourceId);
             return true;
         }
         _series.RemoveAll(s => s.SourceId == sourceId);
         _sourceLabels.Remove(sourceId);
         if (_readoutSeriesId is int pin && _series.All(s => s.Id != pin)) _readoutSeriesId = null;
+        // A title that named the recording removed (as a recording's does until it is renamed) names one that is left, the
+        // first; a title the operator wrote is theirs and stays.
+        if (removed.Length > 0 && Title == removed) Title = SourceList()[0].Label;
         bool drawnChanged = _visibleSource < 0 || _visibleSource == sourceId;
         if (_visibleSource == sourceId) _visibleSource = -1;
         if (drawnChanged)
@@ -424,6 +433,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         {
             SeriesChanged?.Invoke(this, EventArgs.Empty);
         }
+        SourceRemoved?.Invoke(this, sourceId);
         return true;
     }
 

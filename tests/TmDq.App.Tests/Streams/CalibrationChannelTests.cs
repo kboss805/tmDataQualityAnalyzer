@@ -80,9 +80,54 @@ public sealed class CalibrationChannelTests
         await vm.LoadCalibrationAsync("calibration.ch10");
 
         Assert.Equal((0, 1), (vm.CalPcmIndex, vm.CalTimeIndex));   // 40 is the first PCM; 3 is the recording's default time
-        Assert.Equal("The recording has no channel 5: channel 40 is selected.", vm.ChannelNote);
+        Assert.Equal("The recording has no channel 5: channel 40 is selected. The recording has no time channel 9: time channel 3 is selected.", vm.ChannelNote);
         CalibrationRequest request = Assert.Single(runner.Requests);
         Assert.Equal((40, 3), (request.PcmChannelId, request.TimeChannelId));
+    }
+
+    [Fact]
+    public async Task OnlyTheChannelTheRecordingLacksIsSaidSo()
+    {
+        var timeOnly = Dialog(StepCalBase(time: 9, pcm: 26), Channels(2, new[] { 2, 3 }, 26, 27), new RecordingRunner());
+        await timeOnly.LoadCalibrationAsync("calibration.ch10");
+        Assert.Equal("The recording has no time channel 9: time channel 2 is selected.", timeOnly.ChannelNote);
+
+        var pcmOnly = Dialog(StepCalBase(time: 1, pcm: 5), Channels(1, new[] { 1 }, 40), new RecordingRunner());
+        await pcmOnly.LoadCalibrationAsync("calibration.ch10");
+        Assert.Equal("The recording has no channel 5: channel 40 is selected.", pcmOnly.ChannelNote);
+        Assert.True(pcmOnly.HasChannelNote);
+
+        var neither = Dialog(StepCalBase(time: 1, pcm: 26), Channels(1, new[] { 1 }, 26), new RecordingRunner());
+        await neither.LoadCalibrationAsync("calibration.ch10");
+        Assert.Equal(string.Empty, neither.ChannelNote);
+        Assert.False(neither.HasChannelNote);
+    }
+
+    [Fact]
+    public async Task ARecordingWhoseChannelsArriveAfterALaterChoiceIsDropped()
+    {
+        var runner = new RecordingRunner();
+        using var release = new System.Threading.ManualResetEventSlim();
+        RecordingChannels slow = Channels(1, new[] { 1 }, 26), fast = Channels(1, new[] { 1 }, 31, 32);
+        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null)
+        {
+            Runner = runner,
+            ReadChannels = path =>
+            {
+                if (path == "slow.ch10") release.Wait();   // the first choice's channels come last
+                return path == "slow.ch10" ? slow : fast;
+            },
+        };
+
+        Task first = vm.LoadCalibrationAsync("slow.ch10");
+        await vm.LoadCalibrationAsync("fast.ch10");
+        release.Set();
+        await first;
+
+        Assert.Equal("fast.ch10", vm.CalPath);
+        Assert.Equal(new[] { "31 - PCM 31", "32 - PCM 32" }, vm.CalPcmItems);   // the later choice's, not overwritten
+        CalibrationRequest request = Assert.Single(runner.Requests);            // and the earlier one never extracted
+        Assert.Equal("fast.ch10", request.FileName);
     }
 
     [Fact]

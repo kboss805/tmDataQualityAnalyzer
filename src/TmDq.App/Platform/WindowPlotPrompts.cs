@@ -28,8 +28,8 @@ public sealed class WindowPlotPrompts : IPlotPrompts
     public Task<(string Start, string Stop)?> AskTimeWindowAsync(string start, string stop) =>
         Ask<(string Start, string Stop)?>(new TimeWindowPromptWindow(start, stop));
 
-    public Task<int?> ChooseAsync(string title, string label, IReadOnlyList<string> choices) =>
-        Ask<int?>(new ChoiceWindow(title, label, choices));
+    public Task<int?> ChooseAsync(string title, string label, IReadOnlyList<string> choices, int selected = 0) =>
+        Ask<int?>(new ChoiceWindow(title, label, choices, selected));
 
     public Task<Color?> PickColorAsync(Color initial) => Ask<Color?>(new ColorPromptWindow(initial));
 

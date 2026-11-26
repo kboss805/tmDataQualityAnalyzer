@@ -21,9 +21,10 @@ public interface IPlotPrompts
     /// <summary>The Set Time Window dialog: a start and a stop, as DDD:HH:MM:SS text.</summary>
     Task<(string Start, string Stop)?> AskTimeWindowAsync(string start, string stop);
 
-    /// <summary>One of <paramref name="choices"/> (the first starts chosen), asked as <paramref name="label"/>: its index, or
+    /// <summary>One of <paramref name="choices"/> (<paramref name="selected"/> starts chosen, the first by default; -1 for none, which
+    /// holds OK until one is), asked as <paramref name="label"/>: its index, or
     /// null when the user cancels.</summary>
-    Task<int?> ChooseAsync(string title, string label, IReadOnlyList<string> choices);
+    Task<int?> ChooseAsync(string title, string label, IReadOnlyList<string> choices, int selected = 0);
 
     /// <summary>A colour, starting as <paramref name="initial"/>.</summary>
     Task<Color?> PickColorAsync(Color initial);
