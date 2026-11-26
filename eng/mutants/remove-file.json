@@ -18,9 +18,9 @@
     },
     {
       "id": "R2",
-      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "            foreach (int id in removing) _sourceLabels.Remove(id);",
-      "new": "            _ = removing.Count;",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotSources.cs",
+      "old": "        foreach (int id in removed) _labels.Remove(id);",
+      "new": "        _ = removed.Count;",
       "expect": "caught",
       "note": "the recording's name stays, and a later recording by the same id carries it"
     },
@@ -34,16 +34,16 @@
     },
     {
       "id": "R4",
-      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "bool drawnChanged = _visibleSource < 0 || gone.Contains(_visibleSource);",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotSources.cs",
+      "old": "bool drawnChanged = Shown < 0 || removed.Contains(Shown);",
       "new": "bool drawnChanged = true;",
       "expect": "caught",
       "note": "removing a recording that is not shown refits the view the operator zoomed"
     },
     {
       "id": "R5",
-      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "            if (gone.Contains(_visibleSource)) _visibleSource = -1;\n",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotSources.cs",
+      "old": "        if (removed.Contains(Shown)) Shown = -1;\n",
       "new": "",
       "expect": "caught",
       "note": "the recording shown alone is removed and the plot still names it as the one shown"
@@ -59,7 +59,7 @@
     {
       "id": "R7",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "            SetVisibleSource(_visibleSource);   // the window and the axes follow what is left; it tells the view",
+      "old": "                SetVisibleSource(Sources.Shown);   // the window and the axes follow what is left; it tells the view",
       "new": "            SeriesChanged?.Invoke(this, EventArgs.Empty);",
       "expect": "caught",
       "note": "the window and the axes keep the removed recording's span"

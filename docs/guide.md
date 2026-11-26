@@ -597,7 +597,10 @@ profile, so a batch processes with the linear calibration.
   `DialogViewModel` as their base: `CloseRequested`, `Accepted`, Cancel and `Accept()`; `Platform/Modal` shows such a
   dialog the way every host does, the view model reaching no window.
 - **The plot** (`ViewModels/Plot`): `PlotViewModel` (the series built by the core, the axes and overrides, the view mode, the
-  recordings and Plot File, the readout's pin), with its jobs in types of their own, the folder's other seven files:
+  readout's pin), with its jobs in types of their own, the folder's other eight files: `PlotSources` (the recordings it holds:
+  each one's name for Plot File and Remove File, the one shown alone, their list, the id a new one takes, and what removing
+  some does to the names, the one shown and the title; it reads the plot's series and never changes them, and the plot's
+  members that name a recording, `SourceList`, `SetSourceLabel`, `VisibleSource`, `NextSourceId`, are it),
   `PlotTimeWindow` (the span, the window and its zoom history, the gestures and keys that move it), `PlotReadout` (what
   the readout says: the nearest sample, found by binary search in a series whose times are sorted and by looking at every sample in one whose
   times are not, as an imported CSV's can be: `PlotSeries.SortedX` says which), `PlotCsv` (the series to and from the core's CSV), `PlotColors` (the colours), `PlotCommands` (below),
@@ -1206,7 +1209,7 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   layer), `ChartMenuCommandTests` (the right-click menu's commands, asked through a fake of the prompts),
   `CustomizeViewStateTests` (Customize View's rows and what a choice in it does), `ChartViewTests` (the legend and what
   rebuilds it, the zoom rule, chips, menu, keys, read from the controls and from rendered frames) and
-  `ChartPromptWindowTests` (each prompt's window: OK answers, Cancel does not), and `RemoveFileTests` (Remove File: a recording's series, name and CSV columns go and the others stay, what is refitted, the notice that keeps Save Template honest, the title that follows, and what the dialog starts on).
+  `ChartPromptWindowTests` (each prompt's window: OK answers, Cancel does not), `PlotSourcesTests` (the recordings' names, the one shown, the list and the next id, and what removing some does, on their own), and `RemoveFileTests` (Remove File: a recording's series, name and CSV columns go and the others stay, what is refitted, the notice that keeps Save Template honest, the title that follows, and what the dialog starts on).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV), `PhasedArrayImportTests` (the kind question every import asks, an antenna's log as 90 series read H, V and C, and none of it exported),
   `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, Apply Template with the core missing),
