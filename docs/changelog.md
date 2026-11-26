@@ -22,6 +22,10 @@ A minor release (2026-11-26). What the user sees: nothing replaces the plot any 
 
 **How it was checked.** The two actions run through the Windows Installer engine against a test build: the path resolves to the folder in both forms (with and without the separator, in a folder whose name has a space); the engine's scripting session refuses to start a program ("not permitted in a restricted engine"), so the launch itself was checked by an interactive install: the user's, per-user, with the box checked, and the application opened. `RepoFilesTests.TheWizardsLaunchStartsTheExeFromTheInstallFolderPropertyNotItsFileRow` holds it (no `FileRef` launch, the property's value, the order on the Finish button); `eng/mutants/deploy-paths.json` D10 (the launch reads the File row again) and D11 (the launch before the path is set) are caught, and the list's 11 mutants all are. Managed suite 438 in all, 437 passed (440 and 439 with the wizard's pictures, below).
 
+#### Two sentences in the manuals said what the application no longer does
+
+Found by reading the shipped text against v3.5.0 before the release. The base manual's antenna-log passage still said "processing a recording replaces the recordings processed before it, and keeps what was imported": since Open stacks (#410) it adds the recording beside whatever the plot shows, as the rest of the manual says. The walkthroughs said the Receiver SNR figure's "legend covers the right-hand scale": the legend has sat beside the scale since #359, and at the top right since #407; it covers part of the plot. Both reworded; the manuals re-embedded (`build_manual.ps1 -NoCapture`: prose only, the figures were rendered at 3.5.0).
+
 #### The installer's wizard shows the application's own pictures
 
 **What the user asked for.** "Is there any way we can replace the standard install icon or install image ... with our icon?" The wizard's two pictures can be (the `.msi` file's own icon in Explorer cannot: Windows draws one for every package, and Installed apps already shows ours, `ARPPRODUCTICON`). The user approved the previews.
