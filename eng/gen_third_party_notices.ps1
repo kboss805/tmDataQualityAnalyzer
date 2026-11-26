@@ -22,12 +22,19 @@
 
     Usage:
         powershell -ExecutionPolicy Bypass -File eng\gen_third_party_notices.ps1 -DepsFile <deps.json> -Out <file>
-                   [-PackagesFolder <folder>] [-NoNativeCore]
+                   [-AssetsFile <project.assets.json>] [-PackagesFolder <folder>] [-NoNativeCore]
+
+    The packages are looked for in the folders restore used, read from the app's obj\project.assets.json
+    (packageFolders: the global packages folder, then any fallback folders), as eng\check_package_licences.ps1 reads
+    them, so a NuGet.config or NUGET_PACKAGES that moved the folder is followed. -PackagesFolder names one folder instead.
 #>
 param(
     [Parameter(Mandatory = $true)] [string]$DepsFile,
     [Parameter(Mandatory = $true)] [string]$Out,
-    [string]$PackagesFolder = $(if ($env:NUGET_PACKAGES) { $env:NUGET_PACKAGES } else { Join-Path $env:USERPROFILE '.nuget\packages' }),
+    # The restore's assets file, whose packageFolders say where the packages are (default: the app's, set below: Windows
+    # PowerShell 5.1 leaves $PSScriptRoot empty in a parameter's default). Ignored when -PackagesFolder is given.
+    [string]$AssetsFile,
+    [string]$PackagesFolder,
     # Leave out the irig106 notice (for a package that does not ship tmdq_core.dll).
     [switch]$NoNativeCore
 )
@@ -54,6 +61,17 @@ $Rule = '=' * 100
 function Read-Text([string]$path) { return ([System.IO.File]::ReadAllText($path)).Trim() }
 
 if (-not (Test-Path -LiteralPath $DepsFile)) { throw "no deps file at $DepsFile (publish the app first)" }
+
+# The folders the packages are in: the one named, or those the restore used.
+if (-not $AssetsFile) { $AssetsFile = Join-Path $root 'src\TmDq.App\obj\project.assets.json' }
+if ($PackagesFolder) {
+    $packageFolders = @($PackagesFolder)
+} else {
+    if (-not (Test-Path -LiteralPath $AssetsFile)) { throw "no assets file at $AssetsFile (restore the app first, or pass -PackagesFolder)" }
+    $assets = Get-Content -LiteralPath $AssetsFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    $packageFolders = @($assets.packageFolders.PSObject.Properties | ForEach-Object { $_.Name })
+    if ($packageFolders.Count -eq 0) { throw "$AssetsFile names no packages folder" }
+}
 $deps = Get-Content -LiteralPath $DepsFile -Raw -Encoding UTF8 | ConvertFrom-Json
 $target = $deps.targets.($deps.runtimeTarget.name)
 if (-not $target) { throw "$DepsFile has no runtime target '$($deps.runtimeTarget.name)'" }
@@ -80,9 +98,10 @@ $sections = [ordered]@{}        # licence text -> list of "Id Version" sharing i
 $notices = [ordered]@{}         # notices text -> list of packages carrying it
 $summary = New-Object System.Collections.Generic.List[string]
 foreach ($p in ($shipped | Sort-Object Id)) {
-    $dir = Join-Path $PackagesFolder (Join-Path $p.Id.ToLowerInvariant() $p.Version.ToLowerInvariant())
+    $relative = Join-Path $p.Id.ToLowerInvariant() $p.Version.ToLowerInvariant()
+    $dir = $packageFolders | ForEach-Object { Join-Path $_ $relative } | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if (-not $dir) { throw "$($p.Id) $($p.Version): not found under $($packageFolders -join '; ') (restore first)" }
     $nuspecPath = Join-Path $dir ($p.Id.ToLowerInvariant() + '.nuspec')
-    if (-not (Test-Path -LiteralPath $dir)) { throw "$($p.Id) $($p.Version): not found under $PackagesFolder (restore first)" }
 
     $licence = ''; $copyright = ''; $url = ''
     if (Test-Path -LiteralPath $nuspecPath) {

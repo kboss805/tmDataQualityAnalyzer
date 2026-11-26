@@ -209,7 +209,9 @@ if ($AllCores) {
 # --- run ---------------------------------------------------------------------
 Write-Host ''
 Write-Host "Running the throughput benchmark." -ForegroundColor Cyan
-Write-Host "This takes several minutes - four channel probes, four solo runs, one parallel run."
+# The last logged run (out\throughput_Release.txt, 2026-11-07, before the locked-frame skip-ahead of #343 made it faster) spent
+# 34 s in the solo and parallel runs together on the development machine.
+Write-Host "This takes about a minute or less - four channel probes, four solo runs, one parallel run."
 Write-Host ''
 
 $OutDir = Join-Path $ProjectDir 'out'

@@ -104,6 +104,10 @@ Results are plotted in an interactive chart. The UI allows the user to configure
     (`src/TmDq.Core`).
   - **MSVC 2022** (Visual Studio 2022 C++ Build Tools, workload "Desktop development with C++", with the Windows SDK) -
     the native core, `tmdq_core.dll` (`src/core`, C++20, MSBuild).
+  - **Python 3** (the `py` launcher) - only for the release package: `deploy\build_package.ps1` generates the full manual
+    with `eng\build_manual.ps1`, which embeds its figures with `py eng\embed_manual_images.py` (the standard library only;
+    Pillow, in `eng\requirements.txt`, is for `eng\gen_app_icon.py` alone, run when the icon's artwork changes). Also for
+    `py eng/gen_compile_flags.py`, the clangd setup.
   - **Inno Setup 6** - only for the installer.
 
 ## Building the Project
