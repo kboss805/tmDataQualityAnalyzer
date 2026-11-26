@@ -15,7 +15,8 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-None.
+- [**v3.5.1: a deep dive after v3.5.0**](v3.5.1.md): the whole codebase and the documents read for efficiencies, loose ends and
+  stale text, in three bundled pull requests and a release; includes how to make the test suites and the kept-mutant run faster.
 
 Add an entry here when something is scoped and not yet started, and give it its own file
 once it needs more than a paragraph. An empty list is the normal resting state, not a
