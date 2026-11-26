@@ -36,19 +36,29 @@ public sealed class CustomizeViewModel : ObservableObject
         SelectNoneSnrCommand = new RelayCommand(() => SetAllSnr(false));
         ToggleExpandCommand = new RelayCommand(ToggleExpand);
 
-        // Grouped by PCM channel, the groups in ascending stream order, as v2.x's dialog grouped them.
-        var labels = new Dictionary<int, string>();
-        foreach (PlotSeries s in plot.Series)
-            labels.TryAdd(s.StreamOrder, s.StreamLabel);
+        // Grouped by PCM channel, the groups in ascending stream order, as v2.x's dialog grouped them; with several recordings on
+        // the plot (Add Recording, a batch, an antenna's log beside a recording), by recording first, in Plot File's order, each
+        // row and group named for its recording, so that one recording's CH 1 is never another's.
+        IReadOnlyList<(int Id, string Label)> recordings = plot.SourceList();
+        var place = new Dictionary<int, int>();
+        foreach ((int id, _) in recordings) place.TryAdd(id, place.Count);
+        string Recording(int sourceId) =>
+            recordings.Count > 1 ? recordings.First(r => r.Id == sourceId).Label + ": " : string.Empty;
 
-        foreach (IGrouping<int, PlotSeries> stream in plot.Series.Where(s => s.IsLeftAxis).GroupBy(s => s.StreamOrder).OrderBy(g => g.Key))
+        var labels = new Dictionary<(int Source, int Stream), string>();
+        foreach (PlotSeries s in plot.Series)
+            labels.TryAdd((s.SourceId, s.StreamOrder), s.StreamLabel);
+
+        foreach (IGrouping<(int Source, int Stream), PlotSeries> stream in plot.Series.Where(s => s.IsLeftAxis)
+                     .GroupBy(s => (Source: s.SourceId, Stream: s.StreamOrder)).OrderBy(g => place[g.Key.Source]).ThenBy(g => g.Key.Stream))
         {
             PlotSeries first = stream.First();
-            LockRows.Add(new LockStreamRow(this, stream.Key, stream.Select(s => s.Id).ToList(), stream.Any(s => s.Visible),
-                                           first.Name, first.Color));
+            LockRows.Add(new LockStreamRow(this, stream.Key.Stream, stream.Select(s => s.Id).ToList(), stream.Any(s => s.Visible),
+                                           first.Name, first.Color, Recording(stream.Key.Source)));
         }
 
-        foreach (IGrouping<int, PlotSeries> stream in plot.Series.Where(s => s.Metric == MetricType.Snr).GroupBy(s => s.StreamOrder).OrderBy(g => g.Key))
+        foreach (IGrouping<(int Source, int Stream), PlotSeries> stream in plot.Series.Where(s => s.Metric == MetricType.Snr)
+                     .GroupBy(s => (Source: s.SourceId, Stream: s.StreamOrder)).OrderBy(g => place[g.Key.Source]).ThenBy(g => g.Key.Stream))
         {
             // A phased array antenna's series (US10.0) are grouped the same way, a group to a channel of the antenna, but read
             // as the antenna's: "Stream n" with H, V and C, and the unit's name for the group, not CH, RCVR, L, R and C.
@@ -58,9 +68,10 @@ public sealed class CustomizeViewModel : ObservableObject
                 .ToList();
             // The receivers in two columns, the first taking the odd one.
             int split = (receivers.Count + 1) / 2;
-            string streamLabel = phasedArray
-                ? labels.GetValueOrDefault(stream.Key, "") is { Length: > 0 } unit ? unit : "Phased array antenna"
-                : string.Create(CultureInfo.InvariantCulture, $"CH {stream.Key} — {labels.GetValueOrDefault(stream.Key, "")}");
+            string label = labels.GetValueOrDefault(stream.Key, "");
+            string streamLabel = Recording(stream.Key.Source) + (phasedArray
+                ? label is { Length: > 0 } unit ? unit : "Phased array antenna"
+                : string.Create(CultureInfo.InvariantCulture, $"CH {stream.Key.Stream} — {label}"));
             SnrStreams.Add(new SnrStreamGroup(streamLabel, receivers.Take(split).ToList(), receivers.Skip(split).ToList()));
         }
         _selectedSnrStream = SnrStreams.FirstOrDefault();
@@ -151,12 +162,13 @@ public sealed class CustomizeViewModel : ObservableObject
         foreach (ChannelItem ch in AllChannels())
             _plot.SetSeriesVisibleQuiet(ch.SeriesId, ch.IsChecked);
 
+        // Every series of the row, which are its recording's stream's only (its lock and its missed frames).
         foreach (LockStreamRow row in LockRows)
-        {
-            if (row.SeriesIds.Count == 0) continue;
-            _plot.RenameSeries(row.SeriesIds[0], row.Name);
-            _plot.RecolorSeries(row.SeriesIds[0], row.Color);
-        }
+            foreach (int id in row.SeriesIds)
+            {
+                _plot.RenameSeries(id, row.Name);
+                _plot.RecolorSeries(id, row.Color);
+            }
         foreach (ChannelItem ch in AllChannels())
         {
             if (ch.PendingName is not null) _plot.RenameSeries(ch.SeriesId, ch.PendingName);
@@ -174,15 +186,18 @@ public sealed class CustomizeViewModel : ObservableObject
 public sealed class LockStreamRow : ObservableObject
 {
     private readonly CustomizeViewModel _owner;
+    private readonly string _recording;
 
     private bool _isChecked;
     private Color _color;
     private string _name;
 
-    internal LockStreamRow(CustomizeViewModel owner, int order, IReadOnlyList<int> seriesIds, bool isChecked, string name, Color color)
+    internal LockStreamRow(CustomizeViewModel owner, int order, IReadOnlyList<int> seriesIds, bool isChecked, string name, Color color,
+                           string recording = "")
     {
         _owner = owner;
         Order = order;
+        _recording = recording;
         SeriesIds = seriesIds;
         _isChecked = isChecked;
         _name = name;
@@ -192,7 +207,8 @@ public sealed class LockStreamRow : ObservableObject
 
     public int Order { get; }
 
-    public string Label => string.Create(CultureInfo.InvariantCulture, $"CH {Order}");
+    /// <summary>"CH n", after its recording's name ("flight 2: CH n") when the plot holds more than one.</summary>
+    public string Label => string.Create(CultureInfo.InvariantCulture, $"{_recording}CH {Order}");
 
     public IReadOnlyList<int> SeriesIds { get; }
 

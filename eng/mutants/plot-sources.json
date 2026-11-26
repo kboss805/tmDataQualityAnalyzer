@@ -187,6 +187,150 @@
       "new": "            _ = Sources.Shown;   // the new file is the only recording",
       "expect": "caught",
       "note": "an import that replaces the plot keeps the earlier recording's name for its source"
+    },
+    {
+      "id": "CO1",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        PlotColors.Assign(added, _lockColours);",
+      "new": "        PlotColors.Assign(_series, _lockColours);",
+      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.ReusingTheTemplatesLooksKeepsEveryFilesNamesAndColoursNotOnlyTheLasts", "-method", "TmDq.App.Tests.AddRecordingTests.AddingARecordingLeavesTheColoursShownAndColoursTheNewOneAsItWouldBeAlone" ],
+      "expect": "caught",
+      "note": "each stream a run adds colours every series again: a batch's earlier files lose the template's colours, a recording added the user's"
+    },
+    {
+      "id": "CO2",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        PlotColors.Assign(imported, _lockColours);",
+      "new": "        PlotColors.Assign(_series, _lockColours);",
+      "args": [ "-class", "TmDq.App.Tests.PhasedArrayImportTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "an antenna's log joined to the plot colours what was shown again"
+    },
+    {
+      "id": "CO3",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        _series.Clear();\r\n        _lockColours.Clear();\r\n        _window.Clear();",
+      "new": "        _series.Clear();\r\n        _window.Clear();",
+      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.ABatchColoursItsStreamsAfreshNotAfterThoseOfThePlotItReplaced" ],
+      "expect": "caught",
+      "note": "a plot started again keeps the colours given before, so its first stream takes the next colour rather than the first"
+    },
+    {
+      "id": "CV1",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "plot.Series.Where(s => s.IsLeftAxis)\r\n                     .GroupBy(s => (Source: s.SourceId, Stream: s.StreamOrder))",
+      "new": "plot.Series.Where(s => s.IsLeftAxis)\r\n                     .GroupBy(s => (Source: 0, Stream: s.StreamOrder))",
+      "args": [ "-class", "TmDq.App.Tests.CustomizeViewStateTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "two recordings' CH 5 are one Frame Sync Lock row, which renames and recolours the first recording's only"
+    },
+    {
+      "id": "CV2",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "plot.Series.Where(s => s.Metric == MetricType.Snr)\r\n                     .GroupBy(s => (Source: s.SourceId, Stream: s.StreamOrder))",
+      "new": "plot.Series.Where(s => s.Metric == MetricType.Snr)\r\n                     .GroupBy(s => (Source: 0, Stream: s.StreamOrder))",
+      "args": [ "-class", "TmDq.App.Tests.CustomizeViewStateTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "two recordings' CH 40 are one SNR group, its receivers mixed"
+    },
+    {
+      "id": "CV3",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "            recordings.Count > 1 ? recordings.First(r => r.Id == sourceId).Label + \": \" : string.Empty;",
+      "new": "            recordings.Count > 0 ? recordings.First(r => r.Id == sourceId).Label + \": \" : string.Empty;",
+      "args": [ "-class", "TmDq.App.Tests.CustomizeViewStateTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "a plot of one recording names it in every row, as it never did"
+    },
+    {
+      "id": "CV4",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "selected.GetValueOrDefault((s.SourceId, s.StreamOrder), true)",
+      "new": "selected.GetValueOrDefault((0, s.StreamOrder), true)",
+      "args": [ "-class", "TmDq.App.Tests.CustomizeViewStateTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "switching the view gives every recording's CH n the first recording's choice"
+    },
+    {
+      "id": "EL1",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "            AdvanceTimeBase();",
+      "new": "            _ = _timeBase;",
+      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.RemovingTheEarliestRecordingStartsTheAxisAtTheNextAndKeepsEverySamplesClockTime" ],
+      "expect": "caught",
+      "note": "the earliest recording removed, the axis no longer starts at 0"
+    },
+    {
+      "id": "EL2",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        _timeBase.SetClock(clock.BaseDay + days, offset - days * 86400.0);",
+      "new": "        _ = days;",
+      "args": [ "-method", "TmDq.App.Tests.PhasedArrayImportTests.RemovingTheLogThatStartedFirstStartsTheAxisAtTheOtherOnItsOwnClock" ],
+      "expect": "caught",
+      "note": "the clock is the one the core works out from the absolute base, which an imported file never set: day 1 of 1970"
+    },
+    {
+      "id": "EL3",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "            for (int i = 0; i < xs.Length; i++) xs[i] -= shift;",
+      "new": "            for (int i = 0; i < xs.Length; i++) xs[i] -= 0.0;",
+      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.RemovingTheEarliestRecordingStartsTheAxisAtTheNextAndKeepsEverySamplesClockTime" ],
+      "expect": "caught",
+      "note": "the clock moves and the samples do not: each reads a day late"
+    },
+    {
+      "id": "EL4",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        foreach (PlotSeries s in _series) s.Version++;\r\n        _window.Shift(shift);",
+      "new": "        _window.Shift(shift);",
+      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.RemovingTheEarliestRecordingStartsTheAxisAtTheNextAndKeepsEverySamplesClockTime" ],
+      "expect": "caught",
+      "note": "the samples move but their version does not, so the chart draws them from the old geometry"
+    },
+    {
+      "id": "EL5",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotTimeWindow.cs",
+      "old": "        XMax = Math.Max(0.0, XMax - seconds);",
+      "new": "        XMax = Math.Max(0.0, XMax);",
+      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.RemovingTheEarliestRecordingStartsTheAxisAtTheNextAndKeepsEverySamplesClockTime" ],
+      "expect": "caught",
+      "note": "the span stays where the removed recording put it: zooming out reaches a day past the data"
+    },
+    {
+      "id": "EL6",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "            X = copies.TryGetValue(c.X, out double[]? copy) ? copy : copies[c.X] = c.X.ToArray(),",
+      "new": "            X = c.X,",
+      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.RemovingTheEarliestRecordingStartsTheAxisAtTheNextAndKeepsEverySamplesClockTime" ],
+      "expect": "caught",
+      "note": "an export being written while Remove File moves the times writes some of them moved"
+    },
+    {
+      "id": "CH1",
+      "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
+      "old": "            if (_backing is null || _backing.PixelSize != pixels || _backing.Dpi != dpi)\r\n            {",
+      "new": "            if (_backing is not null || _backing is null)\r\n            {",
+      "args": [ "-method", "TmDq.App.Tests.ChartViewTests.TheDataLayersBitmapIsPaintedAgainAtTheSameSizeAndMadeAgainOnlyForANewSize" ],
+      "expect": "caught",
+      "note": "a full-window bitmap made and freed for every repaint of the data layer"
+    },
+    {
+      "id": "CH2",
+      "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
+      "old": "            if (_metrics is { } m && m.Family.Equals(family) && m.Scale.Equals(scale)) return (m.TextHeight, m.LabelWidth);",
+      "new": "            if (_metrics is { } m && m.Family.Equals(family) && m.Scale.Equals(-scale)) return (m.TextHeight, m.LabelWidth);",
+      "args": [ "-method", "TmDq.App.Tests.ChartViewTests.TheTextTheLayoutIsMadeOfIsMeasuredOnceUntilTheThemeChanges" ],
+      "expect": "caught",
+      "note": "the layout's text measured again on every call, several to a mouse move"
+    },
+    {
+      "id": "CH3",
+      "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
+      "old": "            _metrics = null;   // a theme may bring another font",
+      "new": "            _ = _metrics;   // a theme may bring another font",
+      "args": [ "-method", "TmDq.App.Tests.ChartViewTests.TheTextTheLayoutIsMadeOfIsMeasuredOnceUntilTheThemeChanges" ],
+      "expect": "caught",
+      "note": "a theme with another font keeps the last theme's measurements"
     }
   ]
 }

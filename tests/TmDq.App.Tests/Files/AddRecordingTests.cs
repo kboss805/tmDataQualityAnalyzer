@@ -57,6 +57,24 @@ public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
+    public async Task AddingARecordingLeavesTheColoursShownAndColoursTheNewOneAsItWouldBeAlone()
+    {
+        var alone = new MainWindowViewModel();
+        await alone.LoadAsync(Second);
+        var vm = new MainWindowViewModel();
+        await vm.LoadAsync(Prn);
+        PlotSeries first = Assert.Single(PlotFixtures.Locks(vm));
+        vm.Plot.RecolorSeries(first.Id, Avalonia.Media.Colors.Teal);   // as Customize View or a template recolours it
+        int firstId = first.SourceId;
+
+        await vm.LoadAsync(Second, add: true);
+
+        Assert.All(vm.Plot.Series.Where(s => s.SourceId == firstId && s.IsLeftAxis), s => Assert.Equal(Avalonia.Media.Colors.Teal, s.Color));
+        Assert.Equal(alone.Plot.Series.Select(s => (s.Metric, s.Color, s.Dotted, s.Strong)),
+                     vm.Plot.Series.Where(s => s.SourceId != firstId).Select(s => (s.Metric, s.Color, s.Dotted, s.Strong)));
+    }
+
+    [AvaloniaFact]
     public async Task AddingWithNothingOnThePlotIsOpen()
     {
         var vm = new MainWindowViewModel();

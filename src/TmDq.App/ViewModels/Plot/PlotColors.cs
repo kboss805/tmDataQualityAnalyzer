@@ -25,7 +25,7 @@ public static class PlotColors
 
     /// <summary>
     /// The hues of a Receiver SNR stream, 15 of them, each a saturated colour so that its two lighter tints (the stream's
-    /// polarizations, see <see cref="Assign"/>) stay different from it and from each other. A stream is a receiver, or a
+    /// polarizations, see <see cref="Assign(IEnumerable{PlotSeries})"/>) stay different from it and from each other. A stream is a receiver, or a
     /// channel of a phased array antenna; the 16th stream takes the first hue again, dotted.
     /// </summary>
     public static readonly IReadOnlyList<Color> StreamHues = new[]
@@ -56,9 +56,18 @@ public static class PlotColors
     /// Sync Lock primary, then shades of them; an SNR series takes its receiver's primary, shaded by its receiver's
     /// cycle through the primaries and by its channel.
     /// </summary>
-    internal static void Assign(IEnumerable<PlotSeries> series)
+    internal static void Assign(IEnumerable<PlotSeries> series) => Assign(series, new Dictionary<int, int>());
+
+    /// <summary>
+    /// Colours <paramref name="series"/> only, as <see cref="Assign(IEnumerable{PlotSeries})"/> colours a whole plot, with
+    /// <paramref name="leftIndex"/> the Frame Sync Lock colour each stream order has already been given: a stream order in it
+    /// keeps its colour, and one not in it takes the next and is added. The plot keeps it between calls, so a recording or a
+    /// stream added later is coloured on its own and the series already shown keep the colours they have (the user's, or a
+    /// template's); colouring one recording's streams one at a time, in job order, gives the colours colouring them together
+    /// does.
+    /// </summary>
+    internal static void Assign(IEnumerable<PlotSeries> series, Dictionary<int, int> leftIndex)
     {
-        var leftIndex = new Dictionary<int, int>();
         foreach (PlotSeries s in series)
         {
             if (s.IsLeftAxis)

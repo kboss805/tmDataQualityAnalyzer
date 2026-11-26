@@ -25,7 +25,7 @@ public enum LockAxisView
 /// the controls around it. Used on the UI thread.
 /// <para>Four jobs are done by their own types, and reached through this one: the time window and its zoom history
 /// (<see cref="PlotTimeWindow"/>), the readout's text (<see cref="PlotReadout"/>), CSV export and import
-/// (<see cref="PlotCsv"/>), and the colours (<see cref="PlotColors.Assign"/>).</para>
+/// (<see cref="PlotCsv"/>), and the colours (<see cref="PlotColors.Assign(System.Collections.Generic.IEnumerable{PlotSeries})"/>).</para>
 /// </summary>
 public sealed class PlotViewModel : ObservableObject, IDisposable
 {
@@ -43,6 +43,9 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     private static readonly string[] ChannelPrefixes = { "L", "R", "C" };
 
     private readonly List<PlotSeries> _series = new();
+    // The Frame Sync Lock colour each stream order was given (PlotColors.Assign): kept until the plot starts again, so a stream
+    // added later takes the next colour and never recolours the series already shown.
+    private readonly Dictionary<int, int> _lockColours = new();
     private readonly PlotTimeWindow _window;
     // Made with the first stream: the core is loaded only once a recording has been opened.
     private TimeBase? _timeBase;
@@ -132,11 +135,12 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
             foreach (PlotSeries s in _series) s.Version++;
         }
 
+        List<PlotSeries> added;
         using (SeriesSet set = result.BuildSeries(_timeBase.Info.BaseAbsSeconds))
         {
             double[] elapsed = set.ElapsedSeconds.ToArray();
             bool sorted = ChartGeometry.IsSortedX(elapsed);
-            var added = new List<PlotSeries>(set.Count);
+            added = new List<PlotSeries>(set.Count);
             for (int i = 0; i < set.Count; i++)
             {
                 SeriesSpec spec = set.Specs[i];
@@ -171,7 +175,9 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
 
         _window.ShowSpan(SpanOf(_series));
 
-        PlotColors.Assign(_series);
+        // Only the stream just added is coloured: the others keep the colours they have, which the user, Customize View or a
+        // template may have given them (a batch's earlier files, a recording added beside another).
+        PlotColors.Assign(added, _lockColours);
         ComputeSnrRange();
         SeriesChanged?.Invoke(this, EventArgs.Empty);
         RangesChanged?.Invoke(this, EventArgs.Empty);
@@ -188,7 +194,8 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         _nextId = _series.Count == 0 ? 0 : _series.Max(s => s.Id) + 1;
         _window.ShowSpan(SpanOf(_series));
         _window.ClearHistory();
-        PlotColors.Assign(_series);
+        _lockColours.Clear();
+        PlotColors.Assign(_series, _lockColours);
         ComputeSnrRange();
         SeriesChanged?.Invoke(this, EventArgs.Empty);
         RangesChanged?.Invoke(this, EventArgs.Empty);
@@ -213,12 +220,19 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// <summary>
     /// <see cref="ExportCsv"/> with the file written off the UI thread (the export's matched partner of
     /// <see cref="LoadCsvAsync"/>): what is written is taken on the calling thread, before the first await, so a
-    /// plot cleared or replaced meanwhile does not change the file. The series' arrays are never written to once
-    /// a series exists, so the snapshot shares them.
+    /// plot cleared or replaced meanwhile does not change the file. A series' values are never written to once it exists,
+    /// so the snapshot shares them; its times are not: they are moved in place when the shared time base moves (a recording
+    /// that starts earlier added, or the earliest removed by Remove File, which the plot's menu offers while an export is
+    /// written), so the snapshot takes a copy of each array of times.
     /// </summary>
     public Task<bool> ExportCsvAsync(string path, int sourceId = -1)
     {
         (List<CsvColumn> columns, TimeBaseInfo clock) = CsvSnapshot(sourceId);
+        var copies = new Dictionary<IReadOnlyList<double>, double[]>(ReferenceEqualityComparer.Instance);
+        columns = columns.Select(c => c with
+        {
+            X = copies.TryGetValue(c.X, out double[]? copy) ? copy : copies[c.X] = c.X.ToArray(),
+        }).ToList();
         return Task.Run(() => PlotCsv.Write(path, columns, clock));
     }
 
@@ -301,6 +315,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         else
         {
             _series.Clear();
+            _lockColours.Clear();
             Sources.ForgetNames();   // the new file is the only recording; the earlier names went with it
             _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);
         }
@@ -312,7 +327,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         // A file of one recording is named for it in Plot File and Remove File; one that holds several (a batch's export) keeps "Source N".
         if (!added && sourceLabel is not null && imported.Select(s => s.SourceId).Distinct().ToList() is [int only]) SetSourceLabel(only, sourceLabel);
         _window.ShowSpan(added ? SpanOf(_series) : data.XMax);
-        PlotColors.Assign(_series);
+        PlotColors.Assign(imported, _lockColours);   // what was shown already keeps its colours
         ComputeSnrRange();
         SeriesChanged?.Invoke(this, EventArgs.Empty);
         RangesChanged?.Invoke(this, EventArgs.Empty);
@@ -327,6 +342,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     public void Clear()
     {
         _series.Clear();
+        _lockColours.Clear();
         _window.Clear();
         _timeBase?.Reset();
         _snrMin = 0.0;
@@ -418,6 +434,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         else
         {
             _series.RemoveAll(s => gone.Contains(s.SourceId));
+            AdvanceTimeBase();
             bool drawnChanged = Sources.Forget(gone);
             if (_readoutSeriesId is int pin && _series.All(s => s.Id != pin)) _readoutSeriesId = null;
             Title = Sources.TitleAfterRemoving(Title, removedNames);
@@ -428,15 +445,41 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
             else
             {
                 SeriesChanged?.Invoke(this, EventArgs.Empty);
+                RangesChanged?.Invoke(this, EventArgs.Empty);   // the same window, but at other elapsed times if zero moved
             }
         }
         foreach (int id in removing) SourceRemoved?.Invoke(this, id);
         return true;
     }
 
-    /// <summary>A recording's name as Plot File gives it, also before it has any series (a recording being added is named
-    /// first): the name it was given (<see cref="SetSourceLabel"/>), else "Source N".</summary>
-    public string SourceLabel(int sourceId) => Sources.Label(sourceId);
+    /// <summary>
+    /// The earliest recording gone, elapsed zero moves up to the earliest sample left, as adding one that starts earlier moves
+    /// it back (<see cref="AddStream"/>): every series left, the window and the zoom history move earlier by as much, so each
+    /// sample keeps its clock time and the axis starts at 0 again. The clock is moved by the same seconds here rather than
+    /// recomputed from the absolute base, which a plot whose clock an imported CSV set does not keep. Nothing on a plot made
+    /// with no clock (<see cref="SetSeries"/>).
+    /// </summary>
+    private void AdvanceTimeBase()
+    {
+        if (_timeBase is null) return;
+        double? earliest = null;
+        foreach (PlotSeries s in _series)
+        {
+            if (s.X.Length == 0) continue;
+            double first = s.SortedX ? s.X[0] : s.X.Min();
+            earliest = earliest is double e ? Math.Min(e, first) : first;
+        }
+        TimeBaseInfo clock = _timeBase.Info;
+        double shift = _timeBase.Advance(earliest);
+        if (shift <= 0.0) return;
+        double offset = clock.BaseTimeOffset + shift;
+        int days = (int)Math.Floor(offset / 86400.0);
+        _timeBase.SetClock(clock.BaseDay + days, offset - days * 86400.0);
+        foreach (double[] xs in _series.Select(s => s.X).Distinct())
+            for (int i = 0; i < xs.Length; i++) xs[i] -= shift;
+        foreach (PlotSeries s in _series) s.Version++;
+        _window.Shift(shift);
+    }
 
     /// <summary>
     /// What shows when Receiver SNR series arrive: of each stream's channels (a receiver's L, R and C, an antenna's H, V and C)
@@ -571,11 +614,12 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         _leftMaxOverride = null;
         static bool Matches(MetricType m, LockAxisView v) =>
             v == LockAxisView.LockPercent ? m == MetricType.FrameSyncLock : m == MetricType.AccumulatedMissedFrames;
-        var selected = new Dictionary<int, bool>();
+        // By recording and stream: two recordings' CH 1 are two streams, each shown or hidden on its own.
+        var selected = new Dictionary<(int Source, int Stream), bool>();
         foreach (PlotSeries s in _series)
-            if (Matches(s.Metric, old)) selected[s.StreamOrder] = s.Visible;
+            if (Matches(s.Metric, old)) selected[(s.SourceId, s.StreamOrder)] = s.Visible;
         foreach (PlotSeries s in _series)
-            if (s.IsLeftAxis) s.Visible = Matches(s.Metric, view) && selected.GetValueOrDefault(s.StreamOrder, true);
+            if (s.IsLeftAxis) s.Visible = Matches(s.Metric, view) && selected.GetValueOrDefault((s.SourceId, s.StreamOrder), true);
         SeriesChanged?.Invoke(this, EventArgs.Empty);
         RangesChanged?.Invoke(this, EventArgs.Empty);
         OnPropertyChanged(nameof(LockAxisView));

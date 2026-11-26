@@ -235,6 +235,80 @@ public sealed class CustomizeViewStateTests
         Assert.Null(other.PendingColor);
     }
 
+    /// <summary>Two recordings of the same streams, as Add Recording or a batch leaves them: each has CH 5 (its lock series shown,
+    /// its missed frames hidden) and CH 40's receiver 1 (L, R and C).</summary>
+    private static PlotViewModel TwoRecordings()
+    {
+        var series = new List<PlotSeries>();
+        foreach ((int source, int first) in new[] { (0, 0), (1, 5) })
+        {
+            series.Add(PlotFixtures.Make(first, "Ch 5", TmDq.Core.MetricType.FrameSyncLock, 5, 0, X3, new[] { 90.0, 91.0, 92.0 }, source: source));
+            PlotSeries missed = PlotFixtures.Make(first + 1, "Ch 5", TmDq.Core.MetricType.AccumulatedMissedFrames, 5, 0, X3, new[] { 0.0, 1.0, 2.0 }, source: source);
+            missed.Visible = false;
+            series.Add(missed);
+            for (int c = 0; c < 3; c++)
+                series.Add(PlotFixtures.Make(first + 2 + c, "40 - RX", TmDq.Core.MetricType.Snr, 40, 1, X3, new[] { 40.0, 45.0, 50.0 }, receiver: 1, channel: c, source: source));
+        }
+        var plot = new PlotViewModel();
+        plot.SetSeries(series);
+        plot.SetSourceLabel(0, "flight 1");
+        plot.SetSourceLabel(1, "flight 2");
+        return plot;
+    }
+
+    [Fact]
+    public void WithSeveralRecordingsEachRecordingsStreamsAreRowsAndGroupsOfTheirOwnNamedForIt()
+    {
+        var c = new CustomizeViewModel(TwoRecordings(), new FakePrompts());
+
+        Assert.Equal(new[] { "flight 1: CH 5", "flight 2: CH 5" }, c.LockRows.Select(r => r.Label));
+        Assert.Equal(new[] { 0, 1 }, c.LockRows[0].SeriesIds);
+        Assert.Equal(new[] { 5, 6 }, c.LockRows[1].SeriesIds);
+        Assert.Equal(new[] { "flight 1: CH 40 — 40 - RX", "flight 2: CH 40 — 40 - RX" }, c.SnrStreams.Select(s => s.Label));
+        Assert.Equal(new[] { 2, 3, 4 }, c.SnrStreams[0].Receivers.SelectMany(r => r.Channels).Select(ch => ch.SeriesId));
+        Assert.Equal(new[] { 7, 8, 9 }, c.SnrStreams[1].Receivers.SelectMany(r => r.Channels).Select(ch => ch.SeriesId));
+
+        // One recording left: the dialog reads as it always did, with no recording's name.
+        PlotViewModel one = TwoRecordings();
+        one.RemoveSource(1);
+        var alone = new CustomizeViewModel(one, new FakePrompts());
+        Assert.Equal(new[] { "CH 5" }, alone.LockRows.Select(r => r.Label));
+        Assert.Equal(new[] { "CH 40 — 40 - RX" }, alone.SnrStreams.Select(s => s.Label));
+    }
+
+    [Fact]
+    public void ARowsNameColourAndBoxReachOnlyItsOwnRecordingsStream()
+    {
+        PlotViewModel plot = TwoRecordings();
+        Color before = plot.SeriesById(0)!.Color;
+        var c = new CustomizeViewModel(plot, new FakePrompts());
+        c.LockRows[0].IsChecked = false;      // flight 1's CH 5 hidden
+        c.LockRows[1].Name = "Second CH 5";   // flight 2's renamed and recoloured
+        c.LockRows[1].Color = Colors.Teal;
+        c.SnrStreams[1].Receivers.First().Channels[0].IsChecked = false;   // flight 2's L
+
+        c.Apply();
+
+        Assert.False(plot.SeriesById(0)!.Visible);
+        Assert.True(plot.SeriesById(5)!.Visible);
+        Assert.Equal(new[] { "Ch 5", "Ch 5", "Second CH 5", "Second CH 5" }, new[] { 0, 1, 5, 6 }.Select(id => plot.SeriesById(id)!.Name));
+        Assert.Equal(new[] { before, before, Colors.Teal, Colors.Teal }, new[] { 0, 1, 5, 6 }.Select(id => plot.SeriesById(id)!.Color));
+        Assert.True(plot.SeriesById(2)!.Visible);    // flight 1's L stays
+        Assert.False(plot.SeriesById(7)!.Visible);
+    }
+
+    [Fact]
+    public void SwitchingTheViewCarriesEachRecordingsStreamOverOnItsOwn()
+    {
+        PlotViewModel plot = TwoRecordings();
+        plot.SetSeriesVisibleQuiet(5, false);   // flight 2's CH 5 hidden; flight 1's, of the same channel, shown
+
+        plot.SetLockAxisView(LockAxisView.MissedFrames);
+
+        Assert.True(plot.SeriesById(1)!.Visible);    // flight 1's missed frames
+        Assert.False(plot.SeriesById(6)!.Visible);   // flight 2's stay hidden with its lock
+    }
+
     [Fact]
     public async Task SeriesGoneWhileTheDialogIsOpenAreSkipped()
     {

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -29,6 +30,8 @@ public enum CalibrationStatusKind
 /// extracted, with the progress dialog up and Cancel stopping it. OK is available once the step file parsed and at
 /// least one channel calibrated; it gives the profiles, the two files, the clips and the report.
 /// </summary>
+[SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
+    Justification = "Each extraction's cancellation source is disposed when the next replaces it; the last holds no handle (no timer, no wait handle is asked of it), is cancelled when the dialog closes (CancelExtraction), and goes with the dialog.")]
 public sealed class ExtractCalibrationViewModel : DialogViewModel
 {
     public const string Title = "Extract Calibration";
@@ -49,6 +52,11 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
     private IReadOnlyList<ChannelInfo> _calPcm = Array.Empty<ChannelInfo>(), _calTime = Array.Empty<ChannelInfo>();
     private int _calPcmIndex = -1, _calTimeIndex = -1;
     private int _loadVersion;   // the latest recording chosen: an earlier one whose channels arrive late is dropped
+    // The latest extraction asked for: an earlier one still waiting or running is cancelled, and its result dropped.
+    private int _extractVersion;
+    private CancellationTokenSource? _extractCancel;
+    // The extraction running, which the next one waits out before it starts: never two at once, nor two progress dialogs.
+    private Task _running = Task.CompletedTask;
 
     /// <param name="initialStepPath">The step file the stream last used; it is loaded if it exists, else the shipped
     /// default.</param>
@@ -79,6 +87,14 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
 
     /// <summary>What starts an extraction: the core, unless a test stands in.</summary>
     public ICalibrationRunner Runner { get; set; } = CoreCalibrationRunner.Instance;
+
+    /// <summary>How long a clip typed into its box is left before it is extracted with: each keystroke starts the wait
+    /// again, so a value typed digit by digit is extracted once, when the typing stops.</summary>
+    public static readonly TimeSpan ClipSettleTime = TimeSpan.FromMilliseconds(600);
+
+    /// <summary>The wait after a typed clip (<see cref="ClipSettleTime"/>), cancelled by the next keystroke; a test stands in
+    /// with one it ends itself.</summary>
+    public Func<CancellationToken, Task> ClipSettle { get; set; } = token => Task.Delay(ClipSettleTime, token);
 
     /// <summary>What the calibration run is given besides the files and clips. No view reads it: it is kept public as the
     /// tests' only window onto the request the stream's settings make, as audit D8 decided.</summary>
@@ -151,44 +167,52 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
     public CalibrationStatusKind CalKind => _calKind;
 
     // The two clips are plain text boxes (no up/down arrows). What is typed is held in the *Text strings; text that is a
-    // number from 0 to ClipMaximum becomes the clip and extracts again, and anything else is a problem that holds OK and
-    // leaves the clip, and the calibration, as they were.
+    // number from 0 to ClipMaximum becomes the clip and extracts again once the typing stops (ClipSettle), and anything else
+    // is a problem that holds OK and leaves the clip, and the calibration, as they were.
 
     /// <summary>Seconds left off the start of the calibration recording before steps are detected (0 to 100,000); a
-    /// change extracts again. Setting it types it into <see cref="ClipStartText"/>.</summary>
+    /// change extracts again at once. Setting it types it into <see cref="ClipStartText"/>.</summary>
     public decimal ClipStart
     {
         get => _clipStart;
-        set => ClipStartText = NumberText.FormatDecimal(value);
+        set => SetClipStartText(NumberText.FormatDecimal(value), typed: false);
     }
 
     /// <summary>Seconds left off the end, likewise.</summary>
     public decimal ClipEnd
     {
         get => _clipEnd;
-        set => ClipEndText = NumberText.FormatDecimal(value);
+        set => SetClipEndText(NumberText.FormatDecimal(value), typed: false);
     }
 
+    /// <summary>The Clip Start box's text, as typed: a clip it holds is extracted with once the typing stops.</summary>
     public string ClipStartText
     {
         get => _clipStartText;
-        set
-        {
-            if (!SetProperty(ref _clipStartText, value ?? string.Empty)) return;
-            if (TakeClip(_clipStartText, "Clip Start", ref _clipStartProblem) is decimal clip && SetProperty(ref _clipStart, clip, nameof(ClipStart))) _ = ExtractAsync();
-            ClipProblemsChanged();
-        }
+        set => SetClipStartText(value, typed: true);
     }
 
+    /// <summary>The Clip End box's text, likewise.</summary>
     public string ClipEndText
     {
         get => _clipEndText;
-        set
-        {
-            if (!SetProperty(ref _clipEndText, value ?? string.Empty)) return;
-            if (TakeClip(_clipEndText, "Clip End", ref _clipEndProblem) is decimal clip && SetProperty(ref _clipEnd, clip, nameof(ClipEnd))) _ = ExtractAsync();
-            ClipProblemsChanged();
-        }
+        set => SetClipEndText(value, typed: true);
+    }
+
+    private void SetClipStartText(string? value, bool typed)
+    {
+        if (!SetProperty(ref _clipStartText, value ?? string.Empty, nameof(ClipStartText))) return;
+        if (TakeClip(_clipStartText, "Clip Start", ref _clipStartProblem) is decimal clip && SetProperty(ref _clipStart, clip, nameof(ClipStart)))
+            _ = ExtractAsync(afterTyping: typed);
+        ClipProblemsChanged();
+    }
+
+    private void SetClipEndText(string? value, bool typed)
+    {
+        if (!SetProperty(ref _clipEndText, value ?? string.Empty, nameof(ClipEndText))) return;
+        if (TakeClip(_clipEndText, "Clip End", ref _clipEndProblem) is decimal clip && SetProperty(ref _clipEnd, clip, nameof(ClipEnd)))
+            _ = ExtractAsync(afterTyping: typed);
+        ClipProblemsChanged();
     }
 
     public double ClipStartSec => (double)_clipStart;
@@ -364,27 +388,74 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
     /// <summary>
     /// Extracts with what the dialog holds: nothing until a calibration
     /// recording is chosen; a word to choose a valid step file first; otherwise the extraction, its outcome in the
-    /// recording's status line and OK available once a channel calibrated.
+    /// recording's status line and OK available once a channel calibrated. Only the latest asked for counts: one still
+    /// waiting or running is cancelled and its result dropped, and the new one starts once it has stopped, so there is
+    /// never more than one at a time. After a clip typed into its box (<paramref name="afterTyping"/>) it waits
+    /// <see cref="ClipSettle"/> first, which the next keystroke cuts short. The task never fails: whatever goes wrong is
+    /// said in the recording's status line.
     /// </summary>
-    private Task ExtractAsync()
+    private Task ExtractAsync(bool afterTyping = false)
     {
         if (_calPath.Length == 0) return Task.CompletedTask;
+        int version = ++_extractVersion;
+        _extractCancel?.Cancel();
+        _extractCancel?.Dispose();
+        _extractCancel = new CancellationTokenSource();
+        // What was extracted before is of other settings now, whatever comes of this one.
+        SetCalibrated(false, Array.Empty<CalibrationProfile>(), string.Empty);
         if (!_stepOk)
         {
-            SetCalibrated(false, Array.Empty<CalibrationProfile>(), string.Empty);
             SetCal(CalibrationStatusKind.Pending, "Select a valid step cal file to process this recording.");
             return Task.CompletedTask;
         }
-        Task run = RunAsync();
+        SetCal(CalibrationStatusKind.Pending, ProcessingText);
+        Task run = ExtractLatestAsync(version, afterTyping, _extractCancel.Token);
         Extraction = run;
         return run;
     }
 
-    private async Task RunAsync()
+    /// <summary>The dialog is closing: an extraction waiting for the typing to stop, or running, is cancelled and its result
+    /// dropped. The dialog's host calls it once the window has closed, however it was closed.</summary>
+    public void CancelExtraction()
     {
-        SetCalibrated(false, Array.Empty<CalibrationProfile>(), string.Empty);
-        SetCal(CalibrationStatusKind.Pending, ProcessingText);
+        _extractVersion++;
+        _extractCancel?.Cancel();
+    }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Started without being awaited (a clip, a channel or a step file changed): a failure is said in the status line, not lost in a task no one reads.")]
+    private async Task ExtractLatestAsync(int version, bool afterTyping, CancellationToken cancel)
+    {
+        try
+        {
+            if (afterTyping) await ClipSettle(cancel);
+            // The one before is cancelled already; it is waited out, so that its progress dialog has gone before this one's
+            // comes up (the dialog shows one at a time).
+            try
+            {
+                await _running;
+            }
+            catch (Exception)
+            {
+                // That run said its own failure.
+            }
+            if (version != _extractVersion) return;
+            Task run = RunAsync(version, cancel);
+            _running = run;
+            await run;
+        }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+        {
+            // Asked for again, or the dialog closed, while it waited for the typing to stop.
+        }
+        catch (Exception e)
+        {
+            if (version == _extractVersion) SetCal(CalibrationStatusKind.Fail, "The calibration could not be extracted: " + e.Message);
+        }
+    }
+
+    private async Task RunAsync(int version, CancellationToken cancel)
+    {
         using var progress = new ProcessingViewModel(ProcessingText);
         var observer = new Observer(progress);
         ICalibrationRunning run;
@@ -405,13 +476,17 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
             if (run.IsRunning) ProgressDialog?.Show(progress);
             try
             {
+                // Cancel in the progress dialog stops it, and so does another extraction asked for meanwhile.
                 using (progress.Token.Register(run.Cancel))
-                    await Task.Run(run.Wait);
+                using (cancel.Register(run.Cancel))
+                    await Task.Run(run.Wait, CancellationToken.None);   // the run is stopped by its Cancel, not by abandoning the wait
             }
             finally
             {
                 ProgressDialog?.Close();
             }
+            // Asked for again meanwhile: this one's result is of settings the dialog no longer holds.
+            if (version != _extractVersion) return;
             // A report the core made that the observer could not handle was caught at the boundary and kept: the
             // success flag it records cannot be trusted, so say so rather than show a result (audit B4).
             if (run.ObserverException is { } failure)

@@ -307,6 +307,82 @@ public sealed class ChartViewTests
     }
 
     [AvaloniaFact]
+    public void TheDataLayersBitmapIsPaintedAgainAtTheSameSizeAndMadeAgainOnlyForANewSize()
+    {
+        PlotViewModel plot = LockPlot();
+        Shown s = Show(plot);
+        PlotChart chart = s.View.Chart;
+        Frames.Capture(s.Window);
+        int made = chart.BackingBitmapsMade, renders = chart.DataLayerRenders;
+        Color lockColour = plot.Series[0].Color;
+        Rect area = Frames.InWindow(chart, s.Window);
+        Rect plotArea = chart.PlotArea;
+        // Pixels of the plot area in the lock series' colour, or within a little of it.
+        int Coloured()
+        {
+            using ILockedFramebuffer fb = Frames.Capture(s.Window).Lock();
+            int n = 0;
+            for (int y = (int)(area.Top + plotArea.Top); y < (int)(area.Top + plotArea.Bottom); y++)
+                for (int x = (int)(area.Left + plotArea.Left); x < (int)(area.Left + plotArea.Right); x++)
+                {
+                    uint p = Frames.Pixel(fb, x, y);
+                    int d = Math.Abs((int)((p >> 16) & 0xFF) - lockColour.R) + Math.Abs((int)((p >> 8) & 0xFF) - lockColour.G) + Math.Abs((int)(p & 0xFF) - lockColour.B);
+                    if (d < 40) n++;
+                }
+            return n;
+        }
+        Assert.True(Coloured() > 20);
+
+        // Painted again for a title and for the series gone: the same bitmap, cleared first, so the line drawn before is not left.
+        plot.Title = "Another title";
+        Frames.Capture(s.Window);
+        plot.SetSeriesVisibleQuiet(plot.Series[0].Id, false);
+        plot.CommitAppearance();
+        Assert.Equal(0, Coloured());
+        Assert.Equal(renders + 2, chart.DataLayerRenders);
+        Assert.Equal(made, chart.BackingBitmapsMade);
+
+        // A new size is a new bitmap.
+        s.View.Width = 700;
+        Frames.Capture(s.Window);
+        Assert.Equal(made + 1, chart.BackingBitmapsMade);
+        s.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheTextTheLayoutIsMadeOfIsMeasuredOnceUntilTheThemeChanges()
+    {
+        PlotViewModel plot = LockPlot();
+        Shown s = Show(plot);
+        PlotChart chart = s.View.Chart;
+        Frames.Capture(s.Window);
+        int measured = chart.TextMeasurements;
+        Rect area = chart.PlotArea;
+
+        // A cursor move asks for the layout several times over; the text was measured once already.
+        for (int i = 0; i < 20; i++) s.Window.MouseMove(s.At(chart) + new Point(i, 0), RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(area, chart.PlotArea);
+        Assert.Equal(measured, chart.TextMeasurements);
+
+        var app = (App)Application.Current!;
+        ThemeVariant? before = app.RequestedThemeVariant;
+        try
+        {
+            app.ApplyTheme(app.ActualThemeVariant != ThemeVariant.Dark);
+            Dispatcher.UIThread.RunJobs();
+            _ = chart.PlotArea;
+            Assert.Equal(measured + 1, chart.TextMeasurements);
+            Assert.Equal(area, chart.PlotArea);   // the same font: the same layout
+        }
+        finally
+        {
+            app.RequestedThemeVariant = before;
+            s.Window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public void ADenseLegendIsCappedAndScrollsWithoutCoveringALabel()
     {
         PlotViewModel plot = SnrOnly(48);

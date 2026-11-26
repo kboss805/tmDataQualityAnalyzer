@@ -566,7 +566,9 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
             Ch10File file = await StreamsRun.OpenAsync(path);
             // A recording joins Recent Files once its channels are read, as in v2.x.
             _shell.AddRecentFile(path);
-            Log.Add("  File size: " + SizeText(new FileInfo(path).Length));
+            // Read outside the core: a file gone since it was opened is the recording that failed (a FileNotFoundException left to
+            // the catch below would be called the core missing).
+            Log.Add("  File size: " + SizeText(StreamsRun.FileSize(path)));
             Log.Add("  Time channels: " + CountText(file.TimeChannels.Count));
             Log.Add("  PCM channels: " + CountText(file.PcmChannels.Count));
             StreamsChoice? choice = await _configurator.ConfigureAsync(path, file);
@@ -666,7 +668,8 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         }
     }
 
-    /// <summary>A file name as the plot's title takes it: up to its first dot (all of it without one).</summary>
+    /// <summary>A file name as the plot's title, Plot File, a template's name and a batch's per-file exports take it, as v2.x took
+    /// it: up to its first dot (all of it without one).</summary>
     public static string BaseName(string fileName)
     {
         int dot = fileName.IndexOf('.', StringComparison.Ordinal);
@@ -700,13 +703,16 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
 
     /// <summary>A recording's name for Plot File and Remove File, made different from every one the plot already holds, for a
     /// recording added a second time (or two of one name from different folders): "name (2)", "name (3)".</summary>
-    private string UniqueSourceLabel(string label)
+    private string UniqueSourceLabel(string label) => UniqueName(label, Plot.SourceList().Select(s => s.Label).ToHashSet());
+
+    /// <summary><paramref name="name"/> if <paramref name="taken"/> does not hold it (by the set's own comparison), else the first
+    /// of "name (2)", "name (3)"... that it does not.</summary>
+    internal static string UniqueName(string name, IReadOnlySet<string> taken)
     {
-        HashSet<string> taken = Plot.SourceList().Select(s => s.Label).ToHashSet();
-        if (!taken.Contains(label)) return label;
+        if (!taken.Contains(name)) return name;
         for (int i = 2; ; i++)
         {
-            string candidate = string.Create(CultureInfo.InvariantCulture, $"{label} ({i})");
+            string candidate = string.Create(CultureInfo.InvariantCulture, $"{name} ({i})");
             if (!taken.Contains(candidate)) return candidate;
         }
     }

@@ -1,10 +1,13 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using TmDq.App.Models.Processing;
+using TmDq.App.Services;
 using TmDq.App.ViewModels.Dialogs;
 using TmDq.App.Views.Dialogs;
 using TmDq.Core;
@@ -209,6 +212,180 @@ public sealed class CalibrationChannelTests
         Assert.Equal(CalibrationStatusKind.Ok, vm.CalKind);
         Assert.NotEmpty(vm.Profiles);
         Assert.True(vm.CanAccept);
+    }
+
+    // ---- one extraction at a time, the latest asked for -------------------------------------------------------------------
+
+    /// <summary>A run that goes on until it is cancelled or let finish, then cannot hand its result back (so the status says
+    /// which run's result was shown): it notes each start, each cancel and each result asked for, and how many ran at once.</summary>
+    private sealed class HeldRunner : ICalibrationRunner
+    {
+        public readonly List<Held> Runs = new();
+        public int Running, MostAtOnce;
+        public TaskCompletionSource Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ICalibrationRunning Start(CalibrationRequest request, IRunObserver observer)
+        {
+            var run = new Held(this, Runs.Count, request);
+            Runs.Add(run);
+            MostAtOnce = Math.Max(MostAtOnce, Interlocked.Increment(ref Running));
+            Started.TrySetResult();
+            return run;
+        }
+
+        public sealed class Held(HeldRunner owner, int index, CalibrationRequest request) : ICalibrationRunning
+        {
+            private readonly ManualResetEventSlim _go = new();
+            public CalibrationRequest Request { get; } = request;
+            public bool Cancelled { get; private set; }
+            public bool ResultAsked { get; private set; }
+            public bool IsRunning => true;
+            public void Finish() => _go.Set();
+            public void Cancel()
+            {
+                Cancelled = true;
+                _go.Set();
+            }
+            public void Wait() => _go.Wait();
+            public Exception? ObserverException => null;
+            public CalibrationResult GetResult()
+            {
+                ResultAsked = true;
+                throw new TmdqException(Status.Internal, "the result of run " + index);
+            }
+            public void Dispose()
+            {
+                Interlocked.Decrement(ref owner.Running);
+                _go.Dispose();
+            }
+        }
+    }
+
+    /// <summary>The progress dialog, counting how many are up at once.</summary>
+    private sealed class CountingProgress : IProcessingDialog
+    {
+        public int Open, MostOpen, Shown;
+        public void Show(ProcessingViewModel vm)
+        {
+            Shown++;
+            MostOpen = Math.Max(MostOpen, ++Open);
+        }
+        public void Close() => Open--;
+    }
+
+    [AvaloniaFact]
+    public async Task AnExtractionAskedForWhileOneRunsCancelsItDropsItsResultAndStartsOnceItHasStopped()
+    {
+        var runner = new HeldRunner();
+        var progress = new CountingProgress();
+        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null)
+        {
+            Runner = runner, ProgressDialog = progress, ReadChannels = _ => Channels(1, new[] { 1, 2 }, 26, 27),
+        };
+        Task load = vm.LoadCalibrationAsync("calibration.ch10");
+        await runner.Started.Task;
+        Assert.Single(runner.Runs);
+        runner.Started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        vm.CalPcmIndex = 1;    // another channel while the first run goes on,
+        vm.CalTimeIndex = 1;   // and another time channel before that one has started
+        Task latest = vm.Extraction!;
+
+        Assert.True(runner.Runs[0].Cancelled);
+        await load;
+        await runner.Started.Task;   // the run next started, once the first had stopped: the latest asked for, not the one between
+        Assert.Equal(2, runner.Runs.Count);
+        Assert.Equal((27, 2), (runner.Runs[1].Request.PcmChannelId, runner.Runs[1].Request.TimeChannelId));
+        runner.Runs[1].Finish();
+        await latest;
+
+        Assert.Equal(2, runner.Runs.Count);
+        Assert.False(runner.Runs[0].ResultAsked);   // the cancelled run's result was never read, nor shown
+        Assert.Equal((CalibrationStatusKind.Fail, "✗ the result of run 1"), (vm.CalKind, vm.CalStatus));
+        Assert.Equal(1, runner.MostAtOnce);          // the second started once the first had stopped
+        Assert.Equal((2, 1, 0), (progress.Shown, progress.MostOpen, progress.Open));   // one progress dialog at a time, each closed
+    }
+
+    [AvaloniaFact]
+    public async Task AClipTypedDigitByDigitIsExtractedOnceWhenTheTypingStops()
+    {
+        var runner = new RecordingRunner();
+        var waits = new List<TaskCompletionSource>();
+        var vm = Dialog(StepCalBase(), Channels(1, new[] { 1 }, 26), runner);
+        vm.ClipSettle = token =>
+        {
+            var wait = new TaskCompletionSource();
+            token.Register(() => wait.TrySetCanceled(token));
+            waits.Add(wait);
+            return wait.Task;
+        };
+        await vm.LoadCalibrationAsync("calibration.ch10");
+        Assert.Single(runner.Requests);   // the recording chosen: extracted at once
+
+        foreach (string typed in new[] { "1", "12", "123" }) vm.ClipEndText = typed;
+        Assert.Single(runner.Requests);   // nothing yet: the typing has not stopped
+        Assert.Equal(3, waits.Count);
+        Assert.True(waits[0].Task.IsCanceled && waits[1].Task.IsCanceled);   // each keystroke cut the last wait short
+        Assert.False(vm.CanAccept);       // what was extracted is of another clip now
+        Assert.Equal(ExtractCalibrationViewModel.ProcessingText, vm.CalStatus);
+
+        waits[2].SetResult();
+        await vm.Extraction!;
+
+        Assert.Equal(2, runner.Requests.Count);
+        Assert.Equal(123.0, runner.Requests[1].ClipEndSec);
+
+        // Set rather than typed (a stream's saved clip, a test), a clip is extracted with at once.
+        vm.ClipStart = 4m;
+        await vm.Extraction!;
+        Assert.Equal((3, 3), (runner.Requests.Count, waits.Count));
+        Assert.Equal(4.0, runner.Requests[2].ClipStartSec);
+    }
+
+    [AvaloniaFact]
+    public async Task ATypedClipWaitingWhenTheDialogClosesIsNeverExtracted()
+    {
+        var runner = new RecordingRunner();
+        var wait = new TaskCompletionSource();
+        var vm = Dialog(StepCalBase(), Channels(1, new[] { 1 }, 26), runner);
+        vm.ClipSettle = token =>
+        {
+            token.Register(() => wait.TrySetCanceled(token));
+            return wait.Task;
+        };
+        await vm.LoadCalibrationAsync("calibration.ch10");
+
+        vm.ClipStartText = "5";
+        vm.CancelExtraction();   // what the dialog's host does once its window has closed
+
+        Assert.True(wait.Task.IsCanceled);
+        await vm.Extraction!;
+        Assert.Single(runner.Requests);
+    }
+
+    /// <summary>A runner that fails in a way no one planned for.</summary>
+    private sealed class BrokenRunner : ICalibrationRunner
+    {
+        public ICalibrationRunning Start(CalibrationRequest request, IRunObserver observer) =>
+            throw new InvalidOperationException("something unforeseen");
+    }
+
+    [Fact]
+    public async Task AnExtractionThatFailsUnexpectedlyIsACrossNotAProcessingThatNeverEnds()
+    {
+        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null)
+        {
+            Runner = new BrokenRunner(), ReadChannels = _ => Channels(1, new[] { 1 }, 26, 27),
+        };
+
+        await vm.LoadCalibrationAsync("calibration.ch10");   // nothing thrown out of it, nor out of an extraction no one awaits
+        Assert.Equal((CalibrationStatusKind.Fail, "✗ The calibration could not be extracted: something unforeseen"), (vm.CalKind, vm.CalStatus));
+
+        vm.CalPcmIndex = 1;
+        await vm.Extraction!;
+        Assert.True(vm.Extraction!.IsCompletedSuccessfully);
+        Assert.Equal(CalibrationStatusKind.Fail, vm.CalKind);
+        Assert.False(vm.CanAccept);
     }
 
     [AvaloniaFact]

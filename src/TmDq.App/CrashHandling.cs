@@ -65,11 +65,14 @@ public sealed class CrashHandling
     }
 
     /// <summary>The words the user sees: what happened, where the report is (or that it could not be saved, and where it
-    /// would have gone), and what to do with it.</summary>
+    /// would have gone), that it names the files and folders used (the log's lines and the stack hold full paths, user names in
+    /// them), and what to do with it.</summary>
     public static string Message(string? reportPath, string folder) =>
         "tmDataQualityAnalyzer hit an unexpected error and has to close.\n\n" +
         (reportPath is null
             ? "The report could not be saved: the folder " + folder + " cannot be written to.\n\n"
-            : "A report was saved to:\n" + reportPath + "\n\n") +
+            : "A report was saved to:\n" + reportPath + "\n\n" +
+              "It is a text file that contains the full paths of the files and folders you used, which can include your user " +
+              "name. Read it before sending it if those are private.\n\n") +
         "Please send that file, with a note of what you were doing, to the person who supports this copy of the application.";
 }

@@ -28,6 +28,10 @@ public static class Startup
         return null;
     }
 
+    /// <summary>Opens the file the command line named, by its suffix as Recent Files and a drop open one: an exported CSV is
+    /// imported, anything else opened as a recording.</summary>
+    public static Task OpenAsync(MainWindowViewModel vm, string path) => vm.OpenPathAsync(path);
+
     /// <summary>The report file to write, or null when the variable is unset.</summary>
     public static string? SmokeReportPath() =>
         Environment.GetEnvironmentVariable(SmokeReportVariable) is { Length: > 0 } path ? path : null;

@@ -299,6 +299,58 @@ public sealed class PhasedArrayImportTests
     }
 
     [Fact]
+    public async Task RemovingTheLogThatStartedFirstStartsTheAxisAtTheOtherOnItsOwnClock()
+    {
+        string first = WriteLog("late", Noon, 20);                     // 19:00:00 to 19:00:19
+        string second = WriteLog("early", Noon.AddSeconds(-5), 20);    // 18:59:55 to 19:00:14
+        try
+        {
+            (MainWindowViewModel vm, _) = WindowAnswering(CsvKind.PhasedArrayAntenna);
+            await vm.ImportCsvAsync(first);
+            await vm.ImportCsvAsync(second);
+            PlotSeries late = vm.Plot.Series[0];
+            Assert.Equal(5.0, late.X[0], 6);
+
+            Assert.True(vm.Plot.RemoveSource(vm.Plot.Series[^1].SourceId));
+
+            // Zero is the first sample left, and the clock is the files' own: a clock worked out from the absolute base,
+            // which an imported file's clock never set, read day 1 of 1970.
+            Assert.Equal(0.0, late.X[0], 9);
+            Assert.Equal("317:19:00:00", vm.Plot.FormatTime(0.0));
+            Assert.Equal("317:19:00:19", vm.Plot.FormatTime(late.X[^1]));
+            Assert.Equal((0.0, 19.0), (vm.Plot.XViewMin, Math.Round(vm.Plot.XViewMax, 6)));
+        }
+        finally
+        {
+            TempFiles.Delete(first);
+            TempFiles.Delete(second);
+        }
+    }
+
+    [Fact]
+    public async Task ALogJoinedToWhatIsShownLeavesItsColours()
+    {
+        string first = WriteLog("first", Noon, 5), second = WriteLog("second", Noon.AddSeconds(2), 5);
+        try
+        {
+            (MainWindowViewModel vm, _) = WindowAnswering(CsvKind.PhasedArrayAntenna);
+            await vm.ImportCsvAsync(first);
+            PlotSeries shown = vm.Plot.Series[0];
+            vm.Plot.RecolorSeries(shown.Id, Avalonia.Media.Colors.Teal);
+
+            await vm.ImportCsvAsync(second);
+
+            Assert.Equal(Avalonia.Media.Colors.Teal, shown.Color);
+            Assert.Equal(vm.Plot.Series[1].Color, vm.Plot.Series[7].Color);   // the joined log's own, as the first's were given
+        }
+        finally
+        {
+            TempFiles.Delete(first);
+            TempFiles.Delete(second);
+        }
+    }
+
+    [Fact]
     public async Task ALogThatDoesNotOverlapWhatIsShownIsSaidSoAndStillAdded()
     {
         string first = WriteLog("today", Noon, 10);

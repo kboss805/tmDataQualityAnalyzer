@@ -144,16 +144,16 @@
     {
       "id": "C4",
       "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
-      "old": "&& SetProperty(ref _clipEnd, clip, nameof(ClipEnd))) _ = ExtractAsync();",
-      "new": "&& SetProperty(ref _clipEnd, clip, nameof(ClipEnd))) { }",
+      "old": "nameof(ClipEnd)))\n            _ = ExtractAsync(afterTyping: typed);",
+      "new": "nameof(ClipEnd))) { }",
       "expect": "caught",
       "note": "a change of Clip End does not extract again"
     },
     {
       "id": "C5",
       "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
-      "old": "set => ClipStartText = NumberText.FormatDecimal(value);",
-      "new": "set => ClipStartText = value.ToString(\"F0\", CultureInfo.InvariantCulture);",
+      "old": "set => SetClipStartText(NumberText.FormatDecimal(value), typed: false);",
+      "new": "set => SetClipStartText(value.ToString(\"F0\", CultureInfo.InvariantCulture), typed: false);",
       "expect": "caught",
       "note": "a clip set in code is shown rounded to a whole second"
     },

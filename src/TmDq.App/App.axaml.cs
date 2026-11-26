@@ -30,13 +30,14 @@ public sealed class App : Application
                                              Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
             desktop.MainWindow = window;
 
-            // A recording on the command line opens once the window is up (Startup says what the line may hold).
+            // A recording on the command line opens once the window is up, and an exported CSV is imported (Startup says what the
+            // line may hold).
             if (Startup.RecordingFromArguments(desktop.Args) is { } recording)
             {
                 window.Opened += async (_, _) =>
                 {
                     if (smokeReport is not null) desktop.Shutdown(await Startup.RunSmokeAsync(vm, recording, smokeReport));
-                    else await vm.LoadAsync(recording);
+                    else await Startup.OpenAsync(vm, recording);
                 };
             }
         }

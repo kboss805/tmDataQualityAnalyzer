@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using TmDq.App.Models.Streams;
@@ -56,13 +55,6 @@ public static class TemplateBatch
             checks.Add(new FileCheck(path, match.Ok, match.Ok ? "" : Describe(match)));
         }
         return checks;
-    }
-
-    /// <summary>A file name up to its first dot (all of it without one), as v2.x named a template.</summary>
-    public static string BaseName(string fileName)
-    {
-        int dot = fileName.IndexOf('.', StringComparison.Ordinal);
-        return dot < 0 ? fileName : fileName[..dot];
     }
 
     /// <summary>The run a template gives for a recording: its processed rows, over the time channel at the template's
