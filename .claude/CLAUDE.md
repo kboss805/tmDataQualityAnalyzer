@@ -3,7 +3,7 @@
 Windows desktop app for analyzing data quality of IRIG 106 Chapter 10 PCM telemetry: per-stream **Frame Sync
 Lock** stats and **Receiver AGC/SNR**, plotted vs. time. **Avalonia 12 on .NET 10** (`src/TmDq.App`, MVVM) over a
 C++20 single-reader / parallel-worker processing core built as `tmdq_core.dll` (`src/core/`: `include/`, `src/` and the C ABI in `abi/`).
-v3.0.0 replaced the v2.x application; `docs/changelog.md` records the move. **Current version: 3.4.0.**
+v3.0.0 replaced the v2.x application; `docs/changelog.md` records the move. **Current version: 3.5.0.**
 
 > **Full reference:** `docs/guide.md` is the canonical, detailed guide (user stories, architecture,
 > conventions, test catalog); `docs/changelog.md` is the history (every release, every step of the move
@@ -46,7 +46,7 @@ themselves). Use the **PowerShell** tool.
   project is an executable; the build merges a UTF-8 code-page manifest into it with `mt.exe`, because the vendored
   irig106 opens files with a narrow `open()` that reads the active code page. The .NET projects find `mt.exe` in the
   Windows SDK themselves (`eng\WindowsSdkTools.targets`), so a plain `dotnet build` (VS Code's) needs no developer
-  prompt. Green baseline **434 passed / 0
+  prompt. Green baseline **439 passed / 0
   failed / 1 skipped** (the skip is the probe `IsolatedLoadTests` runs in a child process). CI runs it.
 - **The app:** `src/TmDq.App` (Avalonia 12, CommunityToolkit.Mvvm) and `tests/TmDq.App.Tests` (xunit v3 on
   `Avalonia.Headless.XUnit`), both in `tmdq.sln`, which VS Code opens by default (`dotnet.defaultSolution`).

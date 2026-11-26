@@ -2,7 +2,8 @@
 """Generate assets/icon.ico, the application's icon, drawn here (the artwork is this script's geometry).
 
 The icon is the exe's (src/TmDq.App/TmDq.App.csproj's ApplicationIcon: Explorer, the taskbar, the shortcuts), every
-window's (an AvaloniaResource: the title bar, Alt+Tab) and the installer's (SetupIconFile). Windows picks the size it
+window's (an AvaloniaResource: the title bar, Alt+Tab) and the MSI's Installed apps entry (ARPPRODUCTICON); its artwork is also the
+MSI wizard's pictures (eng/gen_installer_images.py). Windows picks the size it
 needs from the file, and scales the nearest one when the file lacks it, so it carries every size Windows asks for at
 100 % to 200 %: 16, 24, 32, 48, 64 and 256 px.
 

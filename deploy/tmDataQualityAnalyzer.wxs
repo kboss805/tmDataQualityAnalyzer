@@ -163,6 +163,10 @@
 
     <!-- Interactive install: welcome, licence, feature tree (with the folder), ready, progress, finish with "launch". -->
     <WixVariable Id="WixUILicenseRtf" Value="$(LicenseRtf)" />
+    <!-- The wizard's pictures, drawn from the icon's artwork by eng\gen_installer_images.py: the Welcome and Finish pages' panel
+         (493 x 312) and the other pages' banner (493 x 58), in place of WiX's own. -->
+    <WixVariable Id="WixUIDialogBmp" Value="$(RepoRoot)\assets\installer_dialog.bmp" />
+    <WixVariable Id="WixUIBannerBmp" Value="$(RepoRoot)\assets\installer_banner.bmp" />
     <ui:WixUI Id="WixUI_Advanced" />
 
     <!-- The dialog set builds its per-machine folder from [ProgramFilesFolder], which is the 32-bit "Program Files (x86)" even for an
@@ -174,10 +178,18 @@
 
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch tmDataQualityAnalyzer" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
-    <CustomAction Id="LaunchApplication" FileRef="AppExe" ExeCommand="" Return="asyncNoWait" />
+    <!-- "Launch" starts the exe at [APPLICATIONFOLDER], the property, and not by its File row (FileRef): the wizard resolves a
+         file's path when it starts (the per-machine folder) and the "only for me" choice changes the APPLICATIONFOLDER property
+         but not that resolved path, so a launch by FileRef after a per-user install looked for the exe in Program Files and
+         failed (return value 1631, nothing shown). The property has no trailing separator after the scope dialog sets it, and
+         has one otherwise; the doubled separator that gives is harmless in a Windows path. -->
+    <CustomAction Id="SetLaunchApplicationExe" Property="LAUNCHAPPLICATIONEXE" Value="[APPLICATIONFOLDER]\tmDataQualityAnalyzer.exe" />
+    <CustomAction Id="LaunchApplication" Property="LAUNCHAPPLICATIONEXE" ExeCommand="" Return="asyncNoWait" />
     <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="SetLaunchApplicationExe"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" Order="1" />
       <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication"
-               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" Order="2" />
     </UI>
   </Package>
 </Wix>

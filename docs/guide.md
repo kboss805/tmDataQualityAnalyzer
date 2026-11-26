@@ -11,7 +11,7 @@ This file provides context and guidelines for AI assistants working on the tmDat
 - **Shipping application** (from v3.0.0): the Avalonia 12 application on .NET 10 (`src/TmDq.App`) over the native
   core (`tmdq_core.dll`), packaged by `deploy/build_package.ps1`. v3.0.0 replaced the v2.x application;
   `docs/changelog.md` records the move.
-- **Project Version**: 3.4.0 — defined once in the `AppVersion` struct in `src/core/include/constants.h`; `eng/AppVersion.props` reads it for every assembly, and the package script and the manual build read it too, so no other file carries a duplicate version literal
+- **Project Version**: 3.5.0 — defined once in the `AppVersion` struct in `src/core/include/constants.h`; `eng/AppVersion.props` reads it for every assembly, and the package script and the manual build read it too, so no other file carries a duplicate version literal
 
 ## User Stories
 
@@ -384,16 +384,17 @@ The stories below follow the workflow a first-time user takes through the applic
 
 **Acceptance Criteria:**
 
-- [x] The installer produces a code-signed application executable.
-- [x] The installer can install to "Program Files" for admin users.
-- [x] The installer can install to a user-selected directory for users without admin privileges.
+- [x] The installer produces a code-signed application executable, and the installer itself (an MSI) is signed.
+- [x] The installer is a Windows Installer package (MSI) that an administrator can deploy silently (Group Policy, SCCM, Intune); a silent install run elevated installs for all users.
+- [x] The installer asks whether to install **for all users**, into Program Files (needs administrator rights), or **only for me**, into a folder of the user's choosing (by default `%LocalAppData%\Programs\tmDataQualityAnalyzer`), which needs no administrator rights.
 - [x] The installer shows progress while installing.
-- [x] The installer never overwrites an existing user TOML settings file, on upgrade or reinstall. A settings file is written only when it is absent (`onlyifdoesntexist`), and is left behind by uninstall (`uninsneveruninstall`).
+- [x] The installer refuses to install beside an install made by the old setup program (Inno Setup, v3.4.0 and earlier), and says to uninstall that first.
+- [x] The installer never overwrites an existing user TOML settings file, on upgrade or reinstall. A settings file is written only when it is absent (`NeverOverwrite`), and is left behind by uninstall (`Permanent`).
 - [x] A settings file written by any earlier version stays usable: every reader supplies its own default for a key the file does not carry, so an older file degrades to "missing keys fall back to defaults" rather than to a wrong result.
 - [x] New fields added to a shipped default therefore reach a **fresh install**, not an existing one. An upgraded install keeps the operator's file exactly as it stands.
   - **There is no merge of a shipped default into an existing settings file.** The installer's source (`deploy/tmDataQualityAnalyzer.wxs`) is declarative, with no custom action, and there is no `new_x`, migration, schema-version or merge logic in the core, `deploy/` or `eng/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
   - **The guarantee above is weaker but true, and the defensive readers are what make it safe** - `FrameSetup::readReceiverParams()` accepts both the current `[Receivers]` keys and the older `[Parameters]` spelling, an absent `Randomized` leaves the operator's choice alone rather than clearing it, and the template reader (`TemplateFile`) keeps each key's default for anything omitted (a new row's value, read from a default `StreamSetup`, which `StreamFilesTests` holds to the core's `ReceiverParamsFile.Defaults()`). A change that removed that tolerance would look harmless and would not be: it is load-bearing for this criterion, not incidental.
-  - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. Building the merge in the installer's `[Code]` section was scoped and deliberately not taken: it would move the installer from no custom code to scripted code, which is what keeps it cheap to maintain, and no one has asked for it (the v2.14.2 entry "US8.0 now describes the installer that exists" in `docs/changelog.md`). Rebuild the sketch from this criterion if that day comes.
+  - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. Building the merge as a custom action in the MSI was scoped and deliberately not taken: it would move the installer from no custom code to scripted code, which is what keeps it cheap to maintain, and no one has asked for it (the v2.14.2 entry "US8.0 now describes the installer that exists" in `docs/changelog.md`). Rebuild the sketch from this criterion if that day comes.
 
 ### US9.0: Switch between light and dark theme — Complete
 
@@ -521,7 +522,7 @@ profile, so a batch processes with the linear calibration.
   Template's batch and each file's export). Opening a recording (`LoadAsync`) stacks: with something on the plot it removes
   nothing, appends to `Sources`, numbers the run `Plot.NextSourceId` so it never shares a source id with an import, names the recording apart from the plot's others
   (`UniqueSourceLabel`, through `UniqueName`: "name (2)"), colours its series without recolouring what is shown, and leaves the plot's title; failing or cancelling it changes nothing.
-  With an empty plot it is where a recording starts (`ClearProcessedRun`, then the title). An import never clears the plot either (it is added to what is shown, US6.3), and
+  With an empty plot it is where a recording starts (`ClearRun`, then the title). An import never clears the plot either (it is added to what is shown, US6.3), and
   neither does a drop or a Recent Files entry, which go through the same two methods. **Clear Plot…** (`PlotCommands.ClearPlotAsync`, in the plot's right-click menu beside
   Remove File…) is how a plot is emptied: it asks once, with nothing chosen for the operator to press Enter on, then `Plot.RemoveSources` takes every
   recording, whose `SourceRemoved` notices empty `Sources`. A batch (Apply Template) still clears everything first. Its dialogs, pickers, configurator, clock and preferences are handed in as
@@ -988,12 +989,10 @@ that worktrees also need.
   replaces an older MSI and refuses a downgrade. **It does not upgrade an Inno Setup install**: a launch condition refuses
   to install beside one (its uninstall key `{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1`) and says to uninstall it first.
   Windows Installer reports a package that does not claim newer Windows as Windows 8.1, so the Windows-version condition
-  reads the real build from the registry. **US8.0 and the MSI:** its criteria that the installer can install to "Program Files"
-  for admin users and to a user-selected directory for users without admin privileges are what the two modes are (the
-  Sandbox test installs, upgrades and uninstalls per-user with `MSIINSTALLPERUSER=1` under a restricted token, so with no
-  elevation; it does not use a real standard-user account, so that such a user gets per-user with no switch is Windows
-  Installer's own rule, and the wizard's scope and folder pages are unverified too: the test is silent); the criterion that names `onlyifdoesntexist` and `uninsneveruninstall` describes the
-  Inno script, whose guarantees `NeverOverwrite` and `Permanent` now give. The story is the user's to reword; it was not touched.
+  reads the real build from the registry. **US8.0 and the MSI:** the story describes the MSI (reworded by the user for v3.5.0). The Sandbox
+  test installs, upgrades and uninstalls per-user with `MSIINSTALLPERUSER=1` under a restricted token, so with no elevation, but
+  its account is an administrator and it drives `msiexec` silently: the "for all users or only for me" criterion was met by hand
+  for v3.5.0, the user clicking through the wizard and installing per-user from a standard account with no switch.
 - **Portable ZIP**: the same files flat, with a `portable` marker (preferences in a `tmDataQualityAnalyzer` folder beside
   the exe), `UserManual.html`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt` and `README.txt`.
 - **Release notes**: `deploy/RELEASENOTES.txt` — installed beside the application (with a Start menu entry) and the GitHub
@@ -1134,7 +1133,7 @@ In the library tests the test classes (`*Tests.cs`) are at the project's root; i
 folders by area (`Plot/`, `Streams/`, `Files/`, `Shell/`, `Build/`, `Soak/`; see the catalog below). In both, what they share is in `Support/`: the
 library tests' `Env`, `RepoPaths`, `TempFiles`, `Collector` and the digests the recordings' expected numbers are in
 (`CalibrationDigest`, `FormatsDigest`, `SeriesDigest`), the collections (`ProcessMemoryCollection`) and the observer fakes;
-the application tests' `Fixtures` (`FakeConfigurator`, `FakeRecordingPicker`, `Recordings`, `StreamsChoices`), `MainWindowFakes` (`FakeCsvKinds`, `FakeExportDialog`, `FakeProgressDialog`), `ShortRecordings` (a short PRN recording made once per class), `PlotFixtures`, `StreamFakes`, `Menus`, `Frames`, `Repo`, `PeResources`,
+the application tests' `Fixtures` (`FakeConfigurator`, `FakeRecordingPicker`, `Recordings`, `StreamsChoices`), `MainWindowFakes` (`FakeExportDialog`, `FakeProgressDialog`), `ShortRecordings` (a short PRN recording made once per class), `PlotFixtures`, `StreamFakes`, `Menus`, `Frames`, `Repo`, `PeResources`,
 `TestAppBuilder` and `NativeCoreCollection`. The app tests link `TempFiles` and `RepoPaths` from the library tests. A
 Support file keeps its project's namespace, so a test uses it by its bare name; the test data (`Soak/`, `Templates/`)
 stays in folders of its own.
@@ -1282,7 +1281,7 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV, two exports stacked and a batch's several recordings added beside one already there), `PhasedArrayImportTests` (each layout recognised from the file with no question, a file of neither one error, an antenna's log as 90 series read H, V and C, and none of it exported),
   `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, named apart and keeping each file's colours, Apply Template with the core missing),
-  `ImportedDataKeptTests` (processing a recording keeps what was imported, the run numbered apart from it, an import named for its file and added beside the run) and
+  `ImportedDataKeptTests` (opening a recording keeps what was imported and what was processed before, each run numbered apart, an import named for its file and added beside the run) and
   `OpenStacksTests` (Open on a plot that shows something: the plot kept, the new recording beside it, names told apart, a failed or cancelled open changes nothing, an empty plot is where one starts).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `StatusBarTests` (the bar's place, colour and hairline, its marks, its trimming), `MenuStyleTests` (no icons, the accent row and white text, the dimmed shortcut, the row height and inset), `DialogAnatomyTests`
   (every window kind's footer band, padding, button widths and spacing, accent and cancel, in both themes; a status text following the theme), `PreferencesTests`

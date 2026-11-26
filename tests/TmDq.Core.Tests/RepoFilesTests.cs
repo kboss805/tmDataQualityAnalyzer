@@ -149,6 +149,41 @@ public class RepoFilesTests
     }
 
     [Fact]
+    public void TheWizardsLaunchStartsTheExeFromTheInstallFolderPropertyNotItsFileRow()
+    {
+        // The Finish page's "Launch" runs in the wizard, which resolves a file's path when it starts (the per-machine folder);
+        // "only for me" then changes the APPLICATIONFOLDER property but not that resolved path. A launch by the exe's File row
+        // (FileRef, or [#AppExe] in the wizard) after a per-user install looked for the exe in Program Files and failed with nothing
+        // shown (return value 1631, found by the user in a v3.5.0 candidate). The path is built from the property at Finish instead.
+        // (The shortcuts' [#AppExe] is resolved by the install itself, after the choice, and is right.)
+        string wxs = File.ReadAllText(Path.Combine(RepoPaths.Root, "deploy", "tmDataQualityAnalyzer.wxs"));
+        Assert.DoesNotMatch(@"<CustomAction Id=""LaunchApplication""[^>]*FileRef=", wxs);
+        Assert.Contains(@"<CustomAction Id=""SetLaunchApplicationExe"" Property=""LAUNCHAPPLICATIONEXE"" Value=""[APPLICATIONFOLDER]\tmDataQualityAnalyzer.exe"" />", wxs, StringComparison.Ordinal);
+        Assert.Contains(@"<CustomAction Id=""LaunchApplication"" Property=""LAUNCHAPPLICATIONEXE""", wxs, StringComparison.Ordinal);
+        // The path is set before the launch reads it: both on the Finish button, in that order.
+        Assert.Matches(@"Value=""SetLaunchApplicationExe""[^>]*Order=""1""", wxs);
+        Assert.Matches(@"Value=""LaunchApplication""[^>]*Order=""2""", wxs);
+    }
+
+    [Theory]
+    [InlineData("WixUIDialogBmp", "installer_dialog.bmp", 493, 312)]
+    [InlineData("WixUIBannerBmp", "installer_banner.bmp", 493, 58)]
+    public void TheWizardsPicturesAreOursAtTheSizesItDraws(string variable, string file, int width, int height)
+    {
+        // The MSI wizard's Welcome/Finish picture and its banner are drawn from the icon's artwork (eng\gen_installer_images.py).
+        // Windows Installer stretches a bitmap of another size to the control, so a wrong size is a distorted picture, not an
+        // error; and an image it cannot read is the stock WiX picture again. Both are 24-bit, bottom-up BMPs of the control's size.
+        string wxs = File.ReadAllText(Path.Combine(RepoPaths.Root, "deploy", "tmDataQualityAnalyzer.wxs"));
+        Assert.Contains($@"<WixVariable Id=""{variable}"" Value=""$(RepoRoot)\assets\{file}"" />", wxs, StringComparison.Ordinal);
+        byte[] bmp = File.ReadAllBytes(Path.Combine(RepoPaths.Root, "assets", file));
+        Assert.Equal((byte)'B', bmp[0]);
+        Assert.Equal((byte)'M', bmp[1]);
+        Assert.Equal(width, BitConverter.ToInt32(bmp, 18));
+        Assert.Equal(height, BitConverter.ToInt32(bmp, 22));
+        Assert.Equal(24, BitConverter.ToInt16(bmp, 28));
+    }
+
+    [Fact]
     public void EveryDotnetProjectKeepsItsOutputWhereItAlwaysIs()
     {
         // vcvars leaves Platform=x64 in the shell; with AppendPlatformToOutputPath=false a dotnet build puts its output
