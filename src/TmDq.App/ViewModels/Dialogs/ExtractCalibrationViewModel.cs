@@ -287,6 +287,8 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
         _calPath = path;
         OnPropertyChanged(nameof(CalPath));
         OnPropertyChanged(nameof(CalName));
+        // A clip typed for the last recording, still waiting, is of that one: this one is extracted once its channels are listed.
+        CancelExtraction();
 
         int version = ++_loadVersion;
         // The recording's channels first (its TMATS only, off the UI thread): the extraction below reads the ones chosen.

@@ -231,6 +231,15 @@
       "args": [ "-class", "TmDq.App.Tests.CalibrationChannelTests", "-stopOnFail" ],
       "expect": "caught",
       "note": "a typed clip still waiting when the dialog closes is extracted over a window that is gone"
+    },
+    {
+      "id": "EX9",
+      "file": "src/TmDq.App/ViewModels/Dialogs/ExtractCalibrationViewModel.cs",
+      "old": "is extracted once its channels are listed.\r\n        CancelExtraction();",
+      "new": "is extracted once its channels are listed.\r\n        _ = _extractVersion;",
+      "args": [ "-class", "TmDq.App.Tests.CalibrationChannelTests", "-stopOnFail" ],
+      "expect": "caught",
+      "note": "a clip typed for the last recording, still waiting, is extracted against the recording chosen since"
     }
   ]
 }

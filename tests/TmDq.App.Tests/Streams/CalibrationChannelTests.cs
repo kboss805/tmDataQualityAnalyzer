@@ -363,6 +363,32 @@ public sealed class CalibrationChannelTests
         Assert.Single(runner.Requests);
     }
 
+    [AvaloniaFact]
+    public async Task ATypedClipWaitingWhenAnotherRecordingIsChosenIsDroppedWithTheRecordingItWasFor()
+    {
+        var runner = new RecordingRunner();
+        var wait = new TaskCompletionSource();
+        RecordingChannels good = Channels(1, new[] { 1 }, 26);
+        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null)
+        {
+            Runner = runner,
+            ReadChannels = path => path == "empty.ch10" ? throw new RecordingException("empty.ch10 has no PCM channel to process.") : good,
+            ClipSettle = token =>
+            {
+                token.Register(() => wait.TrySetCanceled(token));
+                return wait.Task;
+            },
+        };
+        await vm.LoadCalibrationAsync("good.ch10");
+
+        vm.ClipEndText = "7";
+        await vm.LoadCalibrationAsync("empty.ch10");   // one that will not open: nothing of it is extracted
+
+        Assert.True(wait.Task.IsCanceled);
+        Assert.Single(runner.Requests);
+        Assert.Equal((CalibrationStatusKind.Fail, "✗ empty.ch10 has no PCM channel to process."), (vm.CalKind, vm.CalStatus));
+    }
+
     /// <summary>A runner that fails in a way no one planned for.</summary>
     private sealed class BrokenRunner : ICalibrationRunner
     {

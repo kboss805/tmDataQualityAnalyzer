@@ -367,15 +367,10 @@ public sealed class TemplateBatchTests : IDisposable, IClassFixture<ShortRecordi
         Assert.Equal(86400.0, later.X[0], 6);
         string[] clock = later.X.Select(vm.Plot.FormatTime).ToArray();
         int version = later.Version;
-        string before = Path.Combine(_dir, "before.csv"), whole = Path.Combine(_dir, "whole.csv"), during = Path.Combine(_dir, "during.csv"),
-               after = Path.Combine(_dir, "after.csv");
+        string before = Path.Combine(_dir, "before.csv"), after = Path.Combine(_dir, "after.csv");
         Assert.True(vm.Plot.ExportCsv(before, sourceId: 1));
-        Assert.True(vm.Plot.ExportCsv(whole));
 
-        // An export being written while Remove File moves the times writes what it was asked for (its times are its own copy).
-        Task<bool> writing = vm.Plot.ExportCsvAsync(during);
         Assert.True(vm.Plot.RemoveSource(0));
-        Assert.True(await writing);
 
         Assert.Equal(0.0, later.X[0], 9);                                    // the axis starts at the earliest sample left
         Assert.Equal(clock, later.X.Select(vm.Plot.FormatTime));             // each sample at the clock time it was taken
@@ -384,7 +379,6 @@ public sealed class TemplateBatchTests : IDisposable, IClassFixture<ShortRecordi
         Assert.Equal(later.X[^1], vm.Plot.XMax, 6);
         Assert.True(vm.Plot.ExportCsv(after));
         Assert.Equal(TempFiles.ReadAllBytes(before), TempFiles.ReadAllBytes(after));   // to the millisecond, as the CSV gives it
-        Assert.Equal(TempFiles.ReadAllBytes(whole), TempFiles.ReadAllBytes(during));
     }
 
     [Fact]

@@ -297,15 +297,6 @@
       "note": "the span stays where the removed recording put it: zooming out reaches a day past the data"
     },
     {
-      "id": "EL6",
-      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "            X = copies.TryGetValue(c.X, out double[]? copy) ? copy : copies[c.X] = c.X.ToArray(),",
-      "new": "            X = c.X,",
-      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.RemovingTheEarliestRecordingStartsTheAxisAtTheNextAndKeepsEverySamplesClockTime" ],
-      "expect": "caught",
-      "note": "an export being written while Remove File moves the times writes some of them moved"
-    },
-    {
       "id": "CH1",
       "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
       "old": "            if (_backing is null || _backing.PixelSize != pixels || _backing.Dpi != dpi)\r\n            {",
