@@ -213,15 +213,15 @@
       "id": "H18",
       "file": "src/TmDq.Core/Interop/Handles.cs",
       "old": "        handle.DangerousAddRef(ref added);   // throws ObjectDisposedException once the handle is released",
-      "new": "        added = !handle.IsClosed;",
+      "new": "        _ = handle;",
       "expect": "caught",
-      "note": "a lease takes no hold: a Dispose meanwhile frees the object under the copy (and the lease's release is one too many)"
+      "note": "a lease takes no hold (and so gives none back): a Dispose meanwhile frees the object under the copy"
     },
     {
       "id": "H19",
       "file": "src/TmDq.Core/Interop/Handles.cs",
       "old": "    public void Dispose() => _handle?.DangerousRelease();",
-      "new": "    public void Dispose() { }",
+      "new": "    public void Dispose() => _ = _handle;",
       "expect": "caught",
       "note": "a lease never gives its hold back: a disposed handle is never released"
     },

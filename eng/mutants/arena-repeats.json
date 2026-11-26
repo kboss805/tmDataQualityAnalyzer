@@ -1,6 +1,9 @@
 {
   "suite": "managed",
-  "args": [],
+  "args": [
+    "-class-",
+    "TmDq.Core.Tests.RepoFilesTests"
+  ],
   "mutants": [
     {
       "id": "R1",
@@ -71,7 +74,8 @@
       "file": "src/TmDq.Core/Chart.cs",
       "old": "int needed = Library.NonNegative(write(null, 0));",
       "new": "int needed = Math.Max(write(null, 0), 0);",
-      "note": "tick count error ignored"
+      "expect": "survived",
+      "note": "the first tick call's error ignored: equivalent since the second answer is checked too (R22), for a count of 0 asks the same question again (no buffer), and its error is thrown"
     },
     {
       "id": "R10",
@@ -157,9 +161,9 @@
       "id": "R20",
       "file": "src/TmDq.Core/Interop/Text.cs",
       "old": "needed = written;   // truncated: it is longer now than it was when measured",
-      "new": "return Encoding.UTF8.GetString(buffer, 0, buffer.Length - 1);",
+      "new": "needed = Math.Min(written, buffer.Length - 1);",
       "expect": "caught",
-      "note": "text that grew between the calls is truncated silently (the old behaviour)"
+      "note": "text that grew between the calls is asked for again in a buffer no larger: it never fits"
     },
     {
       "id": "R21",
@@ -197,9 +201,9 @@
       "id": "R25",
       "file": "src/TmDq.Core/Chart.cs",
       "old": "                needed = written;\n            }\n        }\n        throw new TmdqException(Status.Internal, $\"the tick count",
-      "new": "                return ticks;\n            }\n        }\n        throw new TmdqException(Status.Internal, $\"the tick count",
+      "new": "                needed = ticks.Length;\n            }\n        }\n        throw new TmdqException(Status.Internal, $\"the tick count",
       "expect": "caught",
-      "note": "more ticks on the second call are cut to the first count"
+      "note": "more ticks on the second call are asked for again in a buffer no larger: they never fit"
     }
   ]
 }
