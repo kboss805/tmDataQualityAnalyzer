@@ -19,7 +19,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **Channel Selection**: Choose the time channel and one or more PCM channels for processing
 - **Drag-and-Drop**: Drop `.ch10` or exported `.csv` files directly onto the application window, or open them from the ☰ menu (**File > Open…** for recordings, **File > Add Recording…** to add one beside what is already plotted, **Import/Export > Import from CSV…** for exports)
 - **Recent Files**: Up to 5 entries under the ☰ menu (File > Recent Files), persisted across sessions
-- **CSV Import**: Re-open a CSV this application previously exported straight into the plot — no re-processing of the source `.ch10` file (☰ menu > Import/Export > **Import from CSV…**, or drag-and-drop a `.csv`)
+- **CSV Import**: Re-open a CSV this application previously exported straight into the plot — no re-processing of the source `.ch10` file; imports stack, each added beside what the plot already shows as a recording of its own that **Remove File** takes out again (☰ menu > Import/Export > **Import from CSV…**, or drag-and-drop a `.csv`)
 
 ### Frame Sync Lock
 

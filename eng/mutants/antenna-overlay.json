@@ -5,10 +5,10 @@
     {
       "id": "O1",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "bool joins = chosen == CsvKind.PhasedArrayAntenna && Plot.HasData;",
+      "old": "bool joins = Plot.HasData;",
       "new": "bool joins = false;",
       "expect": "caught",
-      "note": "an antenna's log clears the plot first, as every import did"
+      "note": "an import clears the plot first, as every import did"
     },
     {
       "id": "O2",
@@ -21,7 +21,7 @@
     {
       "id": "O3",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "bool added = kind == CsvKind.PhasedArrayAntenna && _series.Count > 0;",
+      "old": "bool added = (add || kind == CsvKind.PhasedArrayAntenna) && _series.Count > 0;",
       "new": "bool added = false;",
       "expect": "caught",
       "note": "the plot replaces what was shown, whatever the kind"
@@ -77,8 +77,8 @@
     {
       "id": "O10",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "sourceId = Sources.NextId;",
-      "new": "sourceId = 0;",
+      "old": "sourceId = first;   // a log is one recording, whatever its columns say",
+      "new": "sourceId = 0;   // a log is one recording, whatever its columns say",
       "expect": "caught",
       "note": "the log is the first recording's, so the Plot File selector cannot tell them apart"
     },
@@ -109,10 +109,64 @@
     {
       "id": "O14",
       "file": "src/TmDq.App/ViewModels/Plot/PlotCsv.cs",
-      "old": "SourceId = sourceId ?? c.SourceId,",
-      "new": "SourceId = c.SourceId,",
+      "old": "SourceId = sourceId ?? (sourceMap is not null ? sourceMap[c.SourceId] : c.SourceId),",
+      "new": "SourceId = (sourceMap is not null ? sourceMap[c.SourceId] : c.SourceId),",
       "expect": "caught",
       "note": "the log's series keep the file's source number"
+    },
+    {
+      "id": "O15",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCsv.cs",
+      "old": "SourceId = sourceId ?? (sourceMap is not null ? sourceMap[c.SourceId] : c.SourceId),",
+      "new": "SourceId = sourceId ?? c.SourceId,",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests", "-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "an export added to a plot keeps the numbers its file gave its recordings, which may be ones already there"
+    },
+    {
+      "id": "O16",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "joins ? UniqueSourceLabel(BaseName(name)) : BaseName(name)",
+      "new": "BaseName(name)",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests", "-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "a file imported again is listed under the name of the first"
+    },
+    {
+      "id": "O17",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": ", add: joins) == CsvLoad.Loaded",
+      "new": ") == CsvLoad.Loaded",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests", "-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "an exported CSV is asked to replace what the main window kept"
+    },
+    {
+      "id": "O18",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "(add || kind == CsvKind.PhasedArrayAntenna) && _series.Count > 0",
+      "new": "kind == CsvKind.PhasedArrayAntenna && _series.Count > 0",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests", "-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "the plot ignores a request to add an exported CSV"
+    },
+    {
+      "id": "O19",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "inFile.Count == 1 ? sourceLabel : string.Create(CultureInfo.InvariantCulture, $\"{sourceLabel}, Source {inFile[i]}\")",
+      "new": "sourceLabel",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests", "-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "the recordings of one added file are all listed under the file's name"
+    },
+    {
+      "id": "O20",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "sourceMap[inFile[i]] = first + i;",
+      "new": "sourceMap[inFile[i]] = inFile[i];",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests", "-class", "TmDq.App.Tests.ExportImportTests"],
+      "expect": "caught",
+      "note": "the file's recordings keep the numbers its file gave them"
     }
   ]
 }

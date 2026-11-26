@@ -810,7 +810,7 @@ public sealed class ExportImportTests
     }
 
     [Fact]
-    public async Task ACsvThatIsNotAnExportIsAnErrorAndLeavesThePlotEmpty()
+    public async Task ACsvThatIsNotAnExportIsAnErrorAndLeavesThePlotAsItWas()
     {
         string path = WriteCsv("Day,Time,A Lock (%)\r\n001,00:00:00.000,90\r\n");
         try
@@ -824,8 +824,60 @@ public sealed class ExportImportTests
             string error = "ERROR: '" + name + "' is not a recognized exported CSV (expected a 'Time (DOY:HH:MM:SS.mmm)' column with data rows). Nothing was imported.";
             Assert.Equal(new[] { "Info Importing CSV: " + name, "Error " + error }, LinesOf(vm, before));
             Assert.Equal(error, vm.Status);
-            Assert.False(vm.Plot.HasData);   // cleared before the file was read, as v2.14.2 cleared it
-            Assert.Equal(PlotViewModel.DefaultTitle, vm.Plot.Title);
+            Assert.True(vm.Plot.HasData);   // an import adds to the plot, so a file that is refused takes nothing away
+            Assert.Equal("earlier", vm.Plot.Title);
+        }
+        finally
+        {
+            TempFiles.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task TwoExportedCsvsStackEachNamedForItsFileAndTheFirstIsNotReplaced()
+    {
+        string a = WriteCsv("Time (DOY:HH:MM:SS.mmm),Ch5 Lock (%)\r\n120:00:00:00.000,5\r\n120:00:00:01.000,6\r\n");
+        string b = WriteCsv("Time (DOY:HH:MM:SS.mmm),Ch7 Lock (%)\r\n120:00:00:00.000,7\r\n120:00:00:01.000,8\r\n");
+        try
+        {
+            var vm = new MainWindowViewModel();
+            await vm.ImportCsvAsync(a);
+            string title = vm.Plot.Title;
+            Assert.Equal(Path.GetFileNameWithoutExtension(a), title);   // the first, into an empty plot, titles it
+            await vm.ImportCsvAsync(b);
+
+            Assert.Equal(new[] { "Ch5", "Ch7" }, vm.Plot.Series.Select(s => s.Name.Replace(" Lock (%)", "")));
+            Assert.Equal(title, vm.Plot.Title);
+            Assert.Equal(new[] { Path.GetFileNameWithoutExtension(a), Path.GetFileNameWithoutExtension(b) },
+                         vm.Plot.SourceList().Select(s => s.Label));
+            // The same file again is not mistaken for the one already there: the second is named apart.
+            await vm.ImportCsvAsync(a);
+            Assert.Equal(3, vm.Plot.SourceList().Count);
+            Assert.Equal(3, vm.Plot.SourceList().Select(s => s.Label).Distinct().Count());
+        }
+        finally
+        {
+            TempFiles.Delete(a);
+            TempFiles.Delete(b);
+        }
+    }
+
+    [Fact]
+    public void AnExportOfSeveralRecordingsAddedToAPlotTakesTheNextFreeSourcesAndKeepsWhatWasThere()
+    {
+        // A batch's export: two recordings in one file, their columns qualified S3| and S5| (numbers the plot does not hand out).
+        string path = WriteCsv("Time (DOY:HH:MM:SS.mmm),S3| Ch5 Lock (%),S5| Ch5 Lock (%)\r\n120:00:00:00.000,1,2\r\n120:00:00:01.000,3,4\r\n");
+        try
+        {
+            var plot = new PlotViewModel();
+            plot.SetSeries(new[] { PlotFixtures.Lock(0, "kept", 1, 0, X2, X2) });   // source 0
+            Assert.True(plot.LoadCsv(path, sourceLabel: "batch", add: true));
+
+            PlotSeries kept = Assert.Single(plot.Series, s => s.Name == "kept");
+            Assert.Equal(0, kept.SourceId);
+            Assert.Equal(new[] { 1, 2 }, plot.Series.Where(s => s.Name != "kept").Select(s => s.SourceId).OrderBy(i => i));
+            Assert.Equal(new[] { (0, "Source 0"), (1, "batch, Source 3"), (2, "batch, Source 5") },
+                         plot.SourceList().Select(s => (s.Id, s.Label)));
         }
         finally
         {

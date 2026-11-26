@@ -188,19 +188,25 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
-    public async Task AnImportedCsvStillReplacesWhatTheRunShowed()
+    public async Task AnImportedCsvJoinsWhatTheRunShowedAndTheRunStays()
     {
-        string csv = TempFiles.NewPath("replaces", ".csv");
+        string csv = TempFiles.NewPath("joins", ".csv");
         try
         {
             var vm = Window(CsvKind.TelemetryReceivers);
             await vm.LoadAsync(Prn);
+            int run = vm.Plot.Series.Count;
             Assert.True(vm.Plot.ExportCsv(csv));
 
             await vm.ImportCsvAsync(csv);
 
-            Assert.Empty(vm.Sources);                                   // an import of this application's own export replaces the run
-            Assert.DoesNotContain(vm.Plot.Series, s => s.IsPhasedArray);
+            Assert.NotEmpty(vm.Sources);                                // the run stays: imports stack, they do not replace
+            Assert.True(vm.Plot.Series.Count > run);
+            Assert.Equal(PrnName, vm.Plot.Title);
+            // The imported series are a recording of their own, named for the file and not the run's number.
+            int[] ids = vm.Plot.Series.Select(s => s.SourceId).Distinct().Order().ToArray();
+            Assert.Equal(2, ids.Length);
+            Assert.Equal(Path.GetFileNameWithoutExtension(csv), vm.Plot.SourceList().Single(s => s.Id == ids[1]).Label);
         }
         finally
         {
