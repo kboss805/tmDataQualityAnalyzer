@@ -16,14 +16,62 @@ function Get-TestExePath([string]$Root, [string]$Project, [string]$Configuration
     return Join-Path $Root "tests\$Project\bin\$Configuration\$TargetFramework\$Project.exe"
 }
 
+# The Visual Studio versions the native build may use, as a vswhere range: TMDQ_VS_RANGE when it is set, else Visual Studio
+# 2022 (17.x, MSVC v143), what releases and CI build with. eng\env.ps1 asks vswhere for the same range.
+function Get-PinnedVsRange {
+    if ($env:TMDQ_VS_RANGE) { return $env:TMDQ_VS_RANGE }
+    return '[17.0,18.0)'
+}
+
+# Whether a Visual Studio version ("17.0", as VisualStudioVersion has it) is inside a vswhere range: "[17.0,18.0)" (a bracket
+# includes its bound, a parenthesis excludes it, an empty bound is open) or a bare version, which is a minimum. Throws on a
+# range it cannot read, so a mistyped TMDQ_VS_RANGE fails rather than passing everything.
+function ConvertTo-VsVersion([string]$Text) {
+    $t = $Text.Trim()
+    if ($t -notmatch '\.') { $t += '.0' }   # [version] needs a minor number: "18" is 18.0
+    return [version]$t
+}
+function Test-VsVersionInRange([string]$Version, [string]$Range) {
+    $v = ConvertTo-VsVersion $Version
+    $r = $Range.Trim()
+    if ($r -match '^\d+(\.\d+)*$') { return $v -ge (ConvertTo-VsVersion $r) }
+    $m = [regex]::Match($r, '^([\[\(])\s*(\d+(?:\.\d+)*)?\s*,\s*(\d+(?:\.\d+)*)?\s*([\]\)])$')
+    if (-not $m.Success) { throw "cannot read the Visual Studio version range '$Range' (expected one like [17.0,18.0))" }
+    if ($m.Groups[2].Success) {
+        $low = ConvertTo-VsVersion $m.Groups[2].Value
+        if ($m.Groups[1].Value -eq '[') { if ($v -lt $low) { return $false } } elseif ($v -le $low) { return $false }
+    }
+    if ($m.Groups[3].Success) {
+        $high = ConvertTo-VsVersion $m.Groups[3].Value
+        if ($m.Groups[4].Value -eq ']') { if ($v -gt $high) { return $false } } elseif ($v -ge $high) { return $false }
+    }
+    return $true
+}
+
+# Throws unless this shell's Visual Studio environment (VisualStudioVersion, which vcvars and every developer prompt set) is
+# inside the pinned range. Both native projects build with $(DefaultPlatformToolset), the toolset of whichever Visual Studio
+# runs msbuild, so a Visual Studio 2026 prompt would otherwise build with MSVC 14.5x and leave two compilers' objects in one
+# tree, without a word.
+function Assert-PinnedVisualStudio {
+    $range = Get-PinnedVsRange
+    if (-not $env:VisualStudioVersion) {
+        throw "VisualStudioVersion is not set, so which Visual Studio this shell builds with is unknown (the pin is $range). Use a plain shell (the scripts load Visual Studio 2022 through eng\env.ps1) or a Visual Studio 2022 developer prompt."
+    }
+    if (-not (Test-VsVersionInRange $env:VisualStudioVersion $range)) {
+        throw "this shell's Visual Studio is $env:VisualStudioVersion (VisualStudioVersion), outside the pinned range $range. Use a plain shell (the scripts load the pinned Visual Studio through eng\env.ps1) or a developer prompt of a Visual Studio in that range, or set TMDQ_VS_RANGE to choose another range on purpose (then rebuild with -Rebuild)."
+    }
+}
+
 # Puts msbuild and dumpbin on PATH: eng\env.ps1 (Visual Studio 2022's tools) is dot-sourced when msbuild is not already
-# there, as in a plain shell rather than a developer prompt. Throws when either is still missing.
+# there or this shell names no Visual Studio, as in a plain shell rather than a developer prompt. Throws when either tool
+# is still missing, or when the shell's Visual Studio is outside the pinned range (a Visual Studio 2026 prompt).
 function Initialize-MsvcEnvironment([string]$EngDir) {
-    if (-not (Get-Command msbuild -ErrorAction SilentlyContinue)) {
+    if (-not (Get-Command msbuild -ErrorAction SilentlyContinue) -or -not $env:VisualStudioVersion) {
         . (Join-Path $EngDir 'env.ps1') *> $null
     }
     if (-not (Get-Command msbuild -ErrorAction SilentlyContinue)) { throw 'msbuild not found (install the Visual Studio 2022 C++ build tools)' }
     if (-not (Get-Command dumpbin -ErrorAction SilentlyContinue)) { throw 'dumpbin not found (it ships with the MSVC tools; use a developer prompt or eng\env.ps1)' }
+    Assert-PinnedVisualStudio
 }
 
 # Builds a native project with MSBuild for x64, teeing the output to a log, and throws unless it built, produced

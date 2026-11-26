@@ -19,9 +19,13 @@ public sealed record ProcessedStream(
     IReadOnlyList<ChannelData> Channels);
 
 /// <summary>
-/// One stream's finished result, held in native memory. The arrays are views into it (no copy) and are valid
-/// until <see cref="Dispose"/>; <see cref="ToProcessed"/> takes a copy that outlives it. Thread-safe to dispose
-/// from any thread, at any time.
+/// One stream's finished result, held in native memory. The spans (<see cref="TimesSec"/>, <see cref="LockPercent"/>,
+/// <see cref="MissedFrames"/>, <see cref="ChannelValues"/>) are views into it, no copy, and are valid only until
+/// <see cref="Dispose"/>: a span still in use when another thread disposes the result reads freed memory, so dispose it
+/// only once no span is in use. What copies (<see cref="ToProcessed"/>, <see cref="ChannelName"/>, <see cref="Key"/>)
+/// holds the result open until its copy is done, so a Dispose from another thread meanwhile is carried out after the
+/// copy; any call after the Dispose throws <see cref="ObjectDisposedException"/>, except the numbers and the
+/// <see cref="Label"/>, copied when the result was made. Safe to dispose from any thread, at any time.
 /// </summary>
 public sealed unsafe class StreamResult : IDisposable
 {
@@ -99,7 +103,11 @@ public sealed unsafe class StreamResult : IDisposable
     }
 
     /// <summary>The name of the <paramref name="index"/>'th receiver series, e.g. "L_RCVR1".</summary>
-    public string ChannelName(int index) => Text.Read(Fetch(index).NameUtf8);
+    public string ChannelName(int index)
+    {
+        using HandleLease lease = Lease();   // the name is the result's: read before it can be freed
+        return Text.Read(Fetch(index).NameUtf8);
+    }
 
     /// <summary>The zero-based word within the minor frame the <paramref name="index"/>'th series is read from.</summary>
     public int ChannelWord(int index) => Fetch(index).WordIndex;
@@ -110,6 +118,7 @@ public sealed unsafe class StreamResult : IDisposable
     /// <summary>Copies the whole result into managed arrays, which outlive this object.</summary>
     public ProcessedStream ToProcessed()
     {
+        using HandleLease lease = Lease();   // every span below is copied before the result can be freed
         var channels = new ChannelData[ChannelCount];
         for (int i = 0; i < channels.Length; i++)
         {
@@ -134,9 +143,10 @@ public sealed unsafe class StreamResult : IDisposable
     {
         get
         {
+            using HandleLease lease = Lease();   // the label is the result's: read before it can be freed
             StreamKeyNative key = default;
             key.StructSize = (uint)sizeof(StreamKeyNative);
-            Library.Check(Native.tmdq_stream_result_key(Handle, &key));
+            Library.Check(Native.tmdq_stream_result_key(_handle, &key));
             return new StreamKey(key.SourceId, Text.Read(key.LabelUtf8), key.Channel);
         }
     }
@@ -153,6 +163,13 @@ public sealed unsafe class StreamResult : IDisposable
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(_handle.IsClosed, this);
+    }
+
+    /// <summary>Holds the result open for a call and the copy of what it returns (see <see cref="NativeHandle.Lease"/>).</summary>
+    private HandleLease Lease()
+    {
+        ThrowIfDisposed();   // names this object, where the handle's own refusal would name the handle
+        return _handle.Lease();
     }
 
     /// <summary>Releases the native result. Safe to call twice.</summary>

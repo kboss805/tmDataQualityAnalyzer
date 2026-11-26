@@ -91,7 +91,9 @@ public sealed record RunRequest(string FileName, int TimeChannelId, IReadOnlyLis
 /// <summary>
 /// Where a run reports to. Every method may be called from a native thread, never concurrently for the same
 /// stream, and an exception thrown from one is caught and kept (see <see cref="ProcessingRun.ObserverException"/>).
-/// A method must not call <see cref="ProcessingRun.Dispose"/> or <see cref="ProcessingRun.Wait"/> on its own run.
+/// A method may dispose its own run (<see cref="IRunObserver.OnFinished"/> often will): the run is cancelled at once and released
+/// from another thread as soon as the method has returned, since releasing it waits for the thread the method is on.
+/// <see cref="ProcessingRun.Wait"/> called from a method returns at once, for the same reason.
 /// </summary>
 public interface IRunObserver
 {

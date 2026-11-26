@@ -10,18 +10,27 @@
 # pick whatever was newest, so installing Visual Studio 2026 silently moved every build
 # to MSVC 14.51 (v145) while the docs and CI all said 2022. Objects compiled by two
 # compilers then sit in one build tree. Set TMDQ_VS_RANGE (a vswhere version range, e.g.
-# '[18.0,19.0)') to choose another on purpose.
+# '[18.0,19.0)') to choose another on purpose. A shell whose VisualStudioVersion is outside the range (a
+# Visual Studio 2026 developer prompt) is refused, here and in the build scripts (common.ps1), rather than built in.
 #
 # vcvars also sets Platform=x64. That is left alone: the native builds pass /p:Platform=x64 themselves, and a .NET
 # build is not troubled by it, because every .csproj sets AppendPlatformToOutputPath=false (a test holds that).
 # =============================================================================
+
+# The pinned range and its check live in common.ps1 (Get-PinnedVsRange, Assert-PinnedVisualStudio), shared with the build
+# scripts, which check it even when this file is not loaded (a developer prompt already has msbuild).
+. (Join-Path $PSScriptRoot 'common.ps1')
+
+# A developer prompt of another Visual Studio (2026's, say) is refused before anything is imported over it: importing 2022
+# on top would leave two Visual Studios' paths in one environment.
+if ($env:VisualStudioVersion) { Assert-PinnedVisualStudio }
 
 # Import the MSVC + Windows SDK environment from vcvars64.bat, once per shell.
 # Guard on our OWN marker: a Developer-shell profile can set VSCMD_VER while leaving
 # the env incomplete (no INCLUDE/LIB). Always run a full import once.
 if (-not $env:TMDQ_VCVARS_DONE) {
     $vcvars = $env:TMDQ_VCVARS  # explicit override wins
-    $vsRange = if ($env:TMDQ_VS_RANGE) { $env:TMDQ_VS_RANGE } else { '[17.0,18.0)' }
+    $vsRange = Get-PinnedVsRange
 
     # 1) vswhere, if the VS Installer shipped it at the standard location.
     if (-not $vcvars) {
@@ -85,3 +94,6 @@ if (-not $env:TMDQ_VCVARS_DONE) {
 
     $env:TMDQ_VCVARS_DONE = '1'
 }
+
+# Judged by the result: whatever was imported (or was already there) must be the pinned Visual Studio.
+Assert-PinnedVisualStudio

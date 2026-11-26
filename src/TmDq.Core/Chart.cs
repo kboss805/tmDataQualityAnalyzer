@@ -159,18 +159,33 @@ public static unsafe class ChartGeometry
     public static double[] TimeTicks(double lower, double upper, int count, double origin = 0.0) =>
         ReadTicks((buffer, capacity) => Native.tmdq_chart_time_ticks(lower, upper, count, origin, buffer, capacity));
 
-    private delegate int TickWriter(double* buffer, int capacity);
+    internal delegate int TickWriter(double* buffer, int capacity);
 
-    private static double[] ReadTicks(TickWriter write)
+    /// <summary>
+    /// Ticks a function writes into a buffer the caller provides: asked once with no buffer for the count, then with a
+    /// buffer of that many. The second answer is checked as the first is, and a count larger than the buffer (the function
+    /// wrote what fitted) is asked again with a buffer of that size, up to <see cref="Text.BufferAttempts"/> buffers.
+    /// </summary>
+    /// <exception cref="TmdqException"><see cref="Status.BadArgument"/> for a negative answer; <see cref="Status.Internal"/>
+    /// for ticks that still did not fit the last buffer.</exception>
+    internal static double[] ReadTicks(TickWriter write)
     {
         Library.RequireLoaded();
         int needed = Library.NonNegative(write(null, 0));
-        var ticks = new double[needed];
-        fixed (double* p = ticks)
+        for (int attempt = 0; attempt < Text.BufferAttempts; attempt++)
         {
-            write(p, ticks.Length);
+            var ticks = new double[needed];
+            fixed (double* p = ticks)
+            {
+                int written = Library.NonNegative(write(p, ticks.Length));
+                if (written <= ticks.Length)
+                {
+                    return written == ticks.Length ? ticks : ticks[..written];
+                }
+                needed = written;
+            }
         }
-        return ticks;
+        throw new TmdqException(Status.Internal, $"the tick count kept growing between the calls: {Text.BufferAttempts} buffers were too small for it");
     }
 
     /// <summary>tmdq_chart_transform_kind: which way tmdq_chart_transform converts.</summary>
