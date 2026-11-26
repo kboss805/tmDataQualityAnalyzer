@@ -1,12 +1,9 @@
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using TmDq.App.Models.Export;
 using TmDq.App.Models.Processing;
-using TmDq.App.Models.Streams;
-using TmDq.App.Services;
 using TmDq.App.ViewModels;
 using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
@@ -20,41 +17,24 @@ namespace TmDq.App.Tests;
 /// what was imported), each recording its own entry in Plot File and Remove File. With an empty plot it is Open.
 /// </summary>
 [Collection(NativeCoreCollection.Name)]
-public sealed class AddRecordingTests : System.IDisposable
+public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
 {
-    private readonly string _second = TempFiles.NewPath("flight 2", ".ch10");
+    private readonly ShortRecordings _recordings;
 
-    public AddRecordingTests()
+    public AddRecordingTests(ShortRecordings recordings)
     {
         NativeCore.EnsureLoaded();
-        File.Copy(Prn, _second);   // a second recording to add: the committed sample again, under another name
+        _recordings = recordings;
     }
 
-    public void Dispose() => TempFiles.Delete(_second);
+    // A short recording, and the same again under another name, so that processing one costs a fraction of the whole sample.
+    private string Prn => _recordings.First;
 
-    private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
-
-    private string Second => _second;
+    private string Second => _recordings.Second;
 
     private static string AntennaLog => Repo.Recording("av_snr_log.csv");
 
     private static string NameOf(string path) => MainWindowViewModel.BaseName(Path.GetFileName(path));
-
-    private sealed class FakeKinds : ICsvKindDialog
-    {
-        public Task<CsvKind?> ChooseAsync(string fileName) => Task.FromResult<CsvKind?>(CsvKind.PhasedArrayAntenna);
-    }
-
-    /// <summary>The defaults for each recording, until it is told to cancel.</summary>
-    private sealed class CancellableConfigurator : IStreamConfigurator
-    {
-        public bool Cancel;
-
-        public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file) =>
-            Cancel
-                ? Task.FromResult<StreamsChoice?>(null)
-                : new FirstChannelRun().ConfigureAsync(path, file);
-    }
 
     [AvaloniaFact]
     public async Task AddingARecordingKeepsTheOneOnThePlotAndAddsTheNewBesideIt()
@@ -126,7 +106,7 @@ public sealed class AddRecordingTests : System.IDisposable
     [AvaloniaFact]
     public async Task AddingKeepsWhatWasImportedAsWellAsWhatWasProcessed()
     {
-        var vm = new MainWindowViewModel(new MainWindowServices { CsvKinds = new FakeKinds() });
+        var vm = new MainWindowViewModel(new MainWindowServices { CsvKinds = new FakeCsvKinds { Always = CsvKind.PhasedArrayAntenna } });
         await vm.ImportCsvAsync(AntennaLog);
         await vm.LoadAsync(Prn);
         await vm.LoadAsync(Second, add: true);
@@ -143,7 +123,8 @@ public sealed class AddRecordingTests : System.IDisposable
         File.WriteAllText(junk, "not a recording");
         try
         {
-            var configurator = new CancellableConfigurator();
+            bool cancel = false;
+            var configurator = FakeConfigurator.From((path, file) => cancel ? Task.FromResult<StreamsChoice?>(null) : new FirstChannelRun().ConfigureAsync(path, file));
             var vm = new MainWindowViewModel(new MainWindowServices { Configurator = configurator });
             await vm.LoadAsync(Prn);
             int series = vm.Plot.Series.Count;
@@ -151,7 +132,7 @@ public sealed class AddRecordingTests : System.IDisposable
             await vm.LoadAsync(junk, add: true);                        // not a recording
             Assert.Equal((series, 1), (vm.Plot.Series.Count, vm.Sources.Count));
 
-            configurator.Cancel = true;
+            cancel = true;
             await vm.LoadAsync(Second, add: true);                     // Configure Streams cancelled
             Assert.Equal((series, 1), (vm.Plot.Series.Count, vm.Sources.Count));
             Assert.Equal(NameOf(Prn), vm.Plot.Title);
@@ -165,12 +146,13 @@ public sealed class AddRecordingTests : System.IDisposable
     [AvaloniaFact]
     public async Task ARunCancelledInTheProgressDialogLeavesTheWholePlotAsItWas()
     {
-        var progress = new CancelOnDemandProgress();
+        bool cancelRun = false;
+        var progress = new FakeProgressDialog { OnShow = run => { if (cancelRun) run.CancelCommand.Execute(null); } };
         var vm = new MainWindowViewModel(new MainWindowServices { ProcessingDialog = progress });
         await vm.LoadAsync(Prn);
         int series = vm.Plot.Series.Count;
 
-        progress.Cancel = true;
+        cancelRun = true;
         await vm.LoadAsync(Second, add: true);
 
         Assert.Equal((series, 1), (vm.Plot.Series.Count, vm.Sources.Count));
@@ -178,22 +160,10 @@ public sealed class AddRecordingTests : System.IDisposable
         Assert.StartsWith("Cancelled.", vm.Status, System.StringComparison.Ordinal);
     }
 
-    private sealed class CancelOnDemandProgress : IProcessingDialog
-    {
-        public bool Cancel;
-
-        public void Show(TmDq.App.ViewModels.Dialogs.ProcessingViewModel vm)
-        {
-            if (Cancel) vm.CancelCommand.Execute(null);
-        }
-
-        public void Close() { }
-    }
-
     [AvaloniaFact]
     public async Task TheMenuEntryIsTheViewModelsAndAsksThePicker()
     {
-        var picker = new FakePicker();
+        var picker = new FakeRecordingPicker();
         var vm = new MainWindowViewModel(new MainWindowServices { Picker = picker });
         Assert.True(vm.AddRecordingCommand.CanExecute(null));
 
@@ -207,18 +177,6 @@ public sealed class AddRecordingTests : System.IDisposable
 
         // Without a picker there is nothing to ask, as for Open.
         Assert.False(new MainWindowViewModel().AddRecordingCommand.CanExecute(null));
-    }
-
-    private sealed class FakePicker : IRecordingPicker
-    {
-        public readonly Queue<string?> Answers = new();
-        public int Asked;
-
-        public Task<string?> PickRecordingAsync()
-        {
-            Asked++;
-            return Task.FromResult(Answers.Count > 0 ? Answers.Dequeue() : null);
-        }
     }
 
     [AvaloniaFact]
@@ -240,7 +198,7 @@ public sealed class AddRecordingTests : System.IDisposable
     public async Task TheWarningThatARecordingDoesNotOverlapNamesTheRecordingAdded()
     {
         string safran = Repo.Recording("safran_testfile, sample.ch10");
-        var vm = new MainWindowViewModel(new MainWindowServices { Configurator = new SafranOrDefault(), AppRoot = Repo.Root });
+        var vm = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.SafranOrDefault(), AppRoot = Repo.Root });
         await vm.LoadAsync(Prn);
 
         await vm.LoadAsync(safran, add: true);
@@ -249,21 +207,5 @@ public sealed class AddRecordingTests : System.IDisposable
         // The two recordings are from different days: the warning names the one just added, not nothing or a batch's last file.
         Assert.Contains(vm.Log.Entries, e => e.Text.Contains("does not overlap", System.StringComparison.Ordinal)
                                              && e.Text.Contains("('" + Path.GetFileName(safran) + "')", System.StringComparison.Ordinal));
-    }
-
-    /// <summary>Safran's channel 13, as 4.5's oracle runs it (its own byte order); the defaults for everything else.</summary>
-    private sealed class SafranOrDefault : IStreamConfigurator
-    {
-        public Task<StreamsChoice?> ConfigureAsync(string path, Ch10File file)
-        {
-            if (!Path.GetFileName(path).StartsWith("safran", System.StringComparison.Ordinal)) return new FirstChannelRun().ConfigureAsync(path, file);
-            var stream = new StreamConfig
-            {
-                PcmChannelId = 13, Label = "PCM03", Mode = StreamMode.FrameSyncLock, SyncPattern = "334AABBF", SyncMask = "FFFFFFFF",
-                BitsInMinorFrame = 32767, SamplePeriod = FrameSyncDefaults.Period,
-            };
-            var request = new RunRequest(path, file.DefaultTimeChannel, new[] { stream }) { SwapBytes = false };
-            return Task.FromResult<StreamsChoice?>(new StreamsChoice(request, System.Array.Empty<StreamSetup>(), 0));
-        }
     }
 }

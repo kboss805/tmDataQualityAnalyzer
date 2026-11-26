@@ -1073,7 +1073,7 @@ include; and the project compiles with `/Z7`, since parallel compiles sharing on
 In each .NET test project the test classes (`*Tests.cs`) are at the root, and what they share is in `Support/`: the
 library tests' `Env`, `RepoPaths`, `TempFiles`, `Collector` and the digests the recordings' expected numbers are in
 (`CalibrationDigest`, `FormatsDigest`, `SeriesDigest`), the collections (`ProcessMemoryCollection`) and the observer fakes;
-the application tests' `Fixtures`, `PlotFixtures`, `StreamFakes`, `Menus`, `Frames`, `Repo`, `PeResources`,
+the application tests' `Fixtures` (`FakeConfigurator`, `FakeRecordingPicker`, `Recordings`, `StreamsChoices`), `MainWindowFakes` (`FakeCsvKinds`, `FakeExportDialog`, `FakeProgressDialog`), `ShortRecordings` (a short PRN recording made once per class), `PlotFixtures`, `StreamFakes`, `Menus`, `Frames`, `Repo`, `PeResources`,
 `TestAppBuilder` and `NativeCoreCollection`. The app tests link `TempFiles` and `RepoPaths` from the library tests. A
 Support file keeps its project's namespace, so a test uses it by its bare name; the test data (`Soak/`, `Templates/`)
 stays in folders of its own.

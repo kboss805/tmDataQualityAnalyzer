@@ -50,21 +50,6 @@ public sealed class CalibrationDialogTests : IDisposable
 
     private static readonly int[] CalibratedWords = { 0, 1, 2, 6, 7, 8, 12, 13, 14, 15, 16, 17 };
 
-    private sealed class FakeProgress : IProcessingDialog
-    {
-        public readonly List<string> Shown = new();
-        public int Closed;
-        public Action<ProcessingViewModel>? OnShow;
-
-        public void Show(ProcessingViewModel vm)
-        {
-            Shown.Add(vm.Text);
-            OnShow?.Invoke(vm);
-        }
-
-        public void Close() => Closed++;
-    }
-
     /// <summary>A run whose result the core cannot hand back (audit B4): it starts, runs, and throws on GetResult.</summary>
     private sealed class ResultlessRunner : ICalibrationRunner
     {
@@ -146,7 +131,7 @@ public sealed class CalibrationDialogTests : IDisposable
     [Fact]
     public async Task AResultTheCoreCannotHandBackIsACrossNotAProcessingThatNeverEnds()
     {
-        var progress = new FakeProgress();
+        var progress = new FakeProgressDialog();
         var runner = new ResultlessRunner();
         var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = progress, Runner = runner };
         await vm.LoadCalibrationAsync(StepCal);
@@ -160,7 +145,7 @@ public sealed class CalibrationDialogTests : IDisposable
     [Fact]
     public async Task ARunWhoseObserverThrewIsACrossThatSaysSoAndShowsNoResult()
     {
-        var progress = new FakeProgress();
+        var progress = new FakeProgressDialog();
         var runner = new ObserverFailedRunner();
         var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = progress, Runner = runner };
         await vm.LoadCalibrationAsync(StepCal);
@@ -176,7 +161,7 @@ public sealed class CalibrationDialogTests : IDisposable
     {
         string bad = Path.Combine(_dir, "bad.toml");
         File.WriteAllText(bad, "this is not = [ a step file");
-        var progress = new FakeProgress();
+        var progress = new FakeProgressDialog();
         var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, bad) { ProgressDialog = progress };
         Assert.Equal(("bad.toml", CalibrationStatusKind.Fail), (vm.StepName, vm.StepKind));
         Assert.StartsWith("✗ ", vm.StepStatus);
@@ -206,7 +191,7 @@ public sealed class CalibrationDialogTests : IDisposable
         // Thirty levels in the step file against eleven in the recording: no channel resolves them all.
         string many = Path.Combine(_dir, "many.toml");
         File.WriteAllText(many, string.Concat(Enumerable.Range(0, 30).Select(i => $"[[Step]]\ndb = {2 * i}.0\n\n")));
-        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, many) { ProgressDialog = new FakeProgress() };
+        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, many) { ProgressDialog = new FakeProgressDialog() };
         Assert.Equal("✓ 30 steps parsed (loaded automatically).", vm.StepStatus);
         await vm.LoadCalibrationAsync(StepCal);
         Assert.Equal(("✗ Calibrated 0 of 48 channel(s).", CalibrationStatusKind.Fail), (vm.CalStatus, vm.CalKind));
@@ -217,7 +202,7 @@ public sealed class CalibrationDialogTests : IDisposable
     [Fact]
     public async Task TheCalibrationRecordingIsExtractedWithTheProgressDialogUp()
     {
-        var progress = new FakeProgress();
+        var progress = new FakeProgressDialog();
         var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = progress };
         int closed = 0, okTold = 0;
         vm.CloseRequested += (_, _) => closed++;
@@ -260,7 +245,7 @@ public sealed class CalibrationDialogTests : IDisposable
     [MemberData(nameof(Unreadable))]
     public async Task ASettingThatCannotBeReadIsACrossBeforeAnythingStarts(CalibrationBase calibrationBase, string why)
     {
-        var progress = new FakeProgress();
+        var progress = new FakeProgressDialog();
         var vm = new ExtractCalibrationViewModel(calibrationBase, Repo.Root, null) { ProgressDialog = progress };
         await vm.LoadCalibrationAsync(StepCal);
         Assert.Equal(("✗ " + why, CalibrationStatusKind.Fail), (vm.CalStatus, vm.CalKind));
@@ -274,7 +259,7 @@ public sealed class CalibrationDialogTests : IDisposable
     {
         string notRecording = Path.Combine(_dir, "notes.ch10");
         File.WriteAllText(notRecording, "not a recording");
-        var progress = new FakeProgress();
+        var progress = new FakeProgressDialog();
         var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = progress };
         await vm.LoadCalibrationAsync(notRecording);
         Assert.Equal(CalibrationStatusKind.Fail, vm.CalKind);
@@ -303,7 +288,7 @@ public sealed class CalibrationDialogTests : IDisposable
     public async Task OnlyTheRecordingsOwnByteOrderInversionAndRandomizationCalibrate(bool swap, bool inverted, bool randomized, bool calibrates)
     {
         var vm = new ExtractCalibrationViewModel(StepCalBase() with { SwapBytes = swap, Inverted = inverted, Randomized = randomized },
-                                                 Repo.Root, null) { ProgressDialog = new FakeProgress() };
+                                                 Repo.Root, null) { ProgressDialog = new FakeProgressDialog() };
         await vm.LoadCalibrationAsync(StepCal);
         Assert.Equal(calibrates, vm.CanAccept);
         Assert.Equal(calibrates, vm.Profiles.Count > 0);
@@ -320,7 +305,7 @@ public sealed class CalibrationDialogTests : IDisposable
     [Fact]
     public async Task ClipsBeyondTheRecordingAreIgnoredAndSaySoAtTheStreamsDataRate()
     {
-        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = new FakeProgress() };
+        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = new FakeProgressDialog() };
         vm.ClipStart = 500m;
         vm.ClipEnd = 1000m;   // no recording yet: nothing extracted
         Assert.Null(vm.Extraction);
@@ -337,7 +322,7 @@ public sealed class CalibrationDialogTests : IDisposable
         Assert.True(vm.CanAccept);   // still calibrated, over the whole recording
 
         // The recording's length follows the stream's rate: at half the rate it is twice as long.
-        var half = new ExtractCalibrationViewModel(StepCalBase(0.4), Repo.Root, null) { ProgressDialog = new FakeProgress(), ClipEnd = 1000m };
+        var half = new ExtractCalibrationViewModel(StepCalBase(0.4), Repo.Root, null) { ProgressDialog = new FakeProgressDialog(), ClipEnd = 1000m };
         await half.LoadCalibrationAsync(StepCal);
         Assert.InRange(RecordingSecondsIn(half.CalStatus) / atRate, 1.8, 2.2);
 
@@ -388,7 +373,7 @@ public sealed class CalibrationDialogTests : IDisposable
     [Fact]
     public async Task ATextThatIsNoClipLeavesTheCalibrationAloneAndHoldsOkUntilItIsOne()
     {
-        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = new FakeProgress() };
+        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = new FakeProgressDialog() };
         await vm.LoadCalibrationAsync(StepCal);
         Assert.True(vm.CanAccept);
         Task first = vm.Extraction!;
@@ -444,7 +429,7 @@ public sealed class CalibrationDialogTests : IDisposable
     [Fact]
     public async Task CancelInTheProgressDialogStopsTheExtraction()
     {
-        var progress = new FakeProgress { OnShow = p => p.CancelCommand.Execute(null) };
+        var progress = new FakeProgressDialog { OnShow = p => p.CancelCommand.Execute(null) };
         var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = progress };
         await vm.LoadCalibrationAsync(StepCal);
         Assert.Equal(1, progress.Closed);
@@ -457,7 +442,7 @@ public sealed class CalibrationDialogTests : IDisposable
     public async Task BrowseStartsInTheShippedStepFilesThenWhereItLastWent()
     {
         var files = new FakeCalFiles();
-        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null, files, stepFolder: _dir) { ProgressDialog = new FakeProgress() };
+        var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null, files, stepFolder: _dir) { ProgressDialog = new FakeProgressDialog() };
         Assert.True(vm.BrowseStepCommand.CanExecute(null));
         files.Answers.Enqueue(Shipped("TRC.toml"));
         await vm.BrowseStepCommand.ExecuteAsync(null);
@@ -532,7 +517,7 @@ public sealed class CalibrationDialogTests : IDisposable
         var dialogs = new FakeStreamDialogs();
         dialogs.OnExtract = async e =>
         {
-            e.ProgressDialog = new FakeProgress();
+            e.ProgressDialog = new FakeProgressDialog();
             await e.LoadStepFileAsync(Shipped("default.toml"));
             await e.LoadCalibrationAsync(StepCal);
             e.ClipStart = 2m;
@@ -587,7 +572,7 @@ public sealed class CalibrationDialogTests : IDisposable
         var vm = new StreamSetupViewModel(StepCalRow(), null, Repo.Root, null, 1, true, dialogs);
         dialogs.OnExtract = async e =>
         {
-            e.ProgressDialog = new FakeProgress();
+            e.ProgressDialog = new FakeProgressDialog();
             await e.LoadCalibrationAsync(StepCal);
             typeof(ExtractCalibrationViewModel).GetProperty(nameof(ExtractCalibrationViewModel.Report))!.SetValue(e, "");
             e.OkCommand.Execute(null);
@@ -654,7 +639,7 @@ public sealed class CalibrationDialogTests : IDisposable
             },
             OnExtract = async e =>
             {
-                e.ProgressDialog = new FakeProgress();
+                e.ProgressDialog = new FakeProgressDialog();
                 calFiles.Answers.Enqueue(StepCal);
                 await e.BrowseCalCommand.ExecuteAsync(null);
                 e.OkCommand.Execute(null);
@@ -717,7 +702,7 @@ public sealed class CalibrationDialogTests : IDisposable
     public async Task TheExtractionsProgressReachesTheProgressDialog()
     {
         ProcessingViewModel? shown = null;
-        var progress = new FakeProgress { OnShow = p => shown = p };
+        var progress = new FakeProgressDialog { OnShow = p => shown = p };
         var vm = new ExtractCalibrationViewModel(StepCalBase(), Repo.Root, null) { ProgressDialog = progress };
         Task extraction = vm.LoadCalibrationAsync(StepCal);
         while (!extraction.IsCompleted) Dispatcher.UIThread.RunJobs();

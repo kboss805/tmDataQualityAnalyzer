@@ -1,11 +1,9 @@
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
 using TmDq.App.Models.Export;
 using TmDq.App.Models.Processing;
-using TmDq.App.Services;
 using TmDq.App.ViewModels;
 using TmDq.Core;
 using TmDq.Core.Tests;
@@ -19,26 +17,26 @@ namespace TmDq.App.Tests;
 /// and the new run is numbered so that it never shares a source id with an import.
 /// </summary>
 [Collection(NativeCoreCollection.Name)]
-public sealed class ImportedDataKeptTests
+public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
 {
-    public ImportedDataKeptTests() => NativeCore.EnsureLoaded();
+    private readonly ShortRecordings _recordings;
 
-    private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
+    public ImportedDataKeptTests(ShortRecordings recordings)
+    {
+        NativeCore.EnsureLoaded();
+        _recordings = recordings;
+    }
+
+    // A short recording: processing it costs a fraction of the whole sample, and these tests need a recording, not its numbers.
+    private string Prn => _recordings.First;
 
     private static string AntennaLog => Repo.Recording("av_snr_log.csv");
 
-    private static string PrnName => MainWindowViewModel.BaseName(Path.GetFileName(Prn));
-
-    private sealed class FakeKinds : ICsvKindDialog
-    {
-        public readonly Queue<CsvKind?> Answers = new();
-
-        public Task<CsvKind?> ChooseAsync(string fileName) => Task.FromResult(Answers.Count > 0 ? Answers.Dequeue() : null);
-    }
+    private string PrnName => MainWindowViewModel.BaseName(Path.GetFileName(Prn));
 
     private static MainWindowViewModel Window(params CsvKind[] answers)
     {
-        var kinds = new FakeKinds();
+        var kinds = new FakeCsvKinds();
         foreach (CsvKind answer in answers) kinds.Answers.Enqueue(answer);
         return new MainWindowViewModel(new MainWindowServices { CsvKinds = kinds });
     }

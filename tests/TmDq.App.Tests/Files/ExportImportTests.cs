@@ -749,19 +749,6 @@ public sealed class ExportImportTests
 
     // ---- the main window: Import CSV and Export ------------------------------------------------------------------------
 
-    private sealed class FakeExportDialog : IExportDialog
-    {
-        public ExportViewModel? Shown;
-        public Action<ExportViewModel>? Answer;
-
-        public Task ShowAsync(ExportViewModel vm)
-        {
-            Shown = vm;
-            Answer?.Invoke(vm);
-            return Task.CompletedTask;
-        }
-    }
-
     private sealed class FakeImages : IPlotImageExporter
     {
         public readonly List<string> Asked = new();
