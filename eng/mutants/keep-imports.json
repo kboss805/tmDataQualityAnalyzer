@@ -50,9 +50,9 @@
     },
     {
       "id": "K6",
-      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "_series.Count == 0 ? 0 : _series.Max(s => s.SourceId) + 1;\n\n",
-      "new": "_series.Count == 0 ? 0 : _series.Max(s => s.SourceId) + 0;\n\n",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotSources.cs",
+      "old": "public int NextId => _series.Count == 0 ? 0 : _series.Max(s => s.SourceId) + 1;",
+      "new": "public int NextId => _series.Count == 0 ? 0 : _series.Max(s => s.SourceId) + 0;",
       "expect": "caught",
       "note": "the run takes the greatest id the plot holds, which an import has"
     },
@@ -67,8 +67,8 @@
     {
       "id": "K8",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "            _sourceLabels.Clear();   // the new file is the only recording",
-      "new": "            _ = _sourceLabels.Count;   // the new file is the only recording",
+      "old": "            Sources.ForgetNames();   // the new file is the only recording",
+      "new": "            _ = Sources.Shown;   // the new file is the only recording",
       "expect": "caught",
       "note": "an import that replaces the plot keeps the earlier recording's name for its source"
     }

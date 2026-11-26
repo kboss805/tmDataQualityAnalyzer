@@ -36,17 +36,17 @@
     },
     {
       "id": "P4",
-      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "if (removedLabels.Contains(Title)) Title = SourceList()[0].Label;",
-      "new": "if (!removedLabels.Contains(Title)) Title = SourceList()[0].Label;",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotSources.cs",
+      "old": "removedNames.Contains(title) ? List()[0].Label : title;",
+      "new": "!removedNames.Contains(title) ? List()[0].Label : title;",
       "expect": "caught",
       "note": "a title the operator wrote is replaced, and one that named the removed recording stays"
     },
     {
       "id": "P5",
-      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "Title = SourceList()[0].Label;",
-      "new": "Title = SourceList()[^1].Label;",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotSources.cs",
+      "old": "List()[0].Label",
+      "new": "List()[^1].Label",
       "expect": "caught",
       "note": "the title names the last recording left, not the first"
     },

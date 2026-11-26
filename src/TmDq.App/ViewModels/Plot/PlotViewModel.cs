@@ -54,8 +54,6 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     private int? _readoutSeriesId;
     private bool _legendVisible = true;
     private bool _isLoading;
-    private int _visibleSource = -1;
-    private readonly Dictionary<int, string> _sourceLabels = new();
 
     /// <summary>Raised when the series, their samples or their visibility change (the chart redraws them).</summary>
     public event EventHandler? SeriesChanged;
@@ -76,6 +74,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
 
     public PlotViewModel()
     {
+        Sources = new PlotSources(_series);
         _window = new PlotTimeWindow(() => HasData, FormatTime);
         _window.Changed += (_, _) =>
         {
@@ -296,13 +295,13 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
                 start = 0.0;
             }
             shift = start;
-            sourceId = _series.Max(s => s.SourceId) + 1;
+            sourceId = Sources.NextId;
             if (sourceLabel is not null) SetSourceLabel(sourceId.Value, sourceLabel);
         }
         else
         {
             _series.Clear();
-            _sourceLabels.Clear();   // the new file is the only recording; the earlier names went with it
+            Sources.ForgetNames();   // the new file is the only recording; the earlier names went with it
             _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);
         }
         _window.ClearHistory();
@@ -336,8 +335,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         _leftMinOverride = _leftMaxOverride = _rightMinOverride = _rightMaxOverride = null;
         _readoutSeriesId = null;
         Title = DefaultTitle;
-        _visibleSource = -1;
-        _sourceLabels.Clear();
+        Sources.Reset();
         SeriesChanged?.Invoke(this, EventArgs.Empty);
         RangesChanged?.Invoke(this, EventArgs.Empty);
         OnPropertyChanged(nameof(HasData));
@@ -346,33 +344,27 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
 
     /// <summary>Whether a series is drawn: shown, and of the recording the Plot File selector shows (US1.1), or of any
     /// when it shows them all.</summary>
-    public bool EffectiveVisible(PlotSeries s) => s.Visible && (_visibleSource < 0 || s.SourceId == _visibleSource);
+    public bool EffectiveVisible(PlotSeries s) => s.Visible && Sources.IsShown(s);
 
     // ---- the recordings, and the Plot File selector (plan step 4.7) --------------------------------------------------
 
+    /// <summary>The recordings the plot holds: their names, the one shown alone, their list and the id a new one takes. The
+    /// members below that name a recording are this, kept on the plot for the menus and the main window.</summary>
+    public PlotSources Sources { get; }
+
     /// <summary>The recording the plot shows, or -1 for every one overlaid.</summary>
-    public int VisibleSource => _visibleSource;
+    public int VisibleSource => Sources.Shown;
 
     /// <summary>Each recording the series come from, once, in the order first met, with its label: its file's name as
     /// given (<see cref="SetSourceLabel"/>), else "Source N".</summary>
-    public IReadOnlyList<(int Id, string Label)> SourceList()
-    {
-        var list = new List<(int, string)>();
-        var seen = new HashSet<int>();
-        foreach (PlotSeries s in _series)
-        {
-            if (!seen.Add(s.SourceId)) continue;
-            list.Add((s.SourceId, SourceLabel(s.SourceId)));
-        }
-        return list;
-    }
+    public IReadOnlyList<(int Id, string Label)> SourceList() => Sources.List();
 
     /// <summary>The id a recording added now would take: one past the greatest the plot holds, or 0 for an empty plot. A run is
     /// numbered with it, so that it never shares an id with data already shown (an imported CSV).</summary>
-    public int NextSourceId => _series.Count == 0 ? 0 : _series.Max(s => s.SourceId) + 1;
+    public int NextSourceId => Sources.NextId;
 
     /// <summary>Names a recording in the Plot File selector.</summary>
-    public void SetSourceLabel(int sourceId, string label) => _sourceLabels[sourceId] = label;
+    public void SetSourceLabel(int sourceId, string label) => Sources.Name(sourceId, label);
 
     /// <summary>
     /// Shows <paramref name="sourceId"/>'s series only, or every recording's for -1 (Plot File):
@@ -381,7 +373,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// </summary>
     public void SetVisibleSource(int sourceId)
     {
-        _visibleSource = sourceId;
+        Sources.Show(sourceId);
         double lo = double.MaxValue, hi = double.MinValue;
         foreach (PlotSeries s in _series)
         {
@@ -418,7 +410,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         List<int> removing = sourceIds.Distinct().Where(id => _series.Any(s => s.SourceId == id)).ToList();
         if (removing.Count == 0) return false;
         var gone = new HashSet<int>(removing);
-        var removedLabels = new HashSet<string>(removing.Select(id => _sourceLabels.GetValueOrDefault(id, string.Empty)).Where(l => l.Length > 0));
+        HashSet<string> removedNames = Sources.NamesOf(removing);
         if (_series.All(s => gone.Contains(s.SourceId)))
         {
             Clear();
@@ -426,16 +418,12 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         else
         {
             _series.RemoveAll(s => gone.Contains(s.SourceId));
-            foreach (int id in removing) _sourceLabels.Remove(id);
+            bool drawnChanged = Sources.Forget(gone);
             if (_readoutSeriesId is int pin && _series.All(s => s.Id != pin)) _readoutSeriesId = null;
-            // A title that named a recording removed (as a recording's does until it is renamed) names one that is left, the
-            // first; a title the operator wrote is theirs and stays.
-            if (removedLabels.Contains(Title)) Title = SourceList()[0].Label;
-            bool drawnChanged = _visibleSource < 0 || gone.Contains(_visibleSource);
-            if (gone.Contains(_visibleSource)) _visibleSource = -1;
+            Title = Sources.TitleAfterRemoving(Title, removedNames);
             if (drawnChanged)
             {
-                SetVisibleSource(_visibleSource);   // the window and the axes follow what is left; it tells the view
+                SetVisibleSource(Sources.Shown);   // the window and the axes follow what is left; it tells the view
             }
             else
             {
@@ -448,8 +436,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
 
     /// <summary>A recording's name as Plot File gives it, also before it has any series (a recording being added is named
     /// first): the name it was given (<see cref="SetSourceLabel"/>), else "Source N".</summary>
-    public string SourceLabel(int sourceId) =>
-        _sourceLabels.TryGetValue(sourceId, out string? label) ? label : string.Create(CultureInfo.InvariantCulture, $"Source {sourceId}");
+    public string SourceLabel(int sourceId) => Sources.Label(sourceId);
 
     /// <summary>
     /// What shows when Receiver SNR series arrive: of each stream's channels (a receiver's L, R and C, an antenna's H, V and C)

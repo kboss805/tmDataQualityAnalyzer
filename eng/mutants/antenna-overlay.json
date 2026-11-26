@@ -77,7 +77,7 @@
     {
       "id": "O10",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "sourceId = _series.Max(s => s.SourceId) + 1;",
+      "old": "sourceId = Sources.NextId;",
       "new": "sourceId = 0;",
       "expect": "caught",
       "note": "the log is the first recording's, so the Plot File selector cannot tell them apart"
