@@ -242,14 +242,13 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _isLoading, value);
     }
 
-    /// <summary>Reads an exported CSV and shows it in place of whatever was shown (US6.3), or, with <paramref name="add"/> (and
-    /// always for an antenna's log, US10.0), adds it to what is shown as a recording of its own; false, with nothing changed,
-    /// for a file that is not one.</summary>
-    public bool LoadCsv(string path, CsvKind kind = CsvKind.TelemetryReceivers, string? sourceLabel = null, bool add = false)
+    /// <summary>Reads a CSV, an exported one or an antenna's log (told apart by the file, <see cref="PlotCsv.Parse"/>), and shows it
+    /// in place of whatever was shown (US6.3), or, with <paramref name="add"/> (and always for an antenna's log, US10.0), adds it to
+    /// what is shown as a recording of its own; false, with nothing changed, for a file that is neither.</summary>
+    public bool LoadCsv(string path, string? sourceLabel = null, bool add = false)
     {
-        CsvData? data = PlotCsv.Parse(path, kind);
-        if (data is null) return false;
-        ShowCsv(data, kind, sourceLabel, add);
+        if (PlotCsv.Parse(path) is not { } parsed) return false;
+        ShowCsv(parsed.Data, parsed.Kind, sourceLabel, add);
         return true;
     }
 
@@ -257,15 +256,14 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// <see cref="LoadCsv"/> with the file read off the UI thread and <see cref="IsLoading"/> set meanwhile. A
     /// request while one is being read is dropped, as v2.x dropped it.
     /// </summary>
-    public async Task<CsvLoad> LoadCsvAsync(string path, CsvKind kind = CsvKind.TelemetryReceivers, string? sourceLabel = null, bool add = false)
+    public async Task<CsvLoad> LoadCsvAsync(string path, string? sourceLabel = null, bool add = false)
     {
         if (IsLoading) return CsvLoad.Dropped;
         IsLoading = true;
         try
         {
-            CsvData? data = await Task.Run(() => PlotCsv.Parse(path, kind));
-            if (data is null) return CsvLoad.Failed;
-            ShowCsv(data, kind, sourceLabel, add);
+            if (await Task.Run(() => PlotCsv.Parse(path)) is not { } parsed) return CsvLoad.Failed;
+            ShowCsv(parsed.Data, parsed.Kind, sourceLabel, add);
             return CsvLoad.Loaded;
         }
         finally

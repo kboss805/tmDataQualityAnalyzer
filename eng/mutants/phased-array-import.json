@@ -20,19 +20,19 @@
     },
     {
       "id": "I3",
-      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "if (kind is null || IsBusy) return;",
-      "new": "if (IsBusy) return;",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCsv.cs",
+      "old": "return (export, CsvKind.TelemetryReceivers);",
+      "new": "return (export, CsvKind.PhasedArrayAntenna);",
       "expect": "caught",
-      "note": "Cancel on the kind question imports the file as the application's own"
+      "note": "this application's export is read as an antenna's log"
     },
     {
       "id": "I4",
-      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "chosen == CsvKind.PhasedArrayAntenna ? NotAPhasedArrayLog : NotAnExportedCsv, name);",
-      "new": "NotAnExportedCsv, name);",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCsv.cs",
+      "old": "return (log, CsvKind.PhasedArrayAntenna);",
+      "new": "return (log, CsvKind.TelemetryReceivers);",
       "expect": "caught",
-      "note": "a refused antenna log is reported as a refused export"
+      "note": "a log is read but not marked as one"
     },
     {
       "id": "I5",
@@ -60,28 +60,27 @@
     },
     {
       "id": "I8",
-      "file": "src/TmDq.App/Models/Export/CsvKind.cs",
-      "old": "\"AV Phased Array Antenna\\u2026\"",
-      "new": "\"AV Phased Array Antenna\"",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCsv.cs",
+      "old": "        if (TryParse(() => CsvFile.ParsePhasedArrayLog(path)) is { } log) return (log, CsvKind.PhasedArrayAntenna);\n",
+      "new": "",
       "expect": "caught",
-      "note": "the choice loses its ellipsis"
+      "note": "an antenna log is not recognized"
     },
     {
       "id": "I9",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "_csvKinds = services.CsvKinds;",
-      "new": "_csvKinds = null;",
+      "old": "\"ERROR: '{0}' is not a recognized CSV: neither an export of this application",
+      "new": "\"ERROR: '{0}' is not a recognized exported CSV: neither an export of this application",
       "expect": "caught",
-      "note": "the host's kind question is never asked"
+      "note": "the error for a file of neither layout names only one"
     },
     {
       "id": "I10",
-      "file": "src/TmDq.App/App.axaml.cs",
-      "old": "CsvKinds = new WindowCsvKindDialog(window),",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCsv.cs",
+      "old": "        if (TryParse(() => CsvFile.Parse(path)) is { } export) return (export, CsvKind.TelemetryReceivers);\n",
       "new": "",
-      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.CompositionRootTests"],
       "expect": "caught",
-      "note": "the application does not hand the view model the kind question"
+      "note": "this application's own export is not recognized"
     }
   ]
 }

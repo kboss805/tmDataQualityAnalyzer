@@ -171,9 +171,10 @@ public sealed class PlotCommands : ObservableObject, IDisposable
         string label = sources.Count == 1
             ? "Remove everything of this file from the plot? Process it again to bring it back."
             : "Remove every series of this file from the plot, and keep the others? Process it again to bring it back.";
-        // Nothing is chosen for the operator to press Enter on, since this removes data: the one file there is, or the one shown
-        // alone, starts chosen; with several overlaid, none does and OK waits for a choice.
-        int selected = sources.Count == 1 ? 0 : sources.ToList().FindIndex(s => s.Id == _plot.VisibleSource);
+        // The one shown alone starts chosen; with several overlaid (or only one there), the first does, so the list never opens
+        // blank (the user's choice: OK still asks before anything goes).
+        int shown = sources.ToList().FindIndex(s => s.Id == _plot.VisibleSource);
+        int selected = Math.Max(shown, 0);
         int? chosen = await _prompts.ChooseAsync("Remove File", label, sources.Select(s => s.Label).ToList(), selected);
         if (chosen is int index && index >= 0 && index < sources.Count) _plot.RemoveSource(sources[index].Id);
     }

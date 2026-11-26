@@ -329,7 +329,7 @@ public sealed class RemoveFileTests : IDisposable
     }
 
     [Fact]
-    public async Task RemoveFileStartsOnNothingChosenWithSeveralOverlaidOnTheOneShownAndOnTheOnlyOne()
+    public async Task RemoveFileStartsOnTheFirstWithSeveralOverlaidOnTheOneShownAndOnTheOnlyOne()
     {
         PlotViewModel plot = ThreeRecordings();
         var prompts = new FakePrompts();
@@ -339,7 +339,8 @@ public sealed class RemoveFileTests : IDisposable
         using var commands = new PlotCommands(plot, prompts);
 
         await commands.RemoveFileCommand.ExecuteAsync(null);
-        Assert.Equal(-1, prompts.LastChoice.Selected);          // Enter must not remove the first by accident
+        Assert.Equal(-1, plot.VisibleSource);                   // every one overlaid
+        Assert.Equal(0, prompts.LastChoice.Selected);           // the list does not open blank: the first file is chosen
 
         plot.SetVisibleSource(1);
         await commands.RemoveFileCommand.ExecuteAsync(null);
@@ -363,7 +364,7 @@ public sealed class RemoveFileTests : IDisposable
         none.Choices.SelectedIndex = 1;
         Assert.True(none.OkButton.IsEnabled);
 
-        var first = new TmDq.App.Views.Dialogs.ChoiceWindow("Import CSV", "Which?", new[] { "a", "b" });   // as every other use
+        var first = new TmDq.App.Views.Dialogs.ChoiceWindow("Choose", "Which?", new[] { "a", "b" });   // as a caller that gives no choice does
         Assert.Equal(0, first.Choices.SelectedIndex);
         Assert.True(first.OkButton.IsEnabled);
 
