@@ -93,7 +93,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 ### Deployment
 
-- **Installer & Portable Distribution**: A signed per-machine MSI for managed deployment (Group Policy, SCCM, Intune: silent switches for offering the application for `.ch10` files (Open with; it never takes an association another application holds), the full manual and a desktop shortcut; settings files kept on upgrade and uninstall), and a portable ZIP that keeps its preferences beside itself, for users without admin rights
+- **Installer & Portable Distribution**: A signed MSI that installs per-machine for managed deployment (Group Policy, SCCM, Intune: silent switches for offering the application for `.ch10` files (Open with; it never takes an association another application holds), the full manual and a desktop shortcut; settings files kept on upgrade and uninstall) or per-user, with no administrator rights, to a folder of the user's choosing; and a portable ZIP that keeps its preferences beside itself
 
 ## System Requirements
 

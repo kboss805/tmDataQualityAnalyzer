@@ -127,6 +127,28 @@ public class RepoFilesTests
     }
 
     [Fact]
+    public void TheMsiInstallsPerUserOrPerMachineAndEveryRegistryWriteFollowsTheInstall()
+    {
+        // US8.0: a user without admin rights installs, to a folder of their choosing. The package installs per-user or
+        // per-machine (the wizard asks "for all users, or just for me"), and its registry writes are HKMU, which is HKLM for
+        // an install for all users and HKCU for one user. A write to HKLM would make a per-user install by a standard user fail,
+        // and the per-machine folder the dialog set builds from [ProgramFilesFolder] would be the 32-bit Program Files.
+        string deploy = Path.Combine(RepoPaths.Root, "deploy");
+        string wxs = File.ReadAllText(Path.Combine(deploy, "tmDataQualityAnalyzer.wxs"));
+        Assert.Contains("Scope=\"perUserOrMachine\"", wxs, StringComparison.Ordinal);
+        Assert.Contains("<ui:WixUI Id=\"WixUI_Advanced\" />", wxs, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"<RegistryValue Root=""HK(LM|CU|CR)""", wxs);
+        Assert.True(Regex.Count(wxs, @"<RegistryValue Root=""HKMU""") >= 5, "the MSI writes fewer HKMU values than it did: has its layout changed?");
+        Assert.Contains("Value=\"[ProgramFiles64Folder][ApplicationFolderName]\"", wxs, StringComparison.Ordinal);
+        Assert.Contains("Value=\"[LocalAppDataFolder]Programs\\[ApplicationFolderName]\"", wxs, StringComparison.Ordinal);
+
+        // WiX writes MSIINSTALLPERUSER=1 for such a package, which makes a silent install from an elevated deployment tool
+        // (Group Policy, SCCM, Intune: SYSTEM) per-user, into SYSTEM's profile. The build script takes it out, and checks it.
+        string script = File.ReadAllText(Path.Combine(deploy, "build_msi.ps1"));
+        Assert.Contains("DELETE FROM `Property` WHERE `Property`=''MSIINSTALLPERUSER''", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EveryDotnetProjectKeepsItsOutputWhereItAlwaysIs()
     {
         // vcvars leaves Platform=x64 in the shell; with AppendPlatformToOutputPath=false a dotnet build puts its output

@@ -994,7 +994,7 @@ public sealed class ShellTests : IDisposable
         // are what put it there, so a rename on either side would leave Help on the base manual without a word.
         Assert.Equal("UserManual.html", HelpManual.FullManualName);
         string msi = File.ReadAllText(Repo.File(Path.Combine("deploy", "tmDataQualityAnalyzer.wxs")));
-        Assert.Contains("<ComponentGroup Id=\"ManualItems\" Directory=\"INSTALLFOLDER\">", msi);
+        Assert.Contains("<ComponentGroup Id=\"ManualItems\" Directory=\"APPLICATIONFOLDER\">", msi);
         Assert.Contains("Source=\"$(StagingManual)\\" + HelpManual.FullManualName + "\"", msi);
         string package = File.ReadAllText(Repo.File(Path.Combine("deploy", "build_package.ps1")));
         Assert.Contains("Join-Path $Stage 'manual\\" + HelpManual.FullManualName + "'", package);
