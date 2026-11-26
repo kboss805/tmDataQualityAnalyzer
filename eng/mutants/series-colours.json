@@ -5,20 +5,20 @@
     {
       "id": "C1",
       "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
-      "old": "s.Dotted = stream / hues % 2 == 1;",
-      "new": "s.Dotted = false;",
+      "old": "            s.Dotted = true;",
+      "new": "            s.Dotted = false;",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
       "expect": "caught",
-      "note": "no series is ever dotted"
+      "note": "Receiver SNR is drawn solid, as a lock curve is"
     },
     {
       "id": "C2",
       "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
-      "old": "s.Dotted = stream / hues % 2 == 1;",
-      "new": "s.Dotted = stream / hues % 2 == 0;",
+      "old": "                s.Dotted = false;\n                s.Strong = false;",
+      "new": "                s.Dotted = true;\n                s.Strong = false;",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
       "expect": "caught",
-      "note": "the first 15 are dotted and the second 15 solid"
+      "note": "a Frame Sync Lock curve is drawn dotted, as SNR is"
     },
     {
       "id": "C3",
@@ -50,7 +50,7 @@
     {
       "id": "C6",
       "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
-      "old": "StreamHues[stream % hues]",
+      "old": "StreamHues[stream % StreamHues.Count]",
       "new": "StreamHues[0]",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
       "expect": "caught",
@@ -100,6 +100,24 @@
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ChartViewTests"],
       "expect": "caught",
       "note": "the legend is never told a series is dotted or strong"
+    },
+    {
+      "id": "C12",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "s.Color = StreamHues[idx % StreamHues.Count];",
+      "new": "s.Color = StreamHues[0];",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "every Frame Sync Lock stream takes the first hue"
+    },
+    {
+      "id": "C13",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "s.Color = StreamHues[idx % StreamHues.Count];",
+      "new": "s.Color = StreamHues[Math.Min(idx, StreamHues.Count - 1)];",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "lock streams past the 15th keep the last hue instead of taking the first again"
     }
   ]
 }

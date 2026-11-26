@@ -418,7 +418,7 @@ public sealed class TemplateBatchTests : IDisposable, IClassFixture<ShortRecordi
 
         PlotSeries lockSeries = Assert.Single(vm.Plot.Series, s => s.Metric == MetricType.FrameSyncLock);
         Assert.NotEqual(13, lockSeries.StreamOrder);
-        Assert.Equal(PlotColors.FrameSyncLock[0], lockSeries.Color);   // the plot started again: its first stream, its first colour
+        Assert.Equal(PlotColors.StreamHues[0], lockSeries.Color);   // the plot started again: its first stream, its first colour
     }
 
     [Fact]
