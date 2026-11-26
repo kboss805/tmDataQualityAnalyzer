@@ -522,7 +522,7 @@ profile, so a batch processes with the linear calibration.
   Template's batch and each file's export). Opening a recording (`LoadAsync`) stacks: with something on the plot it removes
   nothing, appends to `Sources`, numbers the run `Plot.NextSourceId` so it never shares a source id with an import, names the recording apart from the plot's others
   (`UniqueSourceLabel`, through `UniqueName`: "name (2)"), colours its series without recolouring what is shown, and leaves the plot's title; failing or cancelling it changes nothing.
-  With an empty plot it is where a recording starts (`ClearProcessedRun`, then the title). An import never clears the plot either (it is added to what is shown, US6.3), and
+  With an empty plot it is where a recording starts (`ClearRun`, then the title). An import never clears the plot either (it is added to what is shown, US6.3), and
   neither does a drop or a Recent Files entry, which go through the same two methods. **Clear Plot…** (`PlotCommands.ClearPlotAsync`, in the plot's right-click menu beside
   Remove File…) is how a plot is emptied: it asks once, with nothing chosen for the operator to press Enter on, then `Plot.RemoveSources` takes every
   recording, whose `SourceRemoved` notices empty `Sources`. A batch (Apply Template) still clears everything first. Its dialogs, pickers, configurator, clock and preferences are handed in as
@@ -1133,7 +1133,7 @@ In the library tests the test classes (`*Tests.cs`) are at the project's root; i
 folders by area (`Plot/`, `Streams/`, `Files/`, `Shell/`, `Build/`, `Soak/`; see the catalog below). In both, what they share is in `Support/`: the
 library tests' `Env`, `RepoPaths`, `TempFiles`, `Collector` and the digests the recordings' expected numbers are in
 (`CalibrationDigest`, `FormatsDigest`, `SeriesDigest`), the collections (`ProcessMemoryCollection`) and the observer fakes;
-the application tests' `Fixtures` (`FakeConfigurator`, `FakeRecordingPicker`, `Recordings`, `StreamsChoices`), `MainWindowFakes` (`FakeCsvKinds`, `FakeExportDialog`, `FakeProgressDialog`), `ShortRecordings` (a short PRN recording made once per class), `PlotFixtures`, `StreamFakes`, `Menus`, `Frames`, `Repo`, `PeResources`,
+the application tests' `Fixtures` (`FakeConfigurator`, `FakeRecordingPicker`, `Recordings`, `StreamsChoices`), `MainWindowFakes` (`FakeExportDialog`, `FakeProgressDialog`), `ShortRecordings` (a short PRN recording made once per class), `PlotFixtures`, `StreamFakes`, `Menus`, `Frames`, `Repo`, `PeResources`,
 `TestAppBuilder` and `NativeCoreCollection`. The app tests link `TempFiles` and `RepoPaths` from the library tests. A
 Support file keeps its project's namespace, so a test uses it by its bare name; the test data (`Soak/`, `Templates/`)
 stays in folders of its own.
@@ -1281,7 +1281,7 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV, two exports stacked and a batch's several recordings added beside one already there), `PhasedArrayImportTests` (each layout recognised from the file with no question, a file of neither one error, an antenna's log as 90 series read H, V and C, and none of it exported),
   `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, named apart and keeping each file's colours, Apply Template with the core missing),
-  `ImportedDataKeptTests` (processing a recording keeps what was imported, the run numbered apart from it, an import named for its file and added beside the run) and
+  `ImportedDataKeptTests` (opening a recording keeps what was imported and what was processed before, each run numbered apart, an import named for its file and added beside the run) and
   `OpenStacksTests` (Open on a plot that shows something: the plot kept, the new recording beside it, names told apart, a failed or cancelled open changes nothing, an empty plot is where one starts).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `StatusBarTests` (the bar's place, colour and hairline, its marks, its trimming), `MenuStyleTests` (no icons, the accent row and white text, the dimmed shortcut, the row height and inset), `DialogAnatomyTests`
   (every window kind's footer band, padding, button widths and spacing, accent and cancel, in both themes; a status text following the theme), `PreferencesTests`
