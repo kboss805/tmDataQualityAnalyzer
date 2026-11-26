@@ -12,6 +12,10 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### A new application icon
+
+The icon is a PCM bit stream (a stepped teal wave, solid) over the Receiver SNR trace (dotted amber) on a navy tile: the two things the plot shows, drawn the way it draws them. `eng\gen_app_icon.py` now **draws** `assets/icon.ico` (the artwork is its geometry, supersampled and box-reduced) instead of resizing `docs/design/icon_image.png`, which is removed. Two drawings: 48 px and up carry the full mark; 16, 24 and 32 px a simplified one (three steps over three square dots) whose every edge is a whole pixel, so a title bar at 100 % and 200 % is crisp. Same sizes as before (16, 24, 32, 48, 64, 256), so `IconTests` and the packaging check hold unchanged. Checked: the script run, the small sizes read back magnified; the suites below. No code of the application.
+
 #### The mutation check's verdicts on the managed suite are the real tests' again, and Pillow is 13.0.0
 
 **What was wrong.** `eng\mutate.ps1` applies a mutant by replacing its `old` text, and the managed suite's anchor guard (`RepoFilesTests.EveryKeptMutantStillNamesTextThatIsInItsFileExactlyOnce`) fails when a kept mutant's `old` text is not in its file exactly once - which is true of every applied mutant. So any managed-suite mutant run without a `-class` or `-method` filter that leaves `RepoFilesTests` out was CAUGHT by that guard, whatever the tests it was meant for did: a survivor could not be seen. Two lists run unfiltered (`imported-stream-orders.json`, `series-index-count.json`), and the lists filtered to `RepoFilesTests` itself ran the guard too.
