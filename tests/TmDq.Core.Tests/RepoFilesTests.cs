@@ -45,12 +45,12 @@ public class RepoFilesTests
     public void TheScriptsTheInstallerAndTheWorkflowAreAsciiOnly()
     {
         // Windows PowerShell 5.1 reads a UTF-8 file with no byte-order mark as Windows-1252, so one em dash inside a
-        // string decodes to a curly quote that ends it (audit B7: a script that could not even be parsed); Inno Setup
-        // and the workflow's temp scripts read the same way. The files are plain ASCII, and stay so.
+        // string decodes to a curly quote that ends it (audit B7: a script that could not even be parsed); the workflow's
+        // temp scripts read the same way. The files are plain ASCII, and stay so.
         var offenders = new List<string>();
         foreach (string folder in new[] { "eng", "deploy", ".github" })
         {
-            foreach (string file in Files(folder, "*.ps1", "*.psm1", "*.iss", "*.yml", "*.yaml", "*.bat", "*.cmd"))
+            foreach (string file in Files(folder, "*.ps1", "*.psm1", "*.yml", "*.yaml", "*.bat", "*.cmd"))
             {
                 byte[] bytes = File.ReadAllBytes(file);
                 int at = Array.FindIndex(bytes, b => b > 127);
@@ -71,33 +71,43 @@ public class RepoFilesTests
         Assert.Contains("env.ps1", names);
         Assert.Contains("mutate.ps1", names);
         Assert.NotEmpty(Files(".github", "*.yml"));
-        Assert.NotEmpty(Files("deploy", "*.iss"));
+        Assert.NotEmpty(Files("deploy", "*.wxs"));
     }
 
     [Fact]
-    public void TheInstallerScriptAndThePackageScriptFindWhatTheyNameFromWhereTheyAre()
+    public void TheMsiSourceAndThePackageScriptsFindWhatTheyNameFromWhereTheyAre()
     {
-        // Inno Setup resolves a file the script names from the script's own folder, and nothing but compiling the installer
-        // (a release-time step, with Inno Setup installed) shows one that no longer resolves: moving deploy/avalonia/ up a
-        // level (audit F1) left the release notes' path pointing at a folder above the repository until a compile said so.
+        // The MSI source names files by $(RepoRoot)\... and nothing but building the package (a release-time step) shows
+        // one that no longer resolves: moving deploy/avalonia/ up a level (audit F1) left the installer's release-notes path
+        // pointing at a folder above the repository until a compile said so.
         string deploy = Path.Combine(RepoPaths.Root, "deploy");
-        string iss = File.ReadAllText(Path.Combine(deploy, "tmDataQualityAnalyzer.iss"));
-        var named = new[] { "LicenseFile", "SetupIconFile", "InfoBeforeFile" };
-        foreach (string directive in named)
+        string wxs = File.ReadAllText(Path.Combine(deploy, "tmDataQualityAnalyzer.wxs"));
+        MatchCollection named = Regex.Matches(wxs, @"\$\(RepoRoot\)\\([^""]+)""");
+        Assert.True(named.Count >= 2, "the MSI source names no file under $(RepoRoot): has its layout changed?");
+        foreach (Match m in named)
         {
-            Match m = Regex.Match(iss, "^" + directive + @"=(.+?)\s*$", RegexOptions.Multiline);
-            Assert.True(m.Success, $"the installer script has no {directive}");
-            string path = Path.GetFullPath(Path.Combine(deploy, m.Groups[1].Value));
-            Assert.True(File.Exists(path), $"{directive}={m.Groups[1].Value} resolves to {path}, which does not exist");
+            string path = Path.GetFullPath(Path.Combine(RepoPaths.Root, m.Groups[1].Value));
+            Assert.True(File.Exists(path), $"$(RepoRoot)\\{m.Groups[1].Value} resolves to {path}, which does not exist");
         }
 
-        // The package script's root is the folder holding the solution, found from its own: it must walk up exactly as far
-        // as it sits below it.
-        string package = File.ReadAllText(Path.Combine(deploy, "build_package.ps1"));
-        Match root = Regex.Match(package, @"\$Root = \(Resolve-Path \(Join-Path \$Here '([^']*)'\)\)\.Path");
-        Assert.True(root.Success, "the package script does not set $Root from $Here");
-        Assert.True(File.Exists(Path.GetFullPath(Path.Combine(deploy, root.Groups[1].Value, "tmdq.sln"))),
-                    $"the package script's $Root ('{root.Groups[1].Value}' from deploy) is not the folder with tmdq.sln");
+        // Every variable the source uses is one the script defines on the wix command line (-d "Name=..."): an unknown one
+        // is an error only when the package is built.
+        string msiScript = File.ReadAllText(Path.Combine(deploy, "build_msi.ps1"));
+        var defined = Regex.Matches(msiScript, @"-d ""(\w+)=").Select(m => m.Groups[1].Value).ToHashSet();
+        var used = Regex.Matches(wxs, @"\$\((\w+)\)").Select(m => m.Groups[1].Value).ToHashSet();
+        Assert.True(used.Count >= 4, "the MSI source uses fewer variables than it did: has its layout changed?");
+        Assert.True(used.IsSubsetOf(defined), "the MSI source uses $(" + string.Join("), $(", used.Except(defined)) + "), which build_msi.ps1 does not define");
+
+        // The package scripts' root is the folder holding the solution, found from their own: each must walk up exactly as
+        // far as it sits below it.
+        foreach (string script in new[] { "build_package.ps1", "build_msi.ps1" })
+        {
+            string text = File.ReadAllText(Path.Combine(deploy, script));
+            Match root = Regex.Match(text, @"\$Root = \(Resolve-Path \(Join-Path \$Here '([^']*)'\)\)\.Path");
+            Assert.True(root.Success, $"{script} does not set $Root from $Here");
+            Assert.True(File.Exists(Path.GetFullPath(Path.Combine(deploy, root.Groups[1].Value, "tmdq.sln"))),
+                        $"{script}'s $Root ('{root.Groups[1].Value}' from deploy) is not the folder with tmdq.sln");
+        }
     }
 
     [Fact]

@@ -7,27 +7,27 @@
   "mutants": [
     {
       "id": "D1",
-      "file": "deploy/tmDataQualityAnalyzer.iss",
-      "old": "InfoBeforeFile=RELEASENOTES.txt",
-      "new": "InfoBeforeFile=..\\RELEASENOTES.txt",
+      "file": "deploy/tmDataQualityAnalyzer.wxs",
+      "old": "$(RepoRoot)\\deploy\\RELEASENOTES.txt",
+      "new": "$(RepoRoot)\\RELEASENOTES.txt",
       "expect": "caught",
       "note": "the release notes' path as it was before the script moved up a level"
     },
     {
       "id": "D2",
-      "file": "deploy/tmDataQualityAnalyzer.iss",
-      "old": "LicenseFile=..\\LICENSE",
-      "new": "LicenseFile=..\\..\\LICENSE",
+      "file": "deploy/tmDataQualityAnalyzer.wxs",
+      "old": "$(RepoRoot)\\assets\\icon.ico",
+      "new": "$(RepoRoot)\\assets\\icon.icx",
       "expect": "caught",
-      "note": "the licence path as it was before the move"
+      "note": "an icon that is not there"
     },
     {
       "id": "D3",
-      "file": "deploy/tmDataQualityAnalyzer.iss",
-      "old": "SetupIconFile=..\\assets\\icon.ico",
-      "new": "SetupIconFile=..\\assets\\icon.icx",
+      "file": "deploy/build_msi.ps1",
+      "old": "$Root = (Resolve-Path (Join-Path $Here '..')).Path",
+      "new": "$Root = (Resolve-Path (Join-Path $Here '\\..\\..')).Path",
       "expect": "caught",
-      "note": "an icon that is not there"
+      "note": "the MSI script's root one level too high"
     },
     {
       "id": "D4",
@@ -36,6 +36,14 @@
       "new": "$Root = (Resolve-Path (Join-Path $Here '\\..\\..')).Path",
       "expect": "caught",
       "note": "the package script's root one level too high"
+    },
+    {
+      "id": "D5",
+      "file": "deploy/build_msi.ps1",
+      "old": "-d \"StagingManual=$ManualDir\"",
+      "new": "-d \"StagingManuals=$ManualDir\"",
+      "expect": "caught",
+      "note": "a variable the MSI source uses that the script no longer defines (an error only when the package is built)"
     }
   ]
 }

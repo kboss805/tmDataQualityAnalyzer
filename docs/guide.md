@@ -389,7 +389,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The installer never overwrites an existing user TOML settings file, on upgrade or reinstall. A settings file is written only when it is absent (`onlyifdoesntexist`), and is left behind by uninstall (`uninsneveruninstall`).
 - [x] A settings file written by any earlier version stays usable: every reader supplies its own default for a key the file does not carry, so an older file degrades to "missing keys fall back to defaults" rather than to a wrong result.
 - [x] New fields added to a shipped default therefore reach a **fresh install**, not an existing one. An upgraded install keeps the operator's file exactly as it stands.
-  - **There is no merge of a shipped default into an existing settings file.** The installer script (`deploy/tmDataQualityAnalyzer.iss`) is declarative, with no `[Code]` section, and there is no `new_x`, migration, schema-version or merge logic in the core, `deploy/` or `eng/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
+  - **There is no merge of a shipped default into an existing settings file.** The installer's source (`deploy/tmDataQualityAnalyzer.wxs`) is declarative, with no custom action, and there is no `new_x`, migration, schema-version or merge logic in the core, `deploy/` or `eng/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
   - **The guarantee above is weaker but true, and the defensive readers are what make it safe** - `FrameSetup::readReceiverParams()` accepts both the current `[Receivers]` keys and the older `[Parameters]` spelling, an absent `Randomized` leaves the operator's choice alone rather than clearing it, and the template reader (`TemplateFile`) keeps each key's default for anything omitted (a new row's value, read from a default `StreamSetup`, which `StreamFilesTests` holds to the core's `ReceiverParamsFile.Defaults()`). A change that removed that tolerance would look harmless and would not be: it is load-bearing for this criterion, not incidental.
   - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. Building the merge in the installer's `[Code]` section was scoped and deliberately not taken: it would move the installer from no custom code to scripted code, which is what keeps it cheap to maintain, and no one has asked for it (the v2.14.2 entry "US8.0 now describes the installer that exists" in `docs/changelog.md`). Rebuild the sketch from this criterion if that day comes.
 
@@ -865,7 +865,7 @@ Everything builds from `tmdq.sln`, which VS Code opens by default; `.claude/CLAU
   figures, because the log in four of them names the version, and `eng\check_release_consistency.ps1` fails when it is not
   `AppVersion`: a version bump needs a full render, never `-NoCapture`.
 - **The release**: `deploy\build_package.ps1` (single-file publish, signing, the portable ZIP, the
-  Inno installer and the symbols ZIP); `.claude/skills/cut-release` is the procedure. The symbols ZIP
+  MSI and the symbols ZIP); `.claude/skills/cut-release` is the procedure. The symbols ZIP
   (`tmDataQualityAnalyzer-vX.Y.Z_symbols.zip`: `tmDataQualityAnalyzer.pdb`, `TmDq.Core.pdb`, `tmdq_core.pdb`) is not shipped to
   users; it is kept with the release and **attached to its GitHub release**, because it is the only thing that turns a crash
   report's frames, or a crash dump, of that version into source lines. A symbol file matches its binary by an id the build wrote
@@ -938,17 +938,30 @@ that worktrees also need.
   the core in Release, a self-contained, single-file, ReadyToRun publish (the code ships compiled: the window is up in about
   half the time, for an exe 45 MB bigger), staging (settings, the VC++ runtime the core imports, the
   licence, `THIRD-PARTY-NOTICES.txt`), signing our two binaries only, a smoke run on the PRN sample, the ZIP, the
-  symbols ZIP and the installer.
-- **Inno Setup installer**: `deploy/tmDataQualityAnalyzer.iss` — v2.x's AppId and folder, so it upgrades a
-  v2.x install in place (its `bin\`, `UserGuide.txt` and old manual deleted, `settings\` kept), admin or per-user,
-  the `.ch10` association, the "What's New" page, the optional full manual.
+  symbols ZIP and the MSI.
+- **MSI**: `deploy/tmDataQualityAnalyzer.wxs`, built by `deploy/build_msi.ps1` with WiX 6.0.2, a repo-local dotnet tool
+  (`dotnet-tools.json`; its UI extension is fetched into the gitignored `.wix\` cache on first use). It replaced the Inno
+  Setup installer, which every release before it used. **Per-machine only**: sites that deploy by Group Policy, SCCM or
+  Intune install elevated, and a user without admin rights takes the portable ZIP. The optional pieces are features
+  (`FileAssoc`, `Manual`, `DesktopShortcut`, the last off by default), and an administrator's switches are public
+  properties: `ASSOCIATE_CH10=0`, `FULLMANUAL=0`, `DESKTOPSHORTCUT=1`, `INSTALLFOLDER=...`. `settings\` is generated into a
+  fragment, one component a file, never overwritten (`NeverOverwrite`) and never removed (`Permanent`). A major-upgrade rule
+  replaces an older MSI and refuses a downgrade. **It does not upgrade an Inno Setup install**: a launch condition refuses
+  to install beside one (its uninstall key `{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1`) and says to uninstall it first.
+  Windows Installer reports a package that does not claim newer Windows as Windows 8.1, so the Windows-version condition
+  reads the real build from the registry. **US8.0 and the MSI:** the story's criterion that the installer can install to a
+  user-selected directory for users without admin privileges is not met by the MSI (per-machine, it needs elevation; the
+  portable ZIP is that user's), and the criterion that names `onlyifdoesntexist` and `uninsneveruninstall` describes the Inno
+  script, whose guarantees `NeverOverwrite` and `Permanent` now give. The story is the user's to reword; it was not touched.
 - **Portable ZIP**: the same files flat, with a `portable` marker (preferences in a `tmDataQualityAnalyzer` folder beside
   the exe), `UserManual.html`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt` and `README.txt`.
-- **Release notes**: `deploy/RELEASENOTES.txt` — the installer's "What's New" page (`InfoBeforeFile`) and the GitHub
+- **Release notes**: `deploy/RELEASENOTES.txt` — installed beside the application (with a Start menu entry) and the GitHub
   release's text. The developer's record is `docs/changelog.md`.
 - **Portable README**: `deploy/README_portable.txt` — copied as `README.txt` into the ZIP.
-- **Clean-machine test**: `deploy/sandbox/run_sandbox_test.ps1` with `verify_install.ps1` — Smart App Control
-  on, an unsigned control blocked, v2.14.2 installed and upgraded.
+- **Clean-machine test**: `deploy/sandbox/run_sandbox_test.ps1` with `verify_install.ps1`, in Windows Sandbox: Smart App
+  Control on, an unsigned control blocked, the MSI refused beside v2.14.2's Inno install, then installed, upgraded (the
+  runner builds a newer, unsigned MSI for that), refused on a downgrade, run, switched and uninstalled silently, and the
+  portable ZIP run. It takes 15 to 20 minutes (every install of the 50 MB MSI waits about two minutes in the Sandbox).
 - **Code signing**: the certificate's SHA-1 in `SIGN_CERT_SHA1` (falls back to the Certum OSS certificate), token-backed
   (SimplySign): unlock it first.
 

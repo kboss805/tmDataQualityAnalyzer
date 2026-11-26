@@ -1,22 +1,24 @@
 # =============================================================================
-# verify_install.ps1 - clean-machine test of the Avalonia application's packages
-# (plan step 3.3 built it for the preview; step 5.3 made it the release's) under Smart App
-# Control, including the UPGRADE from v2.x.
+# verify_install.ps1 - clean-machine test of the application's packages under Smart App Control: the MSI
+# (deploy\tmDataQualityAnalyzer.wxs) installed, upgraded, refused on a downgrade, switched and uninstalled silently, the
+# refusal to install beside an Inno Setup install (what every release before the MSI was), and the portable ZIP.
 #
 # Runs INSIDE Windows Sandbox, launched by
-#   run_sandbox_test.ps1 [-Setup <setup.exe>]
-# which copies in the payload this script reads from C:\tmdqa: the portable ZIP, deploy\staging\unsigned, the
-# PRN sample and v2.x's setup.exe (run_sandbox_test.ps1 -Payload overrides the list; semicolon-separated, because the
-# committed recordings' names contain commas)
+#   run_sandbox_test.ps1 [-Setup <the release's setup.msi>]
+# which copies in the payload this script reads from C:\tmdqa: the release's MSI, a NEWER MSI of the same product (built
+# unsigned by the runner from the same staged files, for the upgrade), the portable ZIP, deploy\staging\unsigned, the PRN
+# sample and v2.14.2's setup.exe (the Inno install the MSI must refuse to sit beside). run_sandbox_test.ps1 -Payload
+# overrides the list; semicolon-separated, because the committed recordings' names contain commas.
 # Do not run it on a developer machine: it installs to Program Files and uninstalls again.
 #
-# What it proves: on a machine that has never seen the application, with Smart App
-# Control ON, the last v2.x release installs as a user has it, and the signed installer
-# upgrades it in place - the v2.x files gone, the user's settings file kept, the v2.x
-# preferences left alone (3.1.0 starts from the defaults), the .ch10 association moved to the new exe. The installed app and the
-# portable ZIP both open their window, every PE file carries a valid signature, the
-# native core DLL loads, Code Integrity blocked nothing of ours - and an UNSIGNED build
-# of the same exe IS blocked, which is what shows the enforcement was real and not absent.
+# What it proves: on a machine that has never seen the application, with Smart App Control ON, the signed MSI installs
+# silently and every file arrives; the .ch10 association, the Start menu entry and the settings are as they should be; an
+# upgrade replaces the files and keeps an edited settings file; the older MSI over the newer is refused; the installed
+# application opens its window and processes a recording, its native core loads, and Code Integrity blocked nothing of
+# ours; an uninstall removes it and leaves the settings; the administrator's switches work; the portable ZIP runs too; and
+# an UNSIGNED build of the same exe IS blocked, which is what shows the enforcement was real and not absent.
+#
+# The interactive wizard is NOT exercised: this drives msiexec silently, as a deployment tool does.
 #
 # ASCII only, written for Windows PowerShell 5.1 (what Sandbox has).
 # =============================================================================
@@ -29,7 +31,12 @@ $lines = @()
 $fails = 0
 $started = Get-Date
 
-function Say($text) { $script:lines += $text; Write-Host $text }
+function Say($text) {
+    $script:lines += $text
+    Write-Host $text
+    # Also appended as it happens, so the host can read how far a slow step has got (results.txt is written only at the end).
+    Add-Content -Path (Join-Path $OUT 'progress.txt') -Value $text -ErrorAction SilentlyContinue
+}
 function Check($name, $ok, $detail) {
     if ($ok) { Say ("  PASS  {0}{1}" -f $name, $(if ($detail) { " - $detail" } else { '' })) }
     else     { Say ("  FAIL  {0}{1}" -f $name, $(if ($detail) { " - $detail" } else { '' })); $script:fails++ }
@@ -46,8 +53,8 @@ function Wait-Window($process, [int]$seconds) {
     return ''
 }
 function Invoke-RecordingRun($exePath, $label) {
-    # The walking skeleton end to end (plan step 3.4): the app opens the recording on its command line, processes its
-    # first PCM channel with the defaults through the native core, writes one line to TMDQ_SMOKE_REPORT and exits.
+    # The walking skeleton end to end: the app opens the recording on its command line, processes its first PCM channel
+    # with the defaults through the native core, writes one line to TMDQ_SMOKE_REPORT and exits.
     $rec = Join-Path $IN 'prn_testfile, sample.ch10'
     if (-not (Test-Path $rec)) { Check "$label processes a recording" $false 'the PRN sample is not in the payload'; return }
     $report = Join-Path $env:TEMP ('tmdq-smoke-' + [guid]::NewGuid().ToString('N') + '.txt')
@@ -64,17 +71,77 @@ function Invoke-RecordingRun($exePath, $label) {
     # The committed PRN sample's known answer: channel 13, 116 one-second windows, mean lock 93.532 %.
     Check "$label processes the PRN sample through the native core" ($done -and $sp.ExitCode -eq 0 -and $line.StartsWith('ok samples=116 mean=93.532 channel=13 ')) ("exit " + $sp.ExitCode + ": " + $line)
 }
-function Signatures($dir) {
+function Get-FileSignature($dir) {
     Get-ChildItem $dir -File | Where-Object { $_.Extension -in '.exe', '.dll' } | ForEach-Object {
         $s = Get-AuthenticodeSignature $_.FullName
         [pscustomobject]@{ Name = $_.Name; Status = [string]$s.Status
                            Signer = $(if ($s.SignerCertificate) { $s.SignerCertificate.Subject -replace '^CN=(?:"([^"]+)"|([^,]+)).*', '$1$2' } else { '-' }) }
     }
 }
+function Invoke-Msi([string[]]$ArgList, [string]$LogName) {
+    # msiexec runs elevated here (the Sandbox user is an administrator). The exit code is what a deployment tool reads.
+    $logPath = Join-Path $OUT $LogName
+    $all = @($ArgList) + @('/qn', '/norestart', '/l*v', ('"' + $logPath + '"'))
+    $p = Start-Process msiexec.exe -ArgumentList $all -PassThru
+    $null = $p.Handle
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    # A heartbeat every 20 s, so a slow step can be told from a hung one: in the Sandbox every install of the 50 MB MSI
+    # (signed or not) sat about 2 minutes verifying the package before it started, which the same package does not do
+    # on the development machine.
+    while (-not $p.WaitForExit(20000)) {
+        $size = if (Test-Path $logPath) { (Get-Item $logPath).Length } else { -1 }
+        $procs = @(Get-CimInstance Win32_Process -Filter "Name='msiexec.exe'" | ForEach-Object { '{0}:read={1}MB' -f $_.ProcessId, [int]($_.ReadTransferCount / 1MB) })
+        Say ('  ... {0}: {1:N0} s, log {2} bytes, msiexec {3}' -f $LogName, $clock.Elapsed.TotalSeconds, $size, ($procs -join ' '))
+        if ($clock.Elapsed.TotalSeconds -gt 900) { Say "  ... $LogName gave up after 900 s"; return -1 }
+    }
+    $p.WaitForExit()
+    Say ('  {0} took {1:N0} s' -f $LogName, $clock.Elapsed.TotalSeconds)
+    return $p.ExitCode
+}
+function Get-ArpEntry {
+    @(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+      ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'tmDataQualityAnalyzer*' })
+}
+function Get-MsiVersion([string]$name) { [version]($name -replace '^.*-v(\d+\.\d+\.\d+)_.*$', '$1') }
 
-Say 'tmDataQualityAnalyzer (Avalonia) clean-machine test, with the upgrade from v2.x'
+$app = 'C:\Program Files\tmDataQualityAnalyzer'
+$exe = Join-Path $app 'tmDataQualityAnalyzer.exe'
+$userFile = Join-Path $app 'settings\receiver_params\default.toml'
+$marker = '# edited by the clean-machine test'
+$startMenu = 'C:\ProgramData\Microsoft\Windows\Start Menu\Programs\tmDataQualityAnalyzer'
+$desktopLink = 'C:\Users\Public\Desktop\tmDataQualityAnalyzer.lnk'
+$progId = 'HKLM:\SOFTWARE\Classes\tmDataQualityAnalyzer.ch10'
+$prefsDir = Join-Path $env:APPDATA 'tmDataQualityAnalyzer'
+
+Say 'tmDataQualityAnalyzer clean-machine test (MSI and portable ZIP)'
 Say ('time    : ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
 Say ('windows : ' + (Get-CimInstance Win32_OperatingSystem).Caption)
+
+$msis = @(Get-ChildItem (Join-Path $IN 'tmDataQualityAnalyzer-v*_setup.msi') | Sort-Object { Get-MsiVersion $_.Name })
+$old2x = (Get-ChildItem (Join-Path $IN 'tmDataQualityAnalyzer-v2.*_setup.exe') -ErrorAction SilentlyContinue | Select-Object -First 1)
+if ($msis.Count -lt 2) {
+    Check 'the payload holds two MSI versions' $false ('found ' + $msis.Count)
+    $lines | Out-File -FilePath $LOG -Encoding ASCII
+    Write-Host 'Press Enter to close.'; [void](Read-Host); exit 1
+}
+# Windows reads a package several times (its signature check, its cached copy, its cabinet) and the mapped folder is slow
+# to read, so the packages are copied to the local disk once and installed from there.
+$LOCAL = 'C:\tmdqa-local'
+New-Item -ItemType Directory -Force -Path $LOCAL | Out-Null
+function Copy-Local($file) {
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $dest = Join-Path $LOCAL $file.Name
+    Copy-Item $file.FullName $dest -Force
+    Say ('  copied {0} to the local disk in {1:N0} s' -f $file.Name, $clock.Elapsed.TotalSeconds)
+    return (Get-Item $dest)
+}
+$first = Copy-Local $msis[0]; $second = Copy-Local $msis[$msis.Count - 1]
+if ($old2x) { $old2x = Copy-Local $old2x }
+$v1 = Get-MsiVersion $first.Name; $v2 = Get-MsiVersion $second.Name
+Say ("release MSI: {0}  newer MSI (for the upgrade): {1}" -f $first.Name, $second.Name)
+Check 'the two MSIs are different versions' ($v1 -lt $v2) "$v1 and $v2"
+$relSig = Get-AuthenticodeSignature $first.FullName
+Check 'the release MSI is signed' ($relSig.Status -eq 'Valid') ([string]$relSig.Status)
 
 # --- 0. The machine: Smart App Control must be ON, or nothing below says anything about it. ---
 Say ''
@@ -103,93 +170,78 @@ try {
 }
 Check 'Smart App Control blocks unsigned code here' $blocked $how
 
-$app = 'C:\Program Files\tmDataQualityAnalyzer'
-$exe = Join-Path $app 'tmDataQualityAnalyzer.exe'
-$userFile = Join-Path $app 'settings\receiver_params\default.toml'
-$marker = '# edited by the clean-machine test'
-$prefsDir = Join-Path $env:APPDATA 'tmDataQualityAnalyzer'
-function Install($path, $label) {
-    $ip = Start-Process $path -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS' -PassThru
-    $null = $ip.Handle
-    $ip.WaitForExit(300000) | Out-Null
-    $ip.WaitForExit()
-    Check "$label exit code 0" ($ip.ExitCode -eq 0) ('exit=' + $ip.ExitCode)
+# --- 2. An Inno Setup install must make the MSI refuse, and say so. ---
+Say ''
+Say '[2] The MSI refuses to install beside an Inno Setup install'
+if (-not $old2x) {
+    Check 'the v2.x setup is in the payload' $false 'pass deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe'
+} else {
+    $ip = Start-Process $old2x.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS' -PassThru
+    $null = $ip.Handle; $ip.WaitForExit(300000) | Out-Null; $ip.WaitForExit()
+    Check 'v2.x installed (Inno)' ($ip.ExitCode -eq 0) ('exit=' + $ip.ExitCode)
+    $code = Invoke-Msi @('/i', ('"' + $first.FullName + '"')) 'refused.log'
+    Check 'the MSI stopped (a launch condition: exit 1603)' ($code -eq 1603) ('exit=' + $code)
+    $why = if (Test-Path (Join-Path $OUT 'refused.log')) { (Select-String -Path (Join-Path $OUT 'refused.log') -Pattern 'earlier tmDataQualityAnalyzer' -SimpleMatch -ErrorAction SilentlyContinue | Select-Object -First 1) } else { $null }
+    Check 'the log carries the message that says what to do' ([bool]$why) ''
+    Check 'the MSI installed nothing' (-not (Test-Path (Join-Path $app 'tmdq_core.dll'))) ''
+    $unins = Get-ChildItem $app -Filter 'unins*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($unins) {
+        $up = Start-Process $unins.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -PassThru
+        $null = $up.Handle; $up.WaitForExit(300000) | Out-Null; $up.WaitForExit()
+        Start-Sleep -Seconds 3
+    }
+    Check 'v2.x uninstalled' (-not (Test-Path (Join-Path $app 'bin\tmDataQualityAnalyzer.exe'))) ''
+    Remove-Item $app -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# --- 2. v2.x, installed as a user has it: v2.14.2 with its default tasks (the .ch10 association and the
-# full manual), a settings file the user edited, and the preferences it keeps in its INI file. ---
+# --- 3. A fresh silent install. ---
 Say ''
-Say '[2] Install v2.x as a user has it'
-$old = (Get-ChildItem (Join-Path $IN 'tmDataQualityAnalyzer-v2.*_setup.exe') | Select-Object -First 1).FullName
-if (-not $old) { Check 'the v2.x setup is in the payload' $false 'pass deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe' }
-else {
-    Say ('  setup: ' + (Split-Path $old -Leaf))
-    Install $old 'v2.x installer'
-    Check 'v2.x installed its exe in bin\' (Test-Path (Join-Path $app 'bin\tmDataQualityAnalyzer.exe')) ''
-    Check 'v2.x installed its text guide' (Test-Path (Join-Path $app 'UserGuide.txt')) ''
-    Check 'v2.x installed its full manual' (Test-Path (Join-Path $app 'UserManual.html')) ''
-    if (Test-Path $userFile) { Add-Content -Path $userFile -Value $marker }
-    Check 'the user''s edit is in a v2.x settings file' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
-    # What v2.x keeps, in an INI file. v3.1.0 does not
-    # read it, so it must be left as it is.
-    New-Item -ItemType Directory -Force -Path $prefsDir | Out-Null
-    "[General]`r`nTheme=light`r`nLegendVisible=false`r`n" | Out-File -FilePath (Join-Path $prefsDir 'tmDataQualityAnalyzer.ini') -Encoding ASCII
-}
-
-# --- 3. The upgrade: v3.x over v2.x, silent and per-machine. ---
-Say ''
-Say '[3] Upgrade to this version'
-$setup = (Get-ChildItem (Join-Path $IN 'tmDataQualityAnalyzer-v*_setup.exe') | Where-Object { $_.Name -notlike 'tmDataQualityAnalyzer-v2.*' } | Select-Object -First 1).FullName
-Say ('  setup: ' + (Split-Path $setup -Leaf))
-Check 'setup signed' ((Get-AuthenticodeSignature $setup).Status -eq 'Valid') (Get-AuthenticodeSignature $setup).Status
-Install $setup 'installer'
-foreach ($f in 'tmDataQualityAnalyzer.exe', 'tmdq_core.dll', 'libSkiaSharp.dll', 'libHarfBuzzSharp.dll', 'av_libglesv2.dll', 'LICENSE.txt', 'THIRD-PARTY-NOTICES.txt') {
+Say '[3] Fresh silent install of the release MSI'
+$code = Invoke-Msi @('/i', ('"' + $first.FullName + '"')) 'install1.log'
+Check 'msiexec exit code 0' ($code -eq 0) ('exit=' + $code)
+foreach ($f in 'tmDataQualityAnalyzer.exe', 'tmdq_core.dll', 'libSkiaSharp.dll', 'libHarfBuzzSharp.dll', 'av_libglesv2.dll', 'LICENSE.txt', 'THIRD-PARTY-NOTICES.txt', 'RELEASENOTES.txt', 'UserManual.html', 'MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll') {
     Check "installed $f" (Test-Path (Join-Path $app $f)) ''
 }
-Check 'v2.x''s bin\ folder is gone' (-not (Test-Path (Join-Path $app 'bin'))) ''
-Check 'v2.x''s text guide is gone' (-not (Test-Path (Join-Path $app 'UserGuide.txt'))) ''
-$manualFile = Join-Path $app 'UserManual.html'
-Check 'the full manual (a task v2.x had chosen) is this version''s' ((Test-Path $manualFile) -and ((Get-Content $manualFile -Raw) -match 'Help .{1,3} User Manual') -and ((Get-Content $manualFile -Raw) -notmatch 'Version 2\.')) ''
-Check 'the user''s edited settings file survived the upgrade' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
-$command = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\tmDataQualityAnalyzer.ch10\shell\open\command' -ErrorAction SilentlyContinue).'(default)'
-Check '.ch10 opens the new exe' ($command -eq ('"' + $exe + '" "%1"')) ([string]$command)
-$ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
-Check '.ch10 still names the ProgID' ($ext -eq 'tmDataQualityAnalyzer.ch10') ([string]$ext)
-$entries = @(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
-             ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'tmDataQualityAnalyzer*' })
-Check 'one entry in Installed apps, not two' ($entries.Count -eq 1) (($entries | ForEach-Object { $_.DisplayName + ' ' + $_.DisplayVersion }) -join '; ')
-# Compared as version numbers: the setup's ProductVersion string carries padding (seen: '2.14.2' followed by blanks),
-# which a text comparison with the exe's '2.14.2.0' calls a mismatch.
-$want = ((Get-Item $setup).VersionInfo.ProductVersion -replace '[^0-9.]', '').Trim('.')
-if (Test-Path $exe) {
-    $have = ((Get-Item $exe).VersionInfo.FileVersion -replace '[^0-9.]', '').Trim('.')
-    $same = $false
-    try { $a = [version]$want; $b = [version]$have; $same = ($a.Major -eq $b.Major -and $a.Minor -eq $b.Minor -and $a.Build -eq $b.Build) } catch { $same = $false }
-    Check 'exe version matches the setup' $same ($have + ' vs ' + $want)
-}
-foreach ($f in 'MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll') {
-    Check "installed $f (the native core's C++ runtime)" (Test-Path (Join-Path $app $f)) ''
-}
-# The settings files (US8.0): installed, and never overwritten by an upgrade or a reinstall. The user's edit is the line
-# appended under v2.x; a second silent install must leave it there too.
 foreach ($f in 'framesync_patterns\framesync_rcvr_default.toml', 'framesync_patterns\framesync_PRN15.toml', 'receiver_params\default.toml', 'rcvr_cals\default.toml') {
     Check "installed settings\$f" (Test-Path (Join-Path $app "settings\$f")) ''
 }
-if (Test-Path $userFile) {
-    $again = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS' -PassThru
-    $null = $again.Handle
-    $again.WaitForExit(300000) | Out-Null
-    Check 'a reinstall keeps an edited settings file' ((Get-Content $userFile -Raw) -match [regex]::Escape($marker)) ''
-}
+$entries = @(Get-ArpEntry)
+Check 'one entry in Installed apps' ($entries.Count -eq 1) (($entries | ForEach-Object { $_.DisplayName + ' ' + $_.DisplayVersion }) -join '; ')
+if ($entries.Count -eq 1) { Check 'its version is the MSI''s' ([version]$entries[0].DisplayVersion -eq $v1) ([string]$entries[0].DisplayVersion) }
+$ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
+Check '.ch10 names the ProgID' ($ext -eq 'tmDataQualityAnalyzer.ch10') ([string]$ext)
+$command = (Get-ItemProperty (Join-Path $progId 'shell\open\command') -ErrorAction SilentlyContinue).'(default)'
+Check '.ch10 opens the installed exe' ($command -eq ('"' + $exe + '" "%1"')) ([string]$command)
+Check 'a Start menu shortcut' (Test-Path (Join-Path $startMenu 'tmDataQualityAnalyzer.lnk')) ''
+Check 'no desktop shortcut by default' (-not (Test-Path $desktopLink)) ''
 Say '  signatures:'
-$sigs = @(Signatures $app)
+$sigs = @(Get-FileSignature $app)
 foreach ($s in $sigs) { Say ('    {0,-10} {1,-28} {2}' -f $s.Status, $s.Signer, $s.Name) }
 Check 'every PE file validly signed' ((@($sigs | Where-Object { $_.Status -ne 'Valid' })).Count -eq 0) ("$($sigs.Count) files")
+if (Test-Path $userFile) { Add-Content -Path $userFile -Value $marker }
+Check 'the user edit is in a settings file' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
 
-# --- 4. The installed app runs under Smart App Control; its first run starts from the default preferences and leaves the
-# v2.x's INI file alone. ---
+# --- 4. Upgrade, then a downgrade the MSI must refuse. ---
 Say ''
-Say '[4] Launch the installed app'
+Say '[4] Upgrade to the newer MSI'
+$code = Invoke-Msi @('/i', ('"' + $second.FullName + '"')) 'upgrade.log'
+Check 'msiexec exit code 0' ($code -eq 0) ('exit=' + $code)
+$entries = @(Get-ArpEntry)
+Check 'still one entry in Installed apps' ($entries.Count -eq 1) (($entries | ForEach-Object { $_.DisplayName + ' ' + $_.DisplayVersion }) -join '; ')
+if ($entries.Count -eq 1) { Check 'its version is the newer MSI''s' ([version]$entries[0].DisplayVersion -eq $v2) ([string]$entries[0].DisplayVersion) }
+Check 'the exe is still installed' (Test-Path $exe) ''
+Check 'the edited settings file survived the upgrade' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
+Check 'the Start menu shortcut is still there' (Test-Path (Join-Path $startMenu 'tmDataQualityAnalyzer.lnk')) ''
+$ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
+Check '.ch10 still names the ProgID' ($ext -eq 'tmDataQualityAnalyzer.ch10') ([string]$ext)
+$code = Invoke-Msi @('/i', ('"' + $first.FullName + '"')) 'downgrade.log'
+Check 'installing the older MSI over the newer one is refused' ($code -ne 0) ('exit=' + $code)
+$entries = @(Get-ArpEntry)
+if ($entries.Count -eq 1) { Check 'the newer version is still installed' ([version]$entries[0].DisplayVersion -eq $v2) ([string]$entries[0].DisplayVersion) }
+
+# --- 5. The installed app runs under Smart App Control; its first run starts from the default preferences. ---
+Say ''
+Say '[5] Launch the installed app'
 $ap = Start-Process $exe -PassThru
 $null = $ap.Handle
 $title = Wait-Window $ap 30
@@ -204,13 +256,11 @@ if ($live) {
 $prefs = Join-Path $prefsDir 'preferences.json'
 $json = if (Test-Path $prefs) { Get-Content $prefs -Raw } else { '' }
 Check 'the first run wrote the default preferences' (($json -match '"[Tt]heme"\s*:\s*"dark"') -and ($json -match '"[Ll]egendVisible"\s*:\s*true')) $(if ($json) { ($json -replace '\s+', ' ') } else { 'no preferences.json' })
-$ini = Join-Path $prefsDir 'tmDataQualityAnalyzer.ini'
-Check 'v2.x''s INI file was left as it was' ((Test-Path $ini) -and ((Get-Content $ini -Raw) -match 'Theme=light')) ''
 Invoke-RecordingRun $exe 'the installed app'
 
-# --- 5. The native core DLL loads and answers, on its own. ---
+# --- 6. The native core DLL loads and answers, on its own. ---
 Say ''
-Say '[5] Load tmdq_core.dll'
+Say '[6] Load tmdq_core.dll'
 # LOAD_WITH_ALTERED_SEARCH_PATH: the DLL's own folder is searched for ITS dependencies (the VC++ runtime beside it),
 # as it is for the app, which sits in that folder, and for .NET's NativeLibrary.Load. A plain LoadLibrary from this
 # PowerShell searches beside powershell.exe instead, and failed with error 126 although the runtime was installed.
@@ -219,6 +269,8 @@ Add-Type -Namespace TmdqProbe -Name Native -MemberDefinition @'
 public static extern System.IntPtr LoadLibraryExW(string path, System.IntPtr file, uint flags);
 [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Ansi, SetLastError = true)]
 public static extern System.IntPtr GetProcAddress(System.IntPtr module, string name);
+[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+public static extern bool FreeLibrary(System.IntPtr module);
 [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.Cdecl)]
 public delegate int IntFn();
 '@
@@ -230,11 +282,43 @@ if ($h -ne [IntPtr]::Zero) {
     $fn = [TmdqProbe.Native]::GetProcAddress($h, 'tmdq_abi_version')
     $abi = if ($fn -ne [IntPtr]::Zero) { [System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($fn, [TmdqProbe.Native+IntFn]).Invoke() } else { -1 }
     Check 'tmdq_abi_version() answers' ($abi -gt 0) ('ABI version ' + $abi)
+    # Let go of it. This process would otherwise hold the installed DLL when the MSI is uninstalled: Windows Installer's
+    # Restart Manager then shuts down the process that holds a file (it did: this very script, which never wrote its results).
+    [void][TmdqProbe.Native]::FreeLibrary($h)
 }
 
-# --- 6. The portable ZIP, extracted somewhere new, also runs. ---
+# --- 7. Uninstall. ---
 Say ''
-Say '[6] Portable ZIP'
+Say '[7] Silent uninstall'
+$code = Invoke-Msi @('/x', ('"' + $second.FullName + '"')) 'uninstall.log'
+Check 'msiexec exit code 0' ($code -eq 0) ('exit=' + $code)
+Check 'the exe is removed' (-not (Test-Path $exe)) ''
+Check 'the native core is removed' (-not (Test-Path (Join-Path $app 'tmdq_core.dll'))) ''
+Check 'the settings are left for the user, edit included' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
+$left = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
+Check '.ch10 association cleared' ([string]::IsNullOrEmpty($left)) $(if ($left) { "still '$left'" } else { '' })
+Check 'ProgID key removed' (-not (Test-Path $progId)) ''
+Check 'no entry left in Installed apps' (@(Get-ArpEntry).Count -eq 0) ''
+Check 'the Start menu folder is removed' (-not (Test-Path $startMenu)) ''
+
+# --- 8. The switches an administrator uses. ---
+Say ''
+Say '[8] Silent install with ASSOCIATE_CH10=0 FULLMANUAL=0 DESKTOPSHORTCUT=1'
+$code = Invoke-Msi @('/i', ('"' + $second.FullName + '"'), 'ASSOCIATE_CH10=0', 'FULLMANUAL=0', 'DESKTOPSHORTCUT=1') 'switches.log'
+Check 'msiexec exit code 0' ($code -eq 0) ('exit=' + $code)
+Check 'the exe is installed' (Test-Path $exe) ''
+Check 'no .ch10 association' (-not (Test-Path $progId)) ''
+Check 'no full manual' (-not (Test-Path (Join-Path $app 'UserManual.html'))) ''
+Check 'a desktop shortcut' (Test-Path $desktopLink) ''
+Check 'the edited settings file is still there (never overwritten)' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
+$code = Invoke-Msi @('/x', ('"' + $second.FullName + '"')) 'uninstall2.log'
+Check 'uninstall exit code 0' ($code -eq 0) ('exit=' + $code)
+Check 'the desktop shortcut is removed' (-not (Test-Path $desktopLink)) ''
+Check 'no entry left in Installed apps' (@(Get-ArpEntry).Count -eq 0) ''
+
+# --- 9. The portable ZIP, extracted somewhere new, also runs. ---
+Say ''
+Say '[9] Portable ZIP'
 $zip = (Get-ChildItem (Join-Path $IN '*_portable.zip') | Select-Object -First 1).FullName
 $pdir = Join-Path $env:USERPROFILE 'Desktop\portable'
 Expand-Archive -Path $zip -DestinationPath $pdir -Force
@@ -251,36 +335,15 @@ if ($pexe) {
     Invoke-RecordingRun $pexe 'the portable app'
 }
 
-# --- 7. What Code Integrity blocked while this ran. ---
+# --- 10. What Code Integrity blocked while this ran. ---
 Say ''
-Say '[7] Code Integrity events since the test began'
+Say '[10] Code Integrity events since the test began'
 $events = @(Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-CodeIntegrity/Operational'; StartTime = $started } -ErrorAction SilentlyContinue |
             Where-Object { $_.Id -in 3033, 3034, 3077, 3089 })
 $ours = @($events | Where-Object { $_.Message -match 'tmDataQualityAnalyzer|tmdq_core|libSkiaSharp|libHarfBuzzSharp|av_libglesv2' })
 foreach ($e in $ours | Select-Object -First 12) { Say ('  event ' + $e.Id + ': ' + (($e.Message -split "`n")[0]).Trim()) }
 $blockedOurs = @($ours | Where-Object { $_.Message -notmatch 'tmdq-unsigned' -and $_.Id -in 3033, 3077 })
 Check 'nothing of the signed packages was blocked' ($blockedOurs.Count -eq 0) $(if ($blockedOurs.Count) { "$($blockedOurs.Count) block event(s)" } else { "$($ours.Count) event(s) about our files, all for the unsigned control or informational" })
-
-# --- 8. Uninstall. ---
-Say ''
-Say '[8] Uninstall'
-$unins = Get-ChildItem $app -Filter 'unins*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($unins) {
-    Check 'uninstaller signed' ((Get-AuthenticodeSignature $unins.FullName).Status -eq 'Valid') (Get-AuthenticodeSignature $unins.FullName).Status
-    $up = Start-Process $unins.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -PassThru
-    $null = $up.Handle
-    $up.WaitForExit(300000) | Out-Null
-    Start-Sleep -Seconds 5
-    Check 'application removed' (-not (Test-Path $exe)) ''
-    Check 'settings left for the user' (Test-Path $userFile) ''
-    # uninsdeletevalue on .ch10 and uninsdeletekey on the ProgID, as v2.x: the empty .ch10 key is left on purpose.
-    $left = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
-    Check '.ch10 association cleared' ([string]::IsNullOrEmpty($left)) $(if ($left) { "still '$left'" } else { '' })
-    Check 'ProgID key removed' (-not (Test-Path 'HKLM:\SOFTWARE\Classes\tmDataQualityAnalyzer.ch10')) ''
-    Check 'no entry left in Installed apps' (@(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall' | ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'tmDataQualityAnalyzer*' }).Count -eq 0) ''
-} else {
-    Check 'uninstaller found' $false 'no unins*.exe'
-}
 
 Say ''
 Say ('RESULT: ' + $(if ($fails -eq 0) { 'ALL CHECKS PASSED' } else { "$fails CHECK(S) FAILED" }))

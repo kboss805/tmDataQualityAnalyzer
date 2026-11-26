@@ -2,11 +2,11 @@
 name: cut-release
 description: >-
   Cut a new versioned release of tmDataQualityAnalyzer — bump the version, update the release notes
-  and history, and build the signed installer + portable ZIP. Use this WHENEVER the user wants to
+  and history, and build the signed MSI + portable ZIP. Use this WHENEVER the user wants to
   "cut a release", "bump the version", "do a v3.x release", "build the installer", "ship a new
   version", or "update the release notes for the next version". The version is single-sourced in one
   struct and propagated by the build, the release notes live in two separate places with different
-  audiences, and packaging runs a specific signing/Inno-Setup script — doing any of these by hand and
+  audiences, and packaging runs a specific signing/WiX script — doing any of these by hand and
   out of order produces a mismatched or unsigned build. This skill encodes the exact, ordered process.
 ---
 
@@ -38,7 +38,7 @@ struct AppVersion {
 
 Do **not** add a version literal anywhere else. `eng/AppVersion.props` reads these three
 constants for every .NET project (never type a version in a `.csproj`), `build_package.ps1` reads
-them for the package names and passes them to Inno Setup, and the manual build stamps them into the
+them for the package names and passes them to `build_msi.ps1` (an MSI version is numeric, X.Y.Z), and the manual build stamps them into the
 manuals. If you find a hardcoded version string elsewhere, that's a bug to remove, not a place
 to update. (Test fixtures written BY a version, such as the v2.14.2 templates, keep theirs: they record
 who wrote them.)
@@ -166,17 +166,20 @@ C runtime, which is what a Debug core looks like; checked again on the staged co
 (UTF-8 code page) → staging (settings, the VC++ runtime the DLL imports, the licence, the generated
 `THIRD-PARTY-NOTICES.txt`) → signing **our two binaries only** (the exe and `tmdq_core.dll`; it refuses to
 sign anything else it finds unsigned) → verifying every PE file's signature → a smoke run of the staged
-app on the PRN sample → the portable ZIP and the Inno installer (`deploy\tmDataQualityAnalyzer.iss`,
-also signed). It reads the version from `constants.h`, so there is no version argument.
+app on the PRN sample → the portable ZIP and the MSI (`deploy\tmDataQualityAnalyzer.wxs`, built by
+`deploy\build_msi.ps1` and signed). It reads the version from `constants.h`, so there is no version argument.
 
 - **Signing:** uses the cert SHA-1 in `$env:SIGN_CERT_SHA1` (falls back to the bundled Certum OSS
   thumbprint). To build unsigned, pass `-SignCertSha1 ''`. Any signing failure is a listed problem and
   a non-zero exit.
-- **The installer replaces a v2.x install** (the v2.x installer's AppId and folder): it deletes v2.x's
-  `bin\`, `UserGuide.txt` and the old `UserManual.html`, keeps `settings\`, and moves the `.ch10`
-  association. The window preferences start from the defaults: v3.0.x imported v2.x's INI file on its first run, and
-  3.1.0 dropped that import, so the INI file is left unread.
-- **Inno Setup:** if `iscc` isn't found no installer is produced, and the run says so and fails.
+- **The MSI is per-machine only** (a user without admin rights takes the portable ZIP). It does **not** upgrade a copy
+  that an Inno Setup installer put there (every release before the MSI): it refuses, says to uninstall that one first
+  (Settings, Apps), and the settings and preferences are kept. Say so in the release notes of the first MSI release. An
+  MSI over an older MSI is an upgrade that keeps `settings\` (never overwritten, never removed); the older MSI over a
+  newer one is refused. An administrator's switches are public properties (`ASSOCIATE_CH10=0`, `FULLMANUAL=0`,
+  `DESKTOPSHORTCUT=1`, `INSTALLFOLDER=...`): they are in the header of the `.wxs` and in `docs/guide.md`.
+- **WiX:** a repo-local dotnet tool pinned in `dotnet-tools.json` (6.0.2), with its UI extension fetched into the
+  gitignored `.wix\` cache the first time. A failed restore or extension fetch fails the MSI step, which the run lists.
 - Antivirus can briefly lock freshly-built exes; the ZIP step already retries — don't panic on a
   transient "file in use".
 
@@ -185,7 +188,7 @@ also signed). It reads the version from `constants.h`, so there is no version ar
 The script prints the final paths. Expect, in `deploy/`:
 
 - `tmDataQualityAnalyzer-vX.Y.Z_portable.zip`
-- `tmDataQualityAnalyzer-vX.Y.Z_setup.exe`
+- `tmDataQualityAnalyzer-vX.Y.Z_setup.msi`
 
 **Verify by hand — do NOT trust the script's summary.** It once printed "Build and packaging
 complete!" and listed an installer path that was never written, exiting 0, while signing had failed
@@ -196,16 +199,18 @@ check independently:
 foreach ($t in @('deploy\staging\app\tmDataQualityAnalyzer.exe',
                  'deploy\staging\app\tmdq_core.dll',
                  "deploy\staging\tmDataQualityAnalyzer-v$v`_portable\tmDataQualityAnalyzer.exe",
-                 "deploy\tmDataQualityAnalyzer-v$v`_setup.exe")) {
+                 "deploy\tmDataQualityAnalyzer-v$v`_setup.msi")) {
   '{0,-8} {1}' -f (Get-AuthenticodeSignature $t).Status, (Get-Item $t).VersionInfo.FileVersion
 }
 ```
 
-An Inno `setup.exe` carries its version in `ProductVersion`, not `FileVersion`.
+An MSI has no file-version resource, so its line shows a signature status and no version: its version is in its name
+and in its ProductVersion property (the Installed apps entry shows it after an install, which the Sandbox test in the next
+step reads and compares).
 
 Then **extract the exe from the portable ZIP and check that too**. Signing runs BEFORE the ZIP and
-the installer compile, so a failed signing still produces a ZIP — containing an unsigned exe — while
-no installer exists at all. **The ZIP existing is not evidence the release is good**; that asymmetry
+the MSI build, so a failed signing still produces a ZIP — containing an unsigned exe — while
+no MSI exists at all. **The ZIP existing is not evidence the release is good**; that asymmetry
 is how v2.8.0 nearly shipped unsigned.
 
 Expect `Status = Valid` and the new version on every one. Report the paths, sizes and signature
@@ -220,35 +225,42 @@ and v2.13.1 could not make it: that needed "a genuinely clean Windows target; Wi
 Home offers neither Sandbox nor Hyper-V."
 
 On Windows Pro/Enterprise with the **Windows Sandbox** feature enabled. The payload the verifier reads defaults to the
-portable ZIP beside the setup, `deploy\staging\unsigned`, the committed PRN sample and v2.14.2's setup (the
-main checkout's `deploy\` when this is a worktree); `-Payload` overrides it, separated by semicolons because the
-recordings' names contain commas:
+portable ZIP beside the MSI, `deploy\staging\unsigned`, the committed PRN sample, v2.14.2's setup (the
+main checkout's `deploy\` when this is a worktree) and a NEWER MSI of the same product, which the runner builds
+itself (unsigned, the next patch version, from the staged files) for the upgrade; `-Payload` overrides it,
+separated by semicolons because the recordings' names contain commas:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 -Setup "deploy\tmDataQualityAnalyzer-v$v`_setup.exe"
+powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 -Setup "deploy\tmDataQualityAnalyzer-v$v`_setup.msi"
 ```
 
 It generates the `.wsb` (absolute host paths, which is why it is generated rather than committed),
 launches a disposable VM that has never seen this application, and prints the results back here.
-Exits non-zero on failure. `deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe` is the last v2.x release
-(the GitHub release's asset, if it is not on disk).
+Exits non-zero on failure. It takes **15 to 20 minutes**: in the Sandbox every `msiexec /i` of the 50 MB MSI spends
+about two minutes before it starts (the same package does not, on a development machine), and the test installs
+it five times; `progress.txt` beside `results.txt` (under `deploy\sandbox\.work\out`) says how far it has got.
+`deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe` is the last v2.x release (the GitHub release's asset, if it is
+not on disk): the MSI's refusal to install beside an Inno install needs a real one.
 
 What it establishes that nothing else can:
 
 - **Smart App Control** is on, and **an unsigned build of the same exe is blocked**: without that
   negative control a pass proves nothing about the signatures.
-- **The upgrade from v2.x:** v2.14.2 installed with its default tasks, a settings file edited and the
-  v2.x INI written, then this setup over it: v2.x's `bin\` and text guide gone, the full manual this
-  version's, the edited settings file kept, `.ch10` opening the new exe, one entry in Installed apps,
-  and the first run starting from the default preferences with the v2.x INI left as it was.
+- **The refusal beside an Inno install:** v2.14.2 installed, the MSI stops with exit 1603 and the message that says to
+  uninstall that one first, and installs nothing.
+- **Install, upgrade, uninstall:** every file arrives, one entry in Installed apps at the MSI's version, `.ch10`
+  opening the installed exe, a Start menu entry and no desktop shortcut; the newer MSI over it replaces the version and
+  keeps an edited settings file; the older MSI over the newer is refused; an uninstall removes the program and the
+  association and leaves `settings\`, the edit included.
+- **The switches:** `ASSOCIATE_CH10=0 FULLMANUAL=0 DESKTOPSHORTCUT=1` give no association, no full manual and a
+  desktop shortcut.
 - **The DLL closure:** the installed app and the portable ZIP open their windows and process the PRN
   sample end to end; `tmdq_core.dll` loads with the VC++ runtime beside it; every PE file verifies.
-- **Uninstall**: program files and the ProgID go, `settings\` stays (`uninsneveruninstall`,
-  US8.0), the `.ch10` value is cleared while its now-empty key is left behind on purpose.
 
-**Two US8.0 criteria the Sandbox cannot check** (it installs silently and elevated): on the release
-build, a user **without admin rights** installs to a directory of their choosing ("Install for me
-only"), and the installer **shows its progress**. Ask the user to run the setup by hand for these.
+**What the Sandbox cannot check** (it drives `msiexec` silently and elevated): the **interactive wizard**, and
+**US8.0's criteria about the installer** (see the note in `docs/guide.md`: the MSI is per-machine only, so "Install for me
+only" is the portable ZIP's). Ask the user to click through the wizard once on the release build: the folder, the
+feature list, the progress and the finish page's launch box.
 
 **A red result is not automatically a product defect.** The first run of this harness
 reported three failures and every one was the harness: a Windows system DLL caught by a
@@ -256,14 +268,15 @@ loose name filter, a registry KEY checked where the VALUE is the contract, and a
 a setting that landed after the build under test. Confirm the check before chasing the code.
 
 **Do not force-kill the Sandbox window.** It leaves the container half torn down and the
-next launch fails silently with no error; close it normally. The launcher refuses to start
+next launch fails silently with no error; close it normally, then **wait until `WindowsSandboxServer` has
+gone** (a few seconds: the process of the closed window outlives it). The launcher refuses to start
 while one is running, for that reason.
 
 ## Step 10 - Commit / tag (only if asked)
 
 Don't commit, tag, or push unless the user asks. When they do: commit the `constants.h` + notes
 changes together with a `feat: release vX.Y.Z` style message, and tag `vX.Y.Z` (annotated) to match the
-existing tag convention. The GitHub release is titled `vX.Y.Z`, carries the setup.exe, the portable
+existing tag convention. The GitHub release is titled `vX.Y.Z`, carries the setup.msi, the portable
 ZIP and the symbols ZIP (`tmDataQualityAnalyzer-vX.Y.Z_symbols.zip`, which `build_package.ps1` makes: not shipped
 to users, but the only thing that turns a crash report's frames, or a dump, of that version into source lines, so
 attach it every time), and its body is the top section of `RELEASENOTES.txt`. Publishing it is outward-facing:
@@ -271,7 +284,7 @@ confirm with the user first. The release artifacts are build outputs and are not
 
 ## Guardrails
 
-- One version source (`constants.h`). Never type a version into a `.csproj`, the Inno script or a manual:
-  `eng/AppVersion.props`, the package script (Inno's `MyAppVersion`) and `eng\build_manual.ps1` derive it.
+- One version source (`constants.h`). Never type a version into a `.csproj`, the WiX source or a manual:
+  `eng/AppVersion.props`, the package script (which hands it to `build_msi.ps1`) and `eng\build_manual.ps1` derive it.
 - Two notes files, two audiences: `docs/changelog.md` = developer; `RELEASENOTES.txt` = end user.
 - A release must come from a green, zero-warning, full-suite-passing build.

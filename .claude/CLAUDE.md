@@ -83,15 +83,20 @@ themselves). Use the **PowerShell** tool.
   deploy\build_package.ps1 [-SignCertSha1 '']` publishes **single-file** and **ReadyToRun** (every managed assembly
   inside our exe, precompiled: half the start-up time, so the certificate signs only our own code: the exe and `tmdq_core.dll`; it refuses to sign any other
   unsigned file), adds the VC++ runtime DLLs `tmdq_core.dll` imports, generates `THIRD-PARTY-NOTICES.txt`
-  (`eng\gen_third_party_notices.ps1`, from the publish's deps file), and builds the portable ZIP and the Inno
-  installer (`deploy\tmDataQualityAnalyzer.iss`: v2.x's AppId and folder, so it upgrades a v2.x
-  install in place, deleting its `bin\`, keeping `settings\`, and taking the `.ch10` association). It runs
+  (`eng\gen_third_party_notices.ps1`, from the publish's deps file), and builds the portable ZIP and the **MSI**
+  (`deploy\tmDataQualityAnalyzer.wxs`, built by `deploy\build_msi.ps1` with WiX 6.0.2, a repo-local dotnet tool
+  pinned in `dotnet-tools.json`: **per-machine only**, silent switches `ASSOCIATE_CH10=0` `FULLMANUAL=0`
+  `DESKTOPSHORTCUT=1`, `settings\` never overwritten or removed, and it **refuses to install beside an Inno Setup install**
+  (every release before the MSI used one: no upgrade path, by the user's choice). The package script's release gate
+  refuses while `docs/changelog.md` has an Unreleased section, so a build for testing is staged by hand). It runs
   `check_release_consistency.ps1 -ReleaseMode` first. **Unlock SimplySign first.** Clean-machine test under Smart App
-  Control, which installs v2.14.2 and upgrades it: `deploy\sandbox\run_sandbox_test.ps1 [-Setup <setup.exe>]`, which
-  tests the newest setup in `deploy\` with the payload it needs by default (the portable ZIP beside it,
-  `staging\unsigned`, the PRN sample, and v2.14.2's setup from `deploy\` of this checkout or the main one: it is its
-  GitHub release's asset; `-Payload` overrides the list, separated by semicolons because recording names contain
-  commas) (an unsigned build must be BLOCKED, or the pass means nothing). The UTF-8 manifest is merged into every SDK host (`apphost`,
+  Control: `deploy\sandbox\run_sandbox_test.ps1 [-Setup <setup.msi>]`, which tests the newest MSI in `deploy\` (15 to 20
+  minutes: each install of it waits about 2 minutes in the Sandbox) with the payload it needs by default (the portable ZIP
+  beside it, `staging\unsigned`, the PRN sample, v2.14.2's setup from `deploy\` of this checkout or the main one: it is its
+  GitHub release's asset, and the MSI's refusal needs a real Inno install; and a newer MSI the runner builds for the upgrade;
+  `-Payload` overrides the list, separated by semicolons because recording names contain commas) (an unsigned build must
+  be BLOCKED, or the pass means nothing). After closing the Sandbox window wait for `WindowsSandboxServer` to exit before
+  running it again. The UTF-8 manifest is merged into every SDK host (`apphost`,
   `singlefilehost`, `apphost_publish`): patching `bin\` misses a single-file publish.
 - **Mutation check (every behaviour change):** `powershell -ExecutionPolicy Bypass -File eng\mutate.ps1 -List <mutants.json>
   [-Only <id>,...] [-Parts 2 -Part <k>] [-Out <file>]`. For each exact-text mutant in a JSON list it applies the

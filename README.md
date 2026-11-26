@@ -93,18 +93,19 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 ### Deployment
 
-- **Installer & Portable Distribution**: A signed Inno Setup installer with admin/non-admin support that upgrades a v2.x install in place (settings files kept; the window preferences start from the defaults), a portable ZIP that keeps its preferences beside itself, and an optional `.ch10` file association
+- **Installer & Portable Distribution**: A signed per-machine MSI for managed deployment (Group Policy, SCCM, Intune: silent switches for the optional `.ch10` file association, the full manual and a desktop shortcut; settings files kept on upgrade and uninstall), and a portable ZIP that keeps its preferences beside itself, for users without admin rights
 
 ## System Requirements
 
-- **Running it:** Windows 10 (1809) or later, x64. The installer and the portable ZIP carry everything the application
+- **Running it:** Windows 10 (1809) or later, x64. The MSI and the portable ZIP carry everything the application
   needs; nothing else is installed first.
 - **Building it:**
   - **.NET 10 SDK** - the application (`src/TmDq.App`, Avalonia 12) and the C# library over the native core
     (`src/TmDq.Core`).
   - **MSVC 2022** (Visual Studio 2022 C++ Build Tools, workload "Desktop development with C++", with the Windows SDK) -
     the native core, `tmdq_core.dll` (`src/core`, C++20, MSBuild).
-  - **Inno Setup 6** - only for the installer.
+  - **WiX 6.0.2** - only for the MSI: a repo-local dotnet tool (`dotnet-tools.json`) that `deploy\build_msi.ps1` restores,
+    with its UI extension, so there is nothing to install first.
 
 ## Building the Project
 
@@ -161,10 +162,11 @@ tmDataQualityAnalyzer/
 ├── .claude/                    # Claude Code: the session guide (CLAUDE.md), shared settings, project skills
 ├── assets/                     # The base user manual (compiled into the app), the icon, the UTF-8 manifest
 ├── deploy/                     # Release packaging and its clean-machine test
-│   ├── sandbox/                # Windows Sandbox install-and-upgrade test (Smart App Control)
-│   ├── build_package.ps1       # The release packages: publish, signing, the portable ZIP and the installer
-│   ├── tmDataQualityAnalyzer.iss  # The Inno Setup script (signing.ps1 beside it is the signing helpers)
-│   └── RELEASENOTES.txt        # The installer's "What's New" page
+│   ├── sandbox/                # Windows Sandbox install, upgrade and uninstall test (Smart App Control)
+│   ├── build_package.ps1       # The release packages: publish, signing, the portable ZIP and the MSI
+│   ├── build_msi.ps1           # Builds the MSI from the staged application (WiX; signing.ps1 beside it is the signing helpers)
+│   ├── tmDataQualityAnalyzer.wxs  # The MSI's source
+│   └── RELEASENOTES.txt        # The release notes (installed beside the application)
 ├── docs/                       # Developer guide (guide.md), changelog, logic notes, records, manual sources
 ├── eng/                        # Build, test, manual and release-check scripts, and the MSBuild props and targets
 ├── settings/                   # The shipped TOML settings: frame sync patterns, receiver parameters, step files

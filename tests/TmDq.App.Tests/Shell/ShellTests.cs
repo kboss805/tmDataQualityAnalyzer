@@ -993,12 +993,12 @@ public sealed class ShellTests : IDisposable
     [Fact]
     public void TheFullManualIsTheFileTheInstallerAndThePortableCopyPutBesideTheApp()
     {
-        // Help looks for it beside the application by this name; the installer's full-manual task and the portable ZIP
+        // Help looks for it beside the application by this name; the MSI's full-manual feature and the portable ZIP
         // are what put it there, so a rename on either side would leave Help on the base manual without a word.
         Assert.Equal("UserManual.html", HelpManual.FullManualName);
-        string setup = File.ReadAllText(Repo.File(Path.Combine("deploy", "tmDataQualityAnalyzer.iss")));
-        Assert.Contains("#define ManualFile \"staging\\manual\\" + HelpManual.FullManualName + "\"", setup);
-        Assert.Contains("Source: \"{#ManualFile}\"; DestDir: \"{app}\"", setup);
+        string msi = File.ReadAllText(Repo.File(Path.Combine("deploy", "tmDataQualityAnalyzer.wxs")));
+        Assert.Contains("<ComponentGroup Id=\"ManualItems\" Directory=\"INSTALLFOLDER\">", msi);
+        Assert.Contains("Source=\"$(StagingManual)\\" + HelpManual.FullManualName + "\"", msi);
         string package = File.ReadAllText(Repo.File(Path.Combine("deploy", "build_package.ps1")));
         Assert.Contains("Join-Path $Stage 'manual\\" + HelpManual.FullManualName + "'", package);
         Assert.Contains("Join-Path $portable '" + HelpManual.FullManualName + "'", package);
