@@ -60,6 +60,29 @@ bool PipelineRunner::start(std::vector<StreamJob> jobs, std::shared_ptr<Pipeline
         error = "A processing run is already in progress.";
         return false;
     }
+    // Everything after the claim runs inside a boundary: a start that throws (a path the code page cannot spell, memory,
+    // a thread that will not start) gives back what it built and the claim with it, or this runner would refuse every
+    // start after it. It is a failed start like any other: false, with the reason, and nothing reported to the sink.
+    bool started = false;
+    if (!containExceptions([&]() { started = startRun(std::move(jobs), std::move(events), error); },
+                           [&](const char* what) { error = std::format("The run could not start: {}.", what); }))
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_workers.clear();
+            m_reader.reset();
+            m_queues.clear();
+            m_jobs.clear();
+        }
+        m_running = false;
+        return false;
+    }
+    return started;
+}
+
+bool PipelineRunner::startRun(std::vector<StreamJob> jobs, std::shared_ptr<PipelineEvents> events,
+                              std::string& error)
+{
     // A previous run's reader thread may still be returning from its last report.
     joinDriver();
 

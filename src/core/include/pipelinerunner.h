@@ -102,7 +102,8 @@ public:
      * reader. A failure before any thread starts - no jobs, a recording that cannot be opened,
      * a stream whose channel the recording does not have - returns false with the reason in
      * @p error and reports nothing to @p events; the jobs and their frame setups are released.
-     * Returns false too, with a reason, if a run is already in flight.
+     * Returns false too, with a reason, if a run is already in flight, and if the setup throws (the runner is then
+     * as it was, and starts again).
      *
      * @param[in]  jobs   The streams to process. Job i's result carries `jobIndex == i`.
      * @param[in]  events Where reports go; shared so it outlives the threads that call it.
@@ -123,6 +124,9 @@ public:
 
 private:
     class Relay;
+
+    /// start() after it has claimed the runner: the setup, which releases the claim itself on each failure it returns.
+    bool startRun(std::vector<StreamJob> jobs, std::shared_ptr<PipelineEvents> events, std::string& error);
 
     /// The reader thread's body: start the stream threads, read, wait for them, report the end.
     void drive();

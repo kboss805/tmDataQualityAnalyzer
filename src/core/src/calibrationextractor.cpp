@@ -97,6 +97,22 @@ void CalibrationExtractor::start(const Request& request, std::shared_ptr<Process
     {
         return;
     }
+    // Everything after the claim runs inside a boundary: a start that throws (a path the code page cannot spell, memory,
+    // a thread that will not start) fails like any other early failure - the reason, then the end, with what was built
+    // released and the claim with it - or this extractor would ignore every start after it.
+    containExceptions([&]() { startRun(request, std::move(events)); },
+                      [&](const char* what) {
+                          const std::string reason = std::format("Calibration extraction could not start: {}.", what);
+                          {
+                              std::lock_guard<std::mutex> lock(m_mutex);
+                              m_error = reason;
+                          }
+                          finish(false, reason, true);
+                      });
+}
+
+void CalibrationExtractor::startRun(const Request& request, std::shared_ptr<ProcessingEvents> events)
+{
     // A previous run's driver may still be returning from its last report.
     joinDriver();
 

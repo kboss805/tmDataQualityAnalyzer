@@ -336,6 +336,32 @@
       "note": "the boundary: a 64-bit frame, which the main run accepts, refused"
     },
     {
+      "id": "U1",
+      "file": "src/core/src/pipelinerunner.cpp",
+      "old": "    if (!containExceptions([&]() { started = startRun(",
+      "new": "    if (![&](auto&& body, auto&&) { body(); return true; }([&]() { started = startRun(",
+      "args": ["-tc=PipelineRunner: a start*"],
+      "expect": "caught",
+      "note": "no boundary on start(): a setup that throws leaves the runner claimed, refusing every later start"
+    },
+    {
+      "id": "U2",
+      "file": "src/core/src/pipelinerunner.cpp",
+      "old": "        m_running = false;\n        return false;\n    }\n    return started;",
+      "new": "        return false;\n    }\n    return started;",
+      "args": ["-tc=PipelineRunner: a start*"],
+      "expect": "caught",
+      "note": "a start that threw reports false but keeps the claim: the next start is refused as already in progress"
+    },
+    {
+      "id": "U3",
+      "file": "src/core/src/calibrationextractor.cpp",
+      "old": "    containExceptions([&]() { startRun(request, std::move(events)); },",
+      "new": "    [&](auto&& body, auto&&) { body(); }([&]() { startRun(request, std::move(events)); },",
+      "args": ["-tc=CalibrationExtractor: a start*"],
+      "expect": "caught",
+      "note": "no boundary on start(): a setup that throws leaves the extractor claimed, ignoring every later start"
+    },    {
       "id": "H1",
       "file": "src/core/src/chapter10reader.cpp",
       "old": "    enI106Ch10Close(m_file_handle);\n    m_file_open = false;",

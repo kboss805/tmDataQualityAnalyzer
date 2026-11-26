@@ -23,18 +23,36 @@
 #include "calibrationextractor.h"
 #include "calibrationprofile.h"
 #include "calibrationreport.h"
+#include "ch10packetreader.h"
 #include "chapter10reader.h"
 #include "containerutil.h"
 #include "doctest.h"
 #include "framesetup.h"
 #include "receivernames.h"
 #include "framesync.h"
+#include "packetqueue.h"
 #include "stepdetector.h"
 #include "stepconfigfile.h"
 #include "streamjobbuilder.h"
 #include "test_support.h"
 
 using namespace tmdq_test;
+
+/// The extractor names this struct its friend, so a test can make its reader report at a chosen moment and see that the
+/// reader has handed the worker packets.
+struct CalibrationExtractorTestAccess
+{
+    static void requestProgress(CalibrationExtractor& extractor)
+    {
+        std::lock_guard<std::mutex> lock(extractor.m_mutex);
+        extractor.m_reader->requestProgress();
+    }
+    static std::size_t queued(CalibrationExtractor& extractor)
+    {
+        std::lock_guard<std::mutex> lock(extractor.m_mutex);
+        return extractor.m_queue->size();
+    }
+};
 
 namespace {
 
@@ -1620,9 +1638,10 @@ TEST_CASE("CalibrationExtractor: a throw on either of its threads fails the extr
 }
 TEST_CASE("CalibrationExtractor: a read that throws part-way fails the extraction rather than calibrating from the part read")
 {
-    // The worker is parked before its first packet, so the reader fills the queue and waits; once its 100 ms progress
-    // throttle has passed, its next packet reports progress, which throws. The worker then ends early with real packets
-    // in hand: profiles detected from them would be taken for the whole sweep. The sleep is the throttle's precondition.
+    // The worker is parked before its first packet, so packets wait in the queue; once they do, the reader is asked to
+    // report its progress at its next packet (not after its 100 ms throttle), and that report throws. The worker then ends
+    // early with real packets in hand: profiles detected from them would be taken for the whole sweep. Every wait is on
+    // something a thread does, none on time.
     const CalibrationExtractor::Request req = stepCalRequest();
     CalibrationExtractor extractor;
     auto recorder = std::make_shared<Recorder>(extractor);
@@ -1630,8 +1649,14 @@ TEST_CASE("CalibrationExtractor: a read that throws part-way fails the extractio
     recorder->parkOn("processing...");
     recorder->start(req);
     REQUIRE(recorder->waitParked(60000));
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    recorder->throwOnProgress = true;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    while (CalibrationExtractorTestAccess::queued(extractor) < 8 && std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::yield();
+    }
+    REQUIRE(CalibrationExtractorTestAccess::queued(extractor) >= 8);
+    recorder->throwOnProgress = true;   // armed only now, so no earlier report can throw before the packets are queued
+    CalibrationExtractorTestAccess::requestProgress(extractor);
     recorder->release();
     REQUIRE(recorder->wait());
     extractor.wait();
@@ -1641,6 +1666,25 @@ TEST_CASE("CalibrationExtractor: a read that throws part-way fails the extractio
     CHECK(extractor.results().empty());
 }
 
+TEST_CASE("CalibrationExtractor: a start that throws is reported, and leaves the extractor able to start")
+{
+    // A path the process code page cannot spell (an unpaired surrogate) throws from inside the setup, after start() has
+    // claimed the extractor. The claim used to stay, and every start after it was ignored.
+    CalibrationExtractor::Request bad = stepCalRequest();
+    TempDir dir;
+    bad.calFilename = dir.path() / std::wstring(L"unspellable-\xD800.ch10");
+
+    CalibrationExtractor extractor;
+    auto recorder = std::make_shared<Recorder>(extractor);
+    CHECK_FALSE(recorder->run(bad));
+    CHECK_MESSAGE(recorder->summary.starts_with("Calibration extraction could not start: "), recorder->summary);
+    CHECK(recorder->errors == std::vector<std::string>{recorder->summary});
+    CHECK(recorder->events.back() == "finished");
+    CHECK_FALSE(extractor.running());
+
+    auto next = std::make_shared<Recorder>(extractor);
+    CHECK_MESSAGE(next->run(stepCalRequest()), next->summary);
+}
 TEST_CASE("CalibrationExtractor: a sink that throws at the end does not take the process with it")
 {
     const CalibrationExtractor::Request req = stepCalRequest();

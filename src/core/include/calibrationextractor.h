@@ -61,6 +61,8 @@ struct CalibrationChannelResult : StepDetector::Result
 /// @brief Extracts non-linear calibration profiles from a calibration Ch10 file.
 class CalibrationExtractor
 {
+    friend struct CalibrationExtractorTestAccess;   ///< Reaches the reader and the queue to act at a chosen moment.
+
 public:
     /// @brief Inputs for one extraction run, gathered from the Receiver SNR dialog.
     struct Request
@@ -96,7 +98,7 @@ public:
      * @brief Begins an extraction. Ignored if one is already running.
      *
      * Everything that can fail before any work starts - no steps, a word map that cannot be
-     * used, a recording that cannot be opened - is reported before this returns, on the calling
+     * used, a recording that cannot be opened, a setup that throws - is reported before this returns, on the calling
      * thread: `errorOccurred`, then `processingFinished(false)`. Otherwise the work runs on a
      * driver thread and this returns at once.
      *
@@ -135,6 +137,8 @@ public:
 private:
     class Relay;
 
+    /// start() after it has claimed the extractor: the setup, then the driver thread.
+    void startRun(const Request& request, std::shared_ptr<ProcessingEvents> events);
     bool buildFrameSetup(const Request& request, int wordsInMinorFrame, std::string& error);
     /// The driver thread's body: driveRun() inside the boundary that turns a throw into a failed extraction.
     void drive();

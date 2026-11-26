@@ -687,7 +687,9 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
    the shared `FrameSetup`. No exception leaves one of its threads (it would end the host): each body runs inside
    `containExceptions` (`exceptionboundary.h`), so a stream that throws is reported and its queue closed (the others
    deliver), a reader that throws closes every queue and drops every result not yet delivered, and either way the run
-   ends with `processingFinished(false)`. `CalibrationExtractor` holds its reader and driver threads the same way.
+   ends with `processingFinished(false)`. `CalibrationExtractor` holds its reader and driver threads the same way. A
+   `start()` of either that throws on the caller's thread gives back what it built and its claim, and fails as any
+   early failure does, so the object starts again.
 6. **ProcessingEvents / EventReporter** (`processingevents.h`) - how the reader, the workers and the extractor report
    log lines, errors, progress and completion; the ABI relays them to the host. **IntervalGate** (`intervalgate.h`) is
    the clock-injected gate that throttles the reader's progress reports.
@@ -1137,8 +1139,8 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
   exact text of everything it reports.
 - **PipelineRunner** (`test_pipelinerunner`) - a run's results and end on `step_cal`, a failing stream beside good ones,
   refusals, cancel at chosen moments (a thread parked on a log line), runs one after another, destruction while
-  running, and a sink that throws on a stream's thread, on the reader's (at its start, and part-way), from a result or
-  at the end. It also holds **the throughput guard**, opt-in (`TMDQA_RUN_HEAVY_BENCH`) and run at release by
+  running, a sink that throws on a stream's thread, on the reader's (at its start, and part-way: the reader asked to
+  report at a chosen packet, `requestProgress`), from a result or at the end, and a start that throws. It also holds **the throughput guard**, opt-in (`TMDQA_RUN_HEAVY_BENCH`) and run at release by
   `eng\run_throughput_bench.ps1` on the full PRN recording: four streams in parallel must cost about what the
   slowest costs alone, asserted as ratios, never milliseconds.
 - **EventReporter** (`test_eventreporter`) and **IntervalGate** (`test_intervalgate`) - the null-safe forwarder every

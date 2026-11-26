@@ -93,6 +93,11 @@ public:
     /// Requests a cooperative abort of the read loop.
     void requestAbort();
 
+    /// Makes the read loop report its progress at the next packet header, whatever the throttle says and even if the
+    /// percentage has not changed; once. Safe from any thread. A test's way to make the reader report at a chosen moment
+    /// (its sink can then act inside the read) instead of waiting out the 100 ms throttle.
+    void requestProgress();
+
     /// Runs the single-pass read/dispatch loop. Returns when the file is exhausted, a read
     /// fails, or an abort is requested; every queue has then been given its end marker.
     void run();
@@ -132,6 +137,7 @@ private:
     std::vector<PacketQueue*> m_all_queues;
 
     std::atomic<bool> m_abort_requested;
+    std::atomic<bool> m_progress_requested{false};   ///< See requestProgress().
     EventReporter m_report; ///< Where progress, log lines and errors go; see setEvents().
 };
 

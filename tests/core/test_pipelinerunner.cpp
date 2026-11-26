@@ -27,8 +27,10 @@
 #include <windows.h>
 
 #include "doctest.h"
+#include "ch10packetreader.h"
 #include "chapter10reader.h"
 #include "frameprocessor.h"
+#include "packetqueue.h"
 #include "pipelinerunner.h"
 #include "test_support.h"
 
@@ -39,6 +41,18 @@ using namespace tmdq_test;
 struct PipelineRunnerTestAccess
 {
     static void abortWorker(PipelineRunner& runner, std::size_t index) { runner.m_workers[index]->requestAbort(); }
+    /// Makes the run's reader report its progress at its next packet (Ch10PacketReader::requestProgress).
+    static void requestProgress(PipelineRunner& runner)
+    {
+        std::lock_guard<std::mutex> lock(runner.m_mutex);
+        runner.m_reader->requestProgress();
+    }
+    /// The packets waiting in stream @p index's queue.
+    static std::size_t queued(PipelineRunner& runner, std::size_t index)
+    {
+        std::lock_guard<std::mutex> lock(runner.m_mutex);
+        return runner.m_queues[index]->size();
+    }
 };
 
 namespace {
@@ -873,10 +887,10 @@ TEST_CASE("PipelineRunner: a read that throws lets every stream go, delivers not
 
 TEST_CASE("PipelineRunner: a read that throws part-way drops the result built from the part read")
 {
-    // The stream is parked before its first packet, so the reader fills its queue and waits; once the reader's 100 ms
-    // progress throttle has passed, its next packet reports progress, which throws. The stream then has a queue of real
-    // packets (sync found, frames extracted) and an end that came early: a result from it would describe part of the
-    // recording as the whole. The sleep is the throttle's precondition, not a measurement.
+    // The stream is parked before its first packet, so packets wait in its queue; once they do, the reader is asked to
+    // report its progress at its next packet (rather than waiting out its 100 ms throttle), and that report throws. The
+    // stream then has a queue of real packets (sync found, frames extracted) and an end that came early: a result from it
+    // would describe part of the recording as the whole. Every wait is on something a thread does, none on time.
     const StepCalFixture fx = loadStepCalFixture();
 
     auto rec = std::make_shared<Recorder>();
@@ -886,8 +900,14 @@ TEST_CASE("PipelineRunner: a read that throws part-way drops the result built fr
     std::string error;
     REQUIRE_MESSAGE(runner.start({lockJob(fx, 0)}, rec, error), error);
     REQUIRE_MESSAGE(rec->waitParked(kRunTimeoutMs), rec->joined());
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    rec->throwOnProgress();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(kRunTimeoutMs);
+    while (PipelineRunnerTestAccess::queued(runner, 0) < 8 && std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::yield();
+    }
+    REQUIRE(PipelineRunnerTestAccess::queued(runner, 0) >= 8);
+    rec->throwOnProgress();   // armed only now, so no earlier report can throw before the packets are queued
+    PipelineRunnerTestAccess::requestProgress(runner);
     rec->release();
     REQUIRE_MESSAGE(rec->waitFinished(kRunTimeoutMs), rec->joined());
     runner.wait();
@@ -898,6 +918,30 @@ TEST_CASE("PipelineRunner: a read that throws part-way drops the result built fr
     CHECK_MESSAGE(rec->anyStartsWith("log:" + tagOf(fx) + "complete"), rec->joined());   // it did finish, on part of it
     CHECK(rec->results().empty());
     CHECK(rec->events().back() == "finished:false");
+}
+
+TEST_CASE("PipelineRunner: a start that throws leaves the runner able to start")
+{
+    // A path the process code page cannot spell (an unpaired surrogate) throws from inside the setup, after start() has
+    // claimed the runner. The claim used to stay, and the runner refused every start after it as "already in progress".
+    const StepCalFixture fx = loadStepCalFixture();
+    TempDir dir;
+    StreamJob bad = lockJob(fx);
+    bad.params.filename = dir.path() / std::wstring(L"unspellable-\xD800.ch10");
+
+    auto rec = std::make_shared<Recorder>();
+    PipelineRunner runner;
+    std::string error;
+    CHECK_FALSE(runner.start({bad}, rec, error));
+    CHECK_MESSAGE(error.starts_with("The run could not start: "), error);
+    CHECK_FALSE(runner.running());
+    CHECK(rec->events().empty());   // a failed start reports nothing
+
+    error.clear();
+    REQUIRE_MESSAGE(runner.start({lockJob(fx)}, rec, error), error);
+    REQUIRE_MESSAGE(rec->waitFinished(kRunTimeoutMs), rec->joined());
+    runner.wait();
+    CHECK(rec->success());
 }
 TEST_CASE("PipelineRunner: a sink that throws at the end does not take the process with it")
 {

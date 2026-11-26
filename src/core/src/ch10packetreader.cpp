@@ -77,6 +77,11 @@ void Ch10PacketReader::requestAbort()
     m_abort_requested.store(true, std::memory_order_relaxed);
 }
 
+void Ch10PacketReader::requestProgress()
+{
+    m_progress_requested.store(true, std::memory_order_relaxed);
+}
+
 void Ch10PacketReader::setEvents(std::shared_ptr<ProcessingEvents> events)
 {
     m_report.setSink(std::move(events));
@@ -355,13 +360,16 @@ void Ch10PacketReader::run()
         // The size test comes first on purpose: it short-circuits, so a file of unknown
         // size never reads the clock at all, as before. This runs once per packet header,
         // so the clock read is the per-iteration cost - one monotonic read either way.
-        if (m_total_file_size > 0 && progress_gate.due())
+        // A requested report (requestProgress()) is a relaxed load per packet, and an exchange only when one was asked.
+        const bool requested = m_progress_requested.load(std::memory_order_relaxed) &&
+                               m_progress_requested.exchange(false, std::memory_order_relaxed);
+        if (m_total_file_size > 0 && (requested || progress_gate.due()))
         {
             progress_gate.reset();
             int64_t current_pos = 0;
             enI106Ch10GetPos(m_file_handle, &current_pos);
             int percent = static_cast<int>(current_pos * kPercent100 / m_total_file_size);
-            if (percent != last_reported_percent)
+            if (percent != last_reported_percent || requested)
             {
                 if (percent / kPercent10 != last_reported_percent / kPercent10 && percent > 0)
                 {
