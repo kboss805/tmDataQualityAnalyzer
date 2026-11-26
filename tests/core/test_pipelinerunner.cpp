@@ -12,8 +12,10 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <new>
 #include <numeric>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
@@ -49,12 +51,24 @@ public:
     {
         add("log:" + m);
         maybePark(m);
+        maybeThrow(m);
     }
     void errorOccurred(const std::string& m) override { add("error:" + m); }
-    void progressUpdated(int p) override { add("progress:" + std::to_string(p)); }
+    void progressUpdated(int p) override
+    {
+        add("progress:" + std::to_string(p));
+        if (p < 100 && m_throw_on_progress.exchange(false))
+        {
+            throw std::bad_alloc();
+        }
+    }
 
     void streamProcessed(ProcessedStreamData data) override
     {
+        if (m_throw_on_result)
+        {
+            throw std::bad_alloc();   // as the C ABI's sink does when the result it hands the host cannot be allocated
+        }
         std::lock_guard<std::mutex> lock(m_mutex);
         m_events.push_back("stream:" + std::to_string(data.jobIndex));
         m_results.push_back(std::move(data));
@@ -96,6 +110,14 @@ public:
         }
         m_cv.notify_all();
     }
+    /// Throws std::bad_alloc from inside logMessage() on the thread that logs a line containing @p needle (the first such
+    /// line only): a failure inside a run's thread, at a chosen point, as running out of memory there would be.
+    void throwOn(std::string needle) { std::lock_guard<std::mutex> lock(m_mutex); m_throw_needle = std::move(needle); }
+    /// Throws std::bad_alloc from the next progressUpdated() below 100 (the reader's, part-way through the recording).
+    void throwOnProgress() { m_throw_on_progress = true; }
+    /// Throws std::bad_alloc from every streamProcessed(). Set before the run starts.
+    void throwOnResult() { m_throw_on_result = true; }
+
     /// Runs @p hook on the reporting thread when the end arrives. Set before the run starts.
     void onFinished(std::function<void()> hook) { m_on_finished = std::move(hook); }
 
@@ -160,6 +182,19 @@ public:
 private:
     void add(std::string e) { std::lock_guard<std::mutex> lock(m_mutex); m_events.push_back(std::move(e)); }
 
+    void maybeThrow(const std::string& message)
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            if (m_throw_needle.empty() || message.find(m_throw_needle) == std::string::npos)
+            {
+                return;
+            }
+            m_throw_needle.clear();
+        }
+        throw std::bad_alloc();
+    }
+
     void maybePark(const std::string& message)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
@@ -182,6 +217,9 @@ private:
     bool                             m_parked = false;
     bool                             m_released = false;
     std::function<void()>            m_on_finished;
+    std::string                      m_throw_needle;
+    std::atomic<bool>                m_throw_on_result{false};
+    std::atomic<bool>                m_throw_on_progress{false};
 };
 
 /// Frees a parked thread however the test ends, so a failed check cannot leave the runner's destructor waiting on a
@@ -748,6 +786,138 @@ TEST_CASE("PipelineRunner: destroying a running runner stops it and reports the 
     CHECK(rec->results().empty());
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Nothing thrown on a run's thread ends the process
+// ---------------------------------------------------------------------------------------------------------------------
+//
+// An exception out of a thread's function calls std::terminate, which takes the host application with it. The sink is
+// the seam: it is called on every thread of the run, so a sink that throws stands in for anything that can throw there (a
+// std::bad_alloc on a long run, the C ABI's own allocation of a result). Without the boundary each of these cases ends
+// the test executable.
+
+TEST_CASE("PipelineRunner: a stream that throws is reported, the others deliver, and the run ends unsuccessfully")
+{
+    const StepCalFixture fx = loadStepCalFixture();
+
+    auto rec = std::make_shared<Recorder>();
+    rec->throwOn("boom] processing...");   // the first line the stream labelled "boom" logs, on its own thread
+    StreamJob boom = lockJob(fx, 0);
+    boom.params.streamLabel = "boom";
+
+    PipelineRunner runner;
+    std::string error;
+    REQUIRE_MESSAGE(runner.start({boom, lockJob(fx, 1)}, rec, error), error);
+    REQUIRE_MESSAGE(rec->waitFinished(kRunTimeoutMs), rec->joined());
+    runner.wait();
+
+    CHECK_FALSE(rec->success());
+    CHECK(rec->finishCount() == 1);
+    CHECK(rec->events().back() == "finished:false");
+    CHECK_MESSAGE(rec->count("error:Stream 1 (boom) stopped on an internal error (bad allocation); its result was "
+                             "dropped.") == 1, rec->joined());
+    // The stream that threw let go of its queue, so the reader finished and the other stream delivered.
+    const auto results = rec->results();
+    REQUIRE(results.size() == 1);
+    CHECK(results[0].jobIndex == 1);
+    CHECK(results[0].hasSamples());
+
+    // And the runner is whole: the next run starts and succeeds.
+    auto next = std::make_shared<Recorder>();
+    REQUIRE_MESSAGE(runner.start({lockJob(fx)}, next, error), error);
+    REQUIRE_MESSAGE(next->waitFinished(kRunTimeoutMs), next->joined());
+    runner.wait();
+    CHECK(next->success());
+}
+
+TEST_CASE("PipelineRunner: a result that cannot be delivered is reported, and the run ends unsuccessfully")
+{
+    // The C ABI's sink allocates the result it hands the host; std::bad_alloc there used to leave the stream's thread.
+    const StepCalFixture fx = loadStepCalFixture();
+
+    auto rec = std::make_shared<Recorder>();
+    rec->throwOnResult();
+    PipelineRunner runner;
+    std::string error;
+    REQUIRE_MESSAGE(runner.start({lockJob(fx, 0)}, rec, error), error);
+    REQUIRE_MESSAGE(rec->waitFinished(kRunTimeoutMs), rec->joined());
+    runner.wait();
+
+    CHECK_FALSE(rec->success());
+    CHECK(rec->results().empty());
+    CHECK_MESSAGE(rec->count("error:Stream 1 (Ch " + std::to_string(fx.pcm_id) + ") stopped on an internal error (bad "
+                             "allocation); its result was dropped.") == 1, rec->joined());
+    CHECK(rec->events().back() == "finished:false");
+}
+
+TEST_CASE("PipelineRunner: a read that throws lets every stream go, delivers nothing, and ends the run unsuccessfully")
+{
+    const StepCalFixture fx = loadStepCalFixture();
+
+    auto rec = std::make_shared<Recorder>();
+    rec->throwOn("Reading Chapter 10 file...");   // the reader's first line, on the reader thread
+    PipelineRunner runner;
+    std::string error;
+    REQUIRE_MESSAGE(runner.start({lockJob(fx, 0), lockJob(fx, 1)}, rec, error), error);
+    REQUIRE_MESSAGE(rec->waitFinished(kRunTimeoutMs), rec->joined());
+    runner.wait();
+
+    CHECK_FALSE(runner.running());
+    CHECK_FALSE(rec->success());
+    CHECK(rec->finishCount() == 1);
+    // No stream saw the recording, so none may report a result built from the part it did (here, none of it).
+    CHECK(rec->results().empty());
+    CHECK_MESSAGE(rec->count("error:Reading the recording stopped on an internal error (bad allocation); the run was "
+                             "abandoned.") == 1, rec->joined());
+    CHECK(rec->events().back() == "finished:false");
+}
+
+TEST_CASE("PipelineRunner: a read that throws part-way drops the result built from the part read")
+{
+    // The stream is parked before its first packet, so the reader fills its queue and waits; once the reader's 100 ms
+    // progress throttle has passed, its next packet reports progress, which throws. The stream then has a queue of real
+    // packets (sync found, frames extracted) and an end that came early: a result from it would describe part of the
+    // recording as the whole. The sleep is the throttle's precondition, not a measurement.
+    const StepCalFixture fx = loadStepCalFixture();
+
+    auto rec = std::make_shared<Recorder>();
+    rec->parkOn("processing...");
+    PipelineRunner runner;
+    ReleaseOnExit guard{*rec};
+    std::string error;
+    REQUIRE_MESSAGE(runner.start({lockJob(fx, 0)}, rec, error), error);
+    REQUIRE_MESSAGE(rec->waitParked(kRunTimeoutMs), rec->joined());
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    rec->throwOnProgress();
+    rec->release();
+    REQUIRE_MESSAGE(rec->waitFinished(kRunTimeoutMs), rec->joined());
+    runner.wait();
+
+    CHECK_FALSE(rec->success());
+    CHECK_MESSAGE(rec->count("error:Reading the recording stopped on an internal error (bad allocation); the run was "
+                             "abandoned.") == 1, rec->joined());
+    CHECK_MESSAGE(rec->anyStartsWith("log:" + tagOf(fx) + "complete"), rec->joined());   // it did finish, on part of it
+    CHECK(rec->results().empty());
+    CHECK(rec->events().back() == "finished:false");
+}
+TEST_CASE("PipelineRunner: a sink that throws at the end does not take the process with it")
+{
+    const StepCalFixture fx = loadStepCalFixture();
+
+    auto rec = std::make_shared<Recorder>();
+    std::atomic<int> ends{0};
+    rec->onFinished([&ends]() {
+        ++ends;
+        throw std::runtime_error("the host's handler failed");
+    });
+    PipelineRunner runner;
+    std::string error;
+    REQUIRE_MESSAGE(runner.start({lockJob(fx, 0)}, rec, error), error);
+    runner.wait();   // the end was not recorded (the hook threw first), so wait for the thread itself
+
+    CHECK(ends.load() == 1);
+    CHECK_FALSE(runner.running());
+    CHECK(rec->results().size() == 1);   // the stream delivered before the end
+}
 // ---------------------------------------------------------------------------------------------------------------------
 // The throughput guard
 // ---------------------------------------------------------------------------------------------------------------------

@@ -5,6 +5,9 @@
 
 #include "framesyncfile.h"
 
+#include <cstdint>
+#include <limits>
+
 #include "constants.h"
 #include "tomldocument.h"
 
@@ -32,9 +35,12 @@ FrameSyncFile readFrameSyncFile(const std::filesystem::path& path)
     {
         // Fall back to the old WordsInMinorFrame key (words x 16 bits).
         const int words = cfg.integer(kLegacyWordsKey, 0);
-        if (words >= 2)
+        // Wide, and only a count of bits an int holds: a word count past INT_MAX / 16 wrapped, and one wrap landed on
+        // a plausible 64 bits.
+        const std::int64_t wide_bits = std::int64_t{words} * PCMConstants::kCommonWordLen;
+        if (words >= 2 && wide_bits <= std::numeric_limits<int>::max())
         {
-            bits = words * PCMConstants::kCommonWordLen;
+            bits = static_cast<int>(wide_bits);
             file.bitsFromLegacyKey = true;
         }
     }

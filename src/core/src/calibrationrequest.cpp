@@ -5,6 +5,7 @@
 
 #include "calibrationrequest.h"
 
+#include <string>
 #include <system_error>
 
 #include "constants.h"
@@ -39,6 +40,12 @@ bool buildCalibrationRequest(const CalibrationInputs& setup, const std::string& 
         case FrameSyncError::MaskInvalid:
             error = "Invalid frame sync mask '" + setup.syncMask + "'.";
             return false;
+    }
+    // Refused as the main run refuses it (buildStreamJob), before the recording is opened: a shorter frame is no frame.
+    if (setup.bitsInMinorFrame < PCMConstants::kMinFrameLengthBits)
+    {
+        error = "Bits/Frame must be >= " + std::to_string(PCMConstants::kMinFrameLengthBits) + ".";
+        return false;
     }
     acquisition.bitsInMinorFrame = setup.bitsInMinorFrame;
     acquisition.randomized       = setup.randomized;

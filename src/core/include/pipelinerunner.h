@@ -21,7 +21,15 @@
  *    line, and only for a stream that completed successfully in a run that was not cancelled.
  *  - `processingFinished`: from the reader thread, once, LAST - after every `streamProcessed` and
  *    after every other thread has ended and every resource has been released. `success` is true if
- *    at least one stream completed and the run was not cancelled.
+ *    at least one stream completed, the run was not cancelled, and none of its threads threw.
+ *
+ * **Exceptions.** None leaves a thread of the run (it would end the host process). One thrown by a
+ * stream (its processing, or the sink's `streamProcessed`) is reported through `errorOccurred`, drops
+ * that stream's result and closes its queue, so the other streams finish and deliver; one thrown on the
+ * reader thread (the read, or a stream thread that could not start) is reported, closes every queue
+ * and drops every result not yet delivered, since no stream was handed the whole recording.
+ * Either way the run ends with `processingFinished(false)`. One thrown by `processingFinished` itself
+ * is dropped.
  *
  * A sink must not call `start()` on the runner from inside one of these calls: that would join
  * the thread it is running on. The C ABI asks the same of a host's callbacks (`tmdq_abi.h`).
@@ -122,6 +130,9 @@ private:
     void runStream(std::size_t index);
     /// Ends the run: releases the pipeline, then reports. Called by drive() once every thread ended.
     void finish();
+    /// Reports @p message as an error and marks the run failed: it ends with `processingFinished(false)`. What a run's
+    /// thread does with an exception it caught (exceptionboundary.h) instead of letting it end the process.
+    void failRun(const std::string& message);
     void joinDriver();
 
     std::shared_ptr<PipelineEvents> m_events;
@@ -134,6 +145,8 @@ private:
 
     std::atomic<bool> m_cancelled{false};
     std::atomic<bool> m_any_success{false};
+    std::atomic<bool> m_failed{false};                       ///< A thread of the run threw (failRun()).
+    std::atomic<bool> m_read_failed{false};                  ///< The reader thread threw: no stream saw all the data.
     std::atomic<bool> m_running{false};
     std::thread       m_driver;                              ///< The reader thread, which also ends the run.
 };

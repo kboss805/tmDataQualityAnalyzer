@@ -3,6 +3,7 @@
 // receiver-parameters file is test_receiverparamsfile.cpp's.
 
 #include <filesystem>
+#include <limits>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -387,6 +388,18 @@ TEST_CASE("FrameSetup: the default receiver map must leave the sync word free, a
     CHECK(error == "Num Receivers x Receiver Channels exceeds the words available in the minor frame.");
     CHECK(full.length() == 0);
 
+    // Counts whose product passes INT_MAX: it wrapped, and 65536 x 65537 wrapped to 65536, which fits 70000 words and
+    // would have built 4 294 967 296 parameters.
+    for (const auto [r, c] : {std::pair{65536, 65537}, std::pair{65537, 65536}, std::pair{1 << 30, 4}})
+    {
+        FrameSetup huge;
+        error.clear();
+        INFO(r << " x " << c);
+        CHECK(!huge.buildDefaultReceiverMap(r, c, 70000, error));
+        CHECK(error == "Num Receivers x Receiver Channels exceeds the words available in the minor frame.");
+        CHECK(huge.length() == 0);
+    }
+
     for (const auto [r, c] : {std::pair{0, 3}, std::pair{3, 0}, std::pair{-1, 3}, std::pair{-2, -2}})
     {
         FrameSetup none;
@@ -543,4 +556,7 @@ TEST_CASE("FrameSetup: wordsInMinorFrame rounds up")
     CHECK(FrameSetup::wordsInMinorFrame(0) == 0);
     CHECK(FrameSetup::wordsInMinorFrame(17) == 2);
     CHECK(FrameSetup::wordsInMinorFrame(32) == 2);
+    // Near INT_MAX the rounding is done wide: bits + 15 overflowed into a negative word count.
+    CHECK(FrameSetup::wordsInMinorFrame(std::numeric_limits<int>::max()) == 134217728);
+    CHECK(FrameSetup::wordsInMinorFrame(std::numeric_limits<int>::max() - 15) == 134217727);
 }

@@ -148,6 +148,7 @@
     <ClCompile Include="test_constants.cpp" />
     <ClCompile Include="test_csvseries.cpp" />
     <ClCompile Include="test_eventreporter.cpp" />
+    <ClCompile Include="test_exceptionboundary.cpp" />
     <ClCompile Include="test_frameprocessor.cpp" />
     <ClCompile Include="test_framesetup.cpp" />
     <ClCompile Include="test_framesync.cpp" />

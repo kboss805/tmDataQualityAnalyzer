@@ -204,6 +204,33 @@ TEST_CASE("CalibrationRequest: a sync pattern or mask that cannot be read is ref
     CHECK(error == "Invalid frame sync pattern 'zz'.");
 }
 
+TEST_CASE("CalibrationRequest: a frame shorter than the main run accepts is refused before anything opens")
+{
+    // The main run refuses Bits/Frame below 64 (buildStreamJob); the extraction must read the frames the same way, so it
+    // refuses them too, with the same words, rather than opening the recording to look for frames that cannot be.
+    const AppRoot root(false);
+    CalibrationExtractor::Request req;
+    std::string error;
+    CalibrationInputs s = typicalSetup();
+
+    s.bitsInMinorFrame = 63;
+    CHECK_FALSE(buildCalibrationRequest(s, root.path(), req, error));
+    CHECK(error == "Bits/Frame must be >= 64.");
+    s.bitsInMinorFrame = 0;
+    CHECK_FALSE(buildCalibrationRequest(s, root.path(), req, error));
+    s.bitsInMinorFrame = -800;
+    CHECK_FALSE(buildCalibrationRequest(s, root.path(), req, error));
+
+    s.bitsInMinorFrame = 64;
+    CHECK_MESSAGE(buildCalibrationRequest(s, root.path(), req, error), error);
+    CHECK(req.acquisition.bitsInMinorFrame == 64);
+
+    // The sync text is still read first.
+    s.bitsInMinorFrame = 10;
+    s.syncPattern = "zz";
+    CHECK_FALSE(buildCalibrationRequest(s, root.path(), req, error));
+    CHECK(error == "Invalid frame sync pattern 'zz'.");
+}
 TEST_CASE("CalibrationRequest: a failed build leaves the request alone")
 {
     const AppRoot root(false);
@@ -341,7 +368,7 @@ TEST_CASE("CalibrationRequest: the new code agrees with the old inline code over
     std::mt19937 rng(20261022);
     auto pick = [&](const auto& v) -> const auto& { return v[rng() % v.size()]; };
 
-    int compared = 0, accepted = 0, refused = 0, usedDefault = 0;
+    int compared = 0, accepted = 0, refused = 0, usedDefault = 0, refusedShort = 0;
     for (int i = 0; i < 3000; ++i)
     {
         CalibrationInputs s;
@@ -373,6 +400,16 @@ TEST_CASE("CalibrationRequest: the new code agrees with the old inline code over
         const bool ok = buildCalibrationRequest(s, root, req, error);
 
         INFO("input " << i << ": ok " << ok << " vs old " << old.ok);
+        if (old.ok && s.bitsInMinorFrame < 64)
+        {
+            // The one departure from the old code, on purpose: a frame the main run refuses (buildStreamJob) is refused
+            // here too, where the old code let it through to the extraction.
+            REQUIRE_FALSE(ok);
+            REQUIRE(error == "Bits/Frame must be >= 64.");
+            ++refusedShort;
+            ++compared;
+            continue;
+        }
         REQUIRE(ok == old.ok);
         if (ok)
         {
@@ -392,6 +429,6 @@ TEST_CASE("CalibrationRequest: the new code agrees with the old inline code over
     }
     // The generator really reached each branch.
     INFO(accepted << " accepted, " << refused << " refused, " << usedDefault << " used the default");
-    CHECK((accepted > 300 && refused > 300 && usedDefault > 30));
+    CHECK((accepted > 300 && refused > 300 && usedDefault > 30 && refusedShort > 5));
     CHECK(compared == 3000);
 }

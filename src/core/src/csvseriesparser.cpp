@@ -6,7 +6,6 @@
 
 #include "csvseriesparser.h"
 
-#include <algorithm>
 #include <map>
 
 #include "constants.h"
@@ -86,11 +85,12 @@ CsvParseResult CsvSeriesParser::parse(const std::filesystem::path& path)
         }
     }
 
-    // Estimate row count from the remaining file size for pre-allocation.
+    // Estimate row count from the remaining file size for pre-allocation. No floor: every column reserves this many, so
+    // a floor of 100 rows made a wide file with little data (a header of 100 000 columns) reserve 160 MB up front. As
+    // it stands the reservation is at most about twice the file's size, however many columns it has.
     constexpr std::size_t kBytesPerRowEstimate = 20;
-    constexpr std::size_t kMinRowsEstimate = 100;
     const std::size_t estimated_rows =
-        std::max(source.remaining() / (static_cast<std::size_t>(param_count) * 8 + kBytesPerRowEstimate), kMinRowsEstimate);
+        source.remaining() / (static_cast<std::size_t>(param_count) * 8 + kBytesPerRowEstimate);
     for (CsvSeries& s : series)
     {
         s.xValues.reserve(estimated_rows);
@@ -133,7 +133,8 @@ CsvParseResult CsvSeriesParser::parse(const std::filesystem::path& path)
             result.baseTimeOffset = time_seconds;
         }
 
-        const double elapsed = ((day - first_day) * TimeConstants::kSecondsPerDay) + (time_seconds - first_time);
+        // In double: the days are file-sourced ints, and their difference times 86400 passes INT_MAX past 24 855 days.
+        const double elapsed = ((static_cast<double>(day) - first_day) * TimeConstants::kSecondsPerDay) + (time_seconds - first_time);
 
         for (int i = 0; i < param_count; ++i)
         {
@@ -195,6 +196,8 @@ bool CsvSeriesParser::parseCombinedTimestamp(std::string_view stamp, int& out_da
     }
 
     out_day     = day;
-    out_seconds = (hours * TimeConstants::kSecondsPerHour) + (minutes * TimeConstants::kSecondsPerMinute) + seconds;
+    // In double, as the hours and minutes are file-sourced ints: 596 524 hours is past INT_MAX seconds.
+    out_seconds = (static_cast<double>(hours) * TimeConstants::kSecondsPerHour) +
+                  (static_cast<double>(minutes) * TimeConstants::kSecondsPerMinute) + seconds;
     return true;
 }

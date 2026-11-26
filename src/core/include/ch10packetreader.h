@@ -107,8 +107,9 @@ private:
         Irig106::SuTmatsInfo* tmats_info,
         std::map<int, ChannelInfo>& channel_info);
 
-    /// Grows m_buffer to at least @p required bytes. Returns false on failure.
-    bool readPacket();
+    /// Reads the data of the packet whose header was just read into m_buffer (ch10setup::readPacketData), refusing a
+    /// data length below @p min_data_length or past the packet. Returns false, having reported why, on failure.
+    bool readPacket(std::uint32_t min_data_length);
     /// Posts an end-of-stream sentinel to every distinct queue.
     void postSentinels();
     /// Closes the recording if it is open, under the irig106 setup lock (the close writes the handle table).

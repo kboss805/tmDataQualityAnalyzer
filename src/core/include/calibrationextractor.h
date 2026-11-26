@@ -136,8 +136,15 @@ private:
     class Relay;
 
     bool buildFrameSetup(const Request& request, int wordsInMinorFrame, std::string& error);
-    /// The driver thread's body: run the reader and worker, wait for both, detect, report.
+    /// The driver thread's body: driveRun() inside the boundary that turns a throw into a failed extraction.
     void drive();
+    /// Runs the reader (on @p reader_thread, which it starts) and the worker, waits for both, detects, reports.
+    void driveRun(const std::shared_ptr<Ch10PacketReader>& reader, const std::shared_ptr<FrameProcessor>& worker,
+                  PacketQueue* queue, std::thread& reader_thread);
+    /// Marks the run failed by a throw (exceptionboundary.h), keeping @p reason if it is the first.
+    void noteThrown(const std::string& reason);
+    /// Makes the first throw's reason the run's error() and returns it.
+    std::string adoptThrownReason();
     /// Turns the worker's raw series into per-channel results; reports a line per channel.
     int buildResults(const ProcessedStreamData& data);
     /// Ends the run: records @p summary, releases the pipeline, reports, and is last.
@@ -165,6 +172,8 @@ private:
     std::string       m_summary;
     std::atomic<bool> m_cancelled{false};
     std::atomic<bool> m_worker_ok{false};
+    std::atomic<bool> m_thrown{false};       ///< The reader or the driver threw: the run fails with m_thrown_reason.
+    std::string       m_thrown_reason;       ///< Under m_mutex: what the first throw was.
     std::atomic<bool> m_running{false};
     std::thread       m_driver;
 };
