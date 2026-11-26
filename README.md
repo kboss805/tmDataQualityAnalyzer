@@ -17,7 +17,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 - **Chapter 10 File Support**: Read, parse, and process IRIG 106 Chapter 10 telemetry files
 - **Channel Selection**: Choose the time channel and one or more PCM channels for processing
-- **Drag-and-Drop**: Drop `.ch10` or exported `.csv` files directly onto the application window, or open them from the ☰ menu (**File > Open…** for recordings, **Import/Export > Import from CSV…** for exports)
+- **Drag-and-Drop**: Drop `.ch10` or exported `.csv` files directly onto the application window, or open them from the ☰ menu (**File > Open…** for recordings, **File > Add Recording…** to add one beside what is already plotted, **Import/Export > Import from CSV…** for exports)
 - **Recent Files**: Up to 5 entries under the ☰ menu (File > Recent Files), persisted across sessions
 - **CSV Import**: Re-open a CSV this application previously exported straight into the plot — no re-processing of the source `.ch10` file (☰ menu > Import/Export > **Import from CSV…**, or drag-and-drop a `.csv`)
 
@@ -68,6 +68,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **View Mode**: The context menu switches the left axis between Frame Sync Lock (%) and Accumulated Missed Frames; the per-stream visibility selection is preserved across the switch
 - **Plot File Selector**: After a batch run, the context menu's **Plot File** submenu selects which processed file to view, or overlays them all (disabled when only one file is loaded)
 - **Remove File**: The context menu's **Remove File...** asks which recording, batch file or imported CSV to drop and removes every series of it from the plot and from the next CSV export, keeping the others; process the recording again to bring it back
+- **Add Recording**: **File > Add Recording…** configures and processes another `.ch10` as Open does, but keeps everything already on the plot (the recordings processed before and any imported CSV data), each recording its own entry in **Plot File** and **Remove File**; with an empty plot it is Open
 - **Movable On-Plot Legend**: A translucent legend floats inside the chart (defaulting to the top-right, reset each session) and can be dragged clear of the data; it scrolls for dense plots (e.g. 48+ SNR channels) and is composited into exported images at its placed position. **Show Legend** on the right-click menu (or **L**) shows or hides it, and the choice persists between sessions
 - **X-Axis Time Display**: Actual file time (DDD:HH:MM:SS) on the X axis instead of elapsed seconds
 - **Export**: Export the current plot and its data from the ☰ menu (**Export…**) — choose any combination of CSV data (every series), a plot image (PNG/SVG/PDF, exactly what the chart shows, legend included), and the log window contents (text)

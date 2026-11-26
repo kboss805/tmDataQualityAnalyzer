@@ -404,7 +404,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The user can toggle between light and dark theme via a menu action.
 - [x] The selected theme persists across application restarts.
 - [x] All windows, dialogs, and the plot update to match the selected theme immediately.
-- [x] The hamburger menu opens four submenus, as a conventional application's menu does: **File** (Open…, Recent Files, then Process Multiple Files… and Save Template…), **Import/Export** (Import from CSV…, Export…), **Settings** (the theme) and **Help** (User Manual, then About). There is no Exit: the window's close button is it.
+- [x] The hamburger menu opens four submenus, as a conventional application's menu does: **File** (Open…, Add Recording…, Recent Files, then Process Multiple Files… and Save Template…), **Import/Export** (Import from CSV…, Export…), **Settings** (the theme) and **Help** (User Manual, then About). There is no Exit: the window's close button is it.
 - [x] The theme is two entries of their own under Settings, **Light Theme** and **Dark Theme**, the one in use checked (a radio mark); choosing one switches every window at once and is remembered, and choosing the one in use changes nothing. Dark is the default.
 - [x] The main menu has no icons: its entries are text under section headings, as VS Code's are (the icons came from the toolbar the menu replaced, and four of nine entries had one). The title bar's own buttons are font glyphs that take the theme's colours.
 - [x] The menus (the main menu and the plot's) are drawn as VS Code's are: a row is 28 px high with 12 px of text padding at the sides and sits inset 4 px from the menu's edges; the row under the pointer, or reached by the keys, or whose submenu is open, is the accent (`AccentFillColorDefault`) with its text, its shortcut and its chevron white (`TextOnAccentFillColorPrimary`); the shortcut is the secondary text until then. They are the `MenuFlyoutItem*` brushes as aliases of the tokens, the paddings as resources, and a margin on every `MenuItem`.
@@ -513,13 +513,16 @@ profile, so a batch processes with the linear calibration.
 
 - **`MainWindow` / `MainWindowViewModel`** (`ViewModels`, `Views`): the shell - its own title bar (snap layouts on the
   maximize button), the hamburger menu (four submenus: File, Import/Export, Settings, Help; no Exit), Recent Files, drag and drop, the
-  log sidebar (Ctrl+B), the themes, and the commands behind them: Open, Import from CSV, Export, Save Template, Process
+  log sidebar (Ctrl+B), the themes, and the commands behind them: Open, Add Recording, Import from CSV, Export, Save Template, Process
   Multiple Files. Three jobs are types of their own: `ShellPreferences` (Recent Files, the theme, the sidebar, the last
   folder, the legend's choice), `SessionExport` (the data, the image and the log written out) and `BatchRunner` (Apply
   Template's batch and each file's export). Processing a recording (`LoadAsync`) removes the recordings processed before
   (`ClearProcessedRun`: `Plot.RemoveSource` for each id in `Sources`) and keeps what was imported from CSV files, numbering
   the run `Plot.NextSourceId` so it never shares a source id with an import; with nothing imported it is `ClearRun`, a plot
-  started again. An import that replaces the plot, and a batch, still clear everything. Its dialogs, pickers, configurator, clock and preferences are handed in as
+  started again. Add Recording (`AddRecordingCommand`, `LoadAsync(path, add: true)`) is the same run with nothing removed: with
+  something on the plot it appends to `Sources`, names the recording apart from the plot's others (`UniqueSourceLabel`: "name
+  (2)") and leaves the plot's title; failing or cancelling it changes nothing. With an empty plot it is Open. An import that
+  replaces the plot, and a batch, still clear everything. Its dialogs, pickers, configurator, clock and preferences are handed in as
   one `MainWindowServices`; each service left out has the effect its property states. The hamburger menu is declared
   in `MainWindow.axaml` and bound to it, every entry a command, Help's two too (through `IHelpActions`).
 - **Menus filled from the data** (Recent Files, Plot File, Readout): a list of `MenuChoice` (a header, a command and
