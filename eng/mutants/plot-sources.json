@@ -4,7 +4,11 @@
     "-class",
     "TmDq.App.Tests.RemoveFileTests",
     "-class",
+    "TmDq.App.Tests.PlotSourcesTests",
+    "-class",
     "TmDq.App.Tests.ChartViewTests",
+    "-class",
+    "TmDq.App.Tests.ImportedDataKeptTests",
     "-stopOnFail"
   ],
   "mutants": [
@@ -103,6 +107,86 @@
       "new": "<MenuItem Header=\"Remove File...\" Command=\"{Binding SetTitleCommand}\" />",
       "expect": "caught",
       "note": "the menu item sets the plot's title"
+    },
+    {
+      "id": "P3",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        foreach (int id in removing) SourceRemoved?.Invoke(this, id);",
+      "new": "        foreach (int id in removing.Skip(1)) SourceRemoved?.Invoke(this, id);",
+      "expect": "caught",
+      "note": "the first recording removed is not told, and Save Template keeps it"
+    },
+    {
+      "id": "P4",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotSources.cs",
+      "old": "removedNames.Contains(title) ? List()[0].Label : title;",
+      "new": "!removedNames.Contains(title) ? List()[0].Label : title;",
+      "expect": "caught",
+      "note": "a title the operator wrote is replaced, and one that named the removed recording stays"
+    },
+    {
+      "id": "P5",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotSources.cs",
+      "old": "List()[0].Label",
+      "new": "List()[^1].Label",
+      "expect": "caught",
+      "note": "the title names the last recording left, not the first"
+    },
+    {
+      "id": "P6",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
+      "old": "int selected = sources.Count == 1 ? 0 : sources.ToList().FindIndex(s => s.Id == _plot.VisibleSource);",
+      "new": "int selected = sources.Count == 1 ? -1 : sources.ToList().FindIndex(s => s.Id == _plot.VisibleSource);",
+      "expect": "caught",
+      "note": "the only recording starts unchosen"
+    },
+    {
+      "id": "P7",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
+      "old": "sources.ToList().FindIndex(s => s.Id == _plot.VisibleSource);",
+      "new": "sources.ToList().FindIndex(s => true);",
+      "expect": "caught",
+      "note": "with several overlaid, the first starts chosen and Enter removes it"
+    },
+    {
+      "id": "P8",
+      "file": "src/TmDq.App/Views/Dialogs/ChoiceWindow.cs",
+      "old": "        OkButton.IsEnabled = Choices.SelectedIndex >= 0;\n        Choices.SelectionChanged",
+      "new": "        Choices.SelectionChanged",
+      "expect": "caught",
+      "note": "OK is available with nothing chosen"
+    },
+    {
+      "id": "P9",
+      "file": "src/TmDq.App/Views/Dialogs/ChoiceWindow.cs",
+      "old": "Choices.SelectionChanged += (_, _) => OkButton.IsEnabled = Choices.SelectedIndex >= 0;",
+      "new": "Choices.SelectionChanged += (_, _) => OkButton.IsEnabled = false;",
+      "expect": "caught",
+      "note": "OK stays held after something is chosen"
+    },
+    {
+      "id": "K6",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotSources.cs",
+      "old": "public int NextId => _series.Count == 0 ? 0 : _series.Max(s => s.SourceId) + 1;",
+      "new": "public int NextId => _series.Count == 0 ? 0 : _series.Max(s => s.SourceId) + 0;",
+      "expect": "caught",
+      "note": "the run takes the greatest id the plot holds, which an import has"
+    },
+    {
+      "id": "K7",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "SetSourceLabel(only, sourceLabel);",
+      "new": "SetSourceLabel(only + 1, sourceLabel);",
+      "expect": "caught",
+      "note": "the imported file's name goes to a source that is not its own"
+    },
+    {
+      "id": "K8",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "            Sources.ForgetNames();   // the new file is the only recording",
+      "new": "            _ = Sources.Shown;   // the new file is the only recording",
+      "expect": "caught",
+      "note": "an import that replaces the plot keeps the earlier recording's name for its source"
     }
   ]
 }

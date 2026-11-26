@@ -4,12 +4,54 @@
     "-class",
     "TmDq.App.Tests.AddRecordingTests",
     "-class",
+    "TmDq.App.Tests.ImportedDataKeptTests",
+    "-class",
     "TmDq.App.Tests.ShellTests",
     "-class",
-    "TmDq.App.Tests.ImportedDataKeptTests",
+    "TmDq.App.Tests.PhasedArrayImportTests",
     "-stopOnFail"
   ],
   "mutants": [
+    {
+      "id": "K1",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "            ClearUnlessAdding();\n            // The run is numbered",
+      "new": "            ClearRun();\n            // The run is numbered",
+      "expect": "caught",
+      "note": "processing a recording clears the plot, and with it what was imported"
+    },
+    {
+      "id": "K2",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "choice.Request with { SourceId = Plot.NextSourceId };",
+      "new": "choice.Request with { SourceId = choice.Request.SourceId };",
+      "expect": "caught",
+      "note": "the run keeps source id 0 and shares it with an import"
+    },
+    {
+      "id": "K3",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        catch (RecordingException e)\n        {\n            ClearUnlessAdding();",
+      "new": "        catch (RecordingException e)\n        {\n            ClearRun();",
+      "expect": "caught",
+      "note": "a recording that fails to open takes the import with it"
+    },
+    {
+      "id": "K4",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "if (Plot.SourceList().All(s => processed.Contains(s.Id)))",
+      "new": "if (Plot.SourceList().Any(s => processed.Contains(s.Id)))",
+      "expect": "caught",
+      "note": "the plot is cleared whenever it holds a processed recording, imports or not"
+    },
+    {
+      "id": "K5",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        Plot.RemoveSources(processed);   // one redraw for all of them\n",
+      "new": "        _ = processed.Count;\n",
+      "expect": "caught",
+      "note": "the recordings processed before stay beside the new one"
+    },
     {
       "id": "A1",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
@@ -113,6 +155,22 @@
       "new": "Command=\"{Binding OpenCommand}\"",
       "expect": "caught",
       "note": "the menu item is Open"
+    },
+    {
+      "id": "P1",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "        _lastRunFile = Path.GetFileName(request.FileName);\n",
+      "new": "",
+      "expect": "caught",
+      "note": "an added recording's non-overlap warning names no file"
+    },
+    {
+      "id": "P2",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "_sources.RemoveAll(s => s.SourceId == id) > 0",
+      "new": "_sources.RemoveAll(s => s.SourceId != id) > 0",
+      "expect": "caught",
+      "note": "Remove File takes out every recording but the one removed from what Save Template captures"
     }
   ]
 }

@@ -101,6 +101,18 @@ Item 7 of the efficiency and practice review of 2026-11-25 (no behaviour change)
 
 **Moved with it:** 9 kept mutants (`antenna-overlay.json` O10, `keep-imports.json` K6 and K8, `pre-release-tidy.json` P4 and P5, `remove-file.json` R2, R4, R5 and R7) re-anchored on the moved text, six of them now in `PlotSources.cs`, and run again: 9 caught. **How it was checked.** Six new cases in `PlotSourcesTests` (the type on its own); every case of the plot's that names a recording passes unchanged. App suite 918 in all, 34 not run, 0 failed: **884 passed** (878 before).
 
+#### The day's mutant lists are three, one for each area of code they guard
+
+Item 9 of the efficiency and practice review of 2026-11-25. The five lists written for the day's changes overlapped: `keep-imports.json`, `add-recording.json` and part of `pre-release-tidy.json` all anchored on the same lines of `LoadAsync`, and `remove-file.json`, the rest of `pre-release-tidy.json` and part of `keep-imports.json` on the plot's removal, so a move that changed no behaviour had five lists to re-anchor (17 anchors in #393, 9 in #395). They are now one list for each area, the mutants and their ids unchanged (61 before and after), so the changelog's verdicts above still name them:
+
+- `processing-flow.json` (20): what the main window does with recordings: Open, Add Recording, imports kept and Save Template kept in step (K1-K5, A1-A13, P1-P2).
+- `plot-sources.json` (22): the plot's removal, `PlotSources`, an import's name, and Remove File's command and dialog (R1-R12, P3-P9, K6-K8), now run against `PlotSourcesTests` as well.
+- `calibration-channel.json` (19): gains P10-P13, the calibration note and the late read.
+
+`keep-imports.json`, `add-recording.json`, `pre-release-tidy.json` and `remove-file.json` are gone. `.claude/CLAUDE.md` says to keep one list per area of code and extend the one that guards what a change touches.
+
+**How it was checked.** The three lists run in full against their new test classes: 61 mutants, 61 caught (20, 22 and 19). The managed suite's `RepoFilesTests` holds every kept anchor in its file exactly once. No code or test changed; the app suite stays 918 in all, 884 passed.
+
 ### v3.4.0 — The CSV export on the clock, a faster start, and the loose ends of the 2026-11-24 list
 
 A minor release (2026-11-25). The visible change is the CSV export, which now writes one row a second for a recording whose channels report once a second (#380, #382); the window is up in half the time (ReadyToRun, #374); a crash leaves a report and each release keeps its symbols; the dialogs' title bars follow the theme on Windows 10 (#379); every control has a name a screen reader can say (#376) and the wording is settled (#377); Select None on the Receiver SNR tab clears every receiver (#378); a corrupt time stamp stops its stream instead of filling the machine with rows (#375). The rest is the repository's own tidying: the app tests in folders by area (#384), the Python helper's requirement written down (#383), `SECURITY.md` (#385), CI's Debug job and local CI script. Baselines at this release: native 551, managed 420 passed, app 836 passed with 34 not run (870 in all).
