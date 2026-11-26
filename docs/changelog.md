@@ -12,6 +12,10 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The Sandbox test finds v2.14.2's setup in Drive, not in the main checkout's `deploy\`
+
+Releases are cut from worktrees, so the main checkout's `deploy\` no longer has a job. `run_sandbox_test.ps1` looked for v2.x's `setup.exe` (untracked) in `deploy\` of the checkout, then in the main checkout's; it now looks in `deploy\` of the checkout, then in the new `-OldSetupDir` (default `G:\My Drive\Software Releases`, where the file now lives). The `cut-release` skill and `verify_install.ps1`'s failure message say so. Checked by parsing the script (PSScriptAnalyzer, `eng\check_scripts.ps1`); the full Sandbox run (15 to 20 minutes) was not repeated.
+
 #### A new application icon
 
 The icon is a PCM bit stream (a stepped teal wave, solid) over the Receiver SNR trace (dotted amber) on a navy tile: the two things the plot shows, drawn the way it draws them. `eng\gen_app_icon.py` now **draws** `assets/icon.ico` (the artwork is its geometry, supersampled and box-reduced) instead of resizing `docs/design/icon_image.png`, which is removed. Two drawings: 48 px and up carry the full mark; 16, 24 and 32 px a simplified one (three steps over three square dots) whose every edge is a whole pixel, so a title bar at 100 % and 200 % is crisp. Same sizes as before (16, 24, 32, 48, 64, 256), so `IconTests` and the packaging check hold unchanged. Checked: the script run, the small sizes read back magnified; the suites below. No code of the application.

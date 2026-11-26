@@ -234,8 +234,8 @@ and v2.13.1 could not make it: that needed "a genuinely clean Windows target; Wi
 Home offers neither Sandbox nor Hyper-V."
 
 On Windows Pro/Enterprise with the **Windows Sandbox** feature enabled. The payload the verifier reads defaults to the
-portable ZIP beside the MSI, `deploy\staging\unsigned`, the committed PRN sample, v2.14.2's setup (the
-main checkout's `deploy\` when this is a worktree) and a NEWER MSI of the same product, which the runner builds
+portable ZIP beside the MSI, `deploy\staging\unsigned`, the committed PRN sample, v2.14.2's setup (`deploy\` of
+this checkout, else `G:\My Drive\Software Releases`, or `-OldSetupDir`) and a NEWER MSI of the same product, which the runner builds
 itself (unsigned, the next patch version, from the staged files) for the upgrade; `-Payload` overrides it,
 separated by semicolons because the recordings' names contain commas:
 
@@ -248,7 +248,7 @@ launches a disposable VM that has never seen this application, and prints the re
 Exits non-zero on failure. It takes **15 to 20 minutes**: in the Sandbox every `msiexec /i` of the 50 MB MSI spends
 about two minutes before it starts (the same package does not, on a development machine), and the test installs
 it five times; `progress.txt` beside `results.txt` (under `deploy\sandbox\.work\out`) says how far it has got.
-`deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe` is the last v2.x release (the GitHub release's asset, if it is
+`tmDataQualityAnalyzer-v2.14.2_setup.exe` (kept in `G:\My Drive\Software Releases`) is the last v2.x release (the GitHub release's asset, if it is
 not on disk): the MSI's refusal to install beside an Inno install needs a real one.
 
 What it establishes that nothing else can:
