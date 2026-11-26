@@ -85,6 +85,54 @@ Items 1, 2, 3, 6 and 8 of the efficiency and practice review of 2026-11-25 (no b
 
 **Moved with it:** 17 kept mutants of five lists anchored on the text that moved. Re-anchored and run again, 15 were caught as they stood; `pre-release-tidy.json` P3 was rewritten (taking out the event's only call no longer compiles) and is caught; `keep-imports.json` K9 is retired: emptying `Sources` in `ClearProcessedRun` is now done by the source-removed notice of #392 for every recording on the plot, and the line is kept only for a run whose streams added no samples, which no test reaches. **How it was checked.** A new case in `RemoveFileTests` (several at once: one redraw, each told, a repeat and an absent id passed over); the batch's warning case in `TemplateBatchTests` and the added recording's in `AddRecordingTests` hold the file named. App suite 912 in all, 34 not run, 0 failed: **878 passed** (877 before).
 
+#### The binding no longer wraps a large array's size, reads a disposed result's memory, or hands the core a changed path
+
+A read-only review of the C# binding (`src/TmDq.Core`) found these, fixed together:
+
+- **A large array's size wrapped (a native heap overflow).** `Arena.Alloc<T>` and `AllocPointers<T>` worked out `count * sizeof(T)` in 32-bit
+  `int`: 536,870,912 doubles came to 0 bytes, a block of one was allocated, and `Copy` then wrote 4 GB past it (`CsvFile.Write` with a column
+  that long). `Arena.Bytes` now works the size out in pointer-sized arithmetic, checked: a size the address space cannot hold throws
+  `OverflowException`, and one the heap cannot give throws `OutOfMemoryException`. `Copy` of a `double[]` (the plot's samples, which the CSV
+  export hands over) is now one block copy instead of an indexer call a value.
+- **A pointer into a native object could be read after it was freed.** The marshaller holds a `SafeHandle` only for the length of the
+  P/Invoke, and several calls return pointers into the object that were read only afterwards: `StreamResult.ChannelName`, `Key` and
+  `ToProcessed`, and `CalibrationRun.GetResult`. A Dispose on another thread in between freed them under the copy (latent: the app makes these
+  calls on one thread). `NativeHandle.Lease()` (`HandleLease`, `DangerousAddRef`/`DangerousRelease` in a `using`) now holds the handle across
+  each call and its copy, so a Dispose meanwhile is carried out after it. The spans `StreamResult` and `SeriesSet` hand out are views, which no
+  lease can cover: their documentation now says a span is valid only until the Dispose, where it promised more than the code kept. The
+  `SeriesSet` and `StreamResult` constructors read their strings with no lease, on purpose: no other thread has the object yet.
+- **A path UTF-8 cannot carry was changed, not refused.** `Arena.Utf8` turned a lone UTF-16 surrogate (which a Windows file name may hold)
+  into U+FFFD, and a NUL ended the text early, so the core was handed another path than the one asked for. Both are refused now with a
+  `TmdqException` (`BadArgument`) saying why, the type every caller already reports a recording or file the core cannot open with (the app's
+  `StreamsRun.Open` wraps it as "<file> could not be opened: ...").
+- **The two-call buffer helpers ignored their second answer.** `Text.Snprintf` cut text short that grew between the measuring call and the
+  writing one, and `ChartGeometry`'s tick reader ignored a failing second call (an axis of zeros). Both check the second answer now, ask again
+  with a buffer of the new size while it does not fit, and give up after four buffers (`Text.BufferAttempts`) with a `TmdqException`
+  (`Internal`); fewer ticks than measured are cut to those written.
+- **Documentation:** `IRunObserver` said a method must not dispose its own run, which is supported and tested (cancelled at once, released
+  once the method has returned; `Wait` from a method returns at once); `Library.Load` said a failed load leaves nothing behind, but a DLL with
+  no `tmdq_abi_version` stays mapped; `StreamKey.IsSameStream` said it always agrees with `==`, which is false for `default(StreamKey)` (a
+  null label, which the core reads as "") and a label with a NUL (now refused): the documentation says so instead of normalising the key;
+  `MinimumRevision`'s comment names `tmdq_chart_round_ticks` beside the phased array log in revision 4; the `Handles.cs` header and the guide's
+  binding paragraph describe the lease.
+
+**Left as they are.** The `TMDQ_CORE_DLL` override is honoured in release builds (documented, and set only by the user's own environment);
+the test-only public members (`StreamResult.ChannelName`/`ChannelWord`/`ChannelValues`, `ChartGeometry.Ticks`/`PixelToY`, `Library.AbiVersion`/
+`AbiRevision`/`LoadedPath`) stay, since tests use them; `TimeBase.Advance` is unchanged; `ChartGeometry.Build`'s arrays are not pooled
+(`ArrayPool`), a larger change.
+
+**How it was checked.** New cases in `ArenaTests` (the size in pointer-sized arithmetic and an impossible one; a 100,000-value array and a
+list copied whole; a lone surrogate either way and a NUL refused, by `Arena.Utf8` and by `Ch10File.Open` and `CsvFile.Write` before the core
+is asked; text that grew between the calls, by one byte and twice, and text that never stops growing; the case that held the old truncation
+is replaced), `ChartGeometryTests` (ticks that grew or shrank between the calls, a failing second call, a count that never settles),
+`HandleTests` (a lease holds the handle through a Dispose until the last lease ends; a lease on a handle nobody disposed leaves it open) and
+`SeriesTests` (the two keys `IsSameStream` and `==` part on). Mutation check: `eng/mutants/arena-repeats.json`, extended by R14-R25 and now
+run without `RepoFilesTests` (which, in a list with no filter, failed on every mutant because the mutated text no longer matched its list):
+all 25 run, 24 caught; R4 was re-anchored on the moved text (caught by the heap's own check, the process ending 0xC0000374), R20 and R25
+rewritten since they did not compile, and R9 (the first tick call's error ignored) now survives as equivalent: the second call asks the same
+question and is checked (R22). `eng/mutants/safe-handles.json` extended by H18-H23: the lease that takes no hold and the lease that never gives it back are caught (both rewritten once: the first was caught only by a 420 s hang, the second did not compile); taking the lease out of `ToProcessed`, `ChannelName`, `Key` or `GetResult` survives, kept as `survived`: only a Dispose on another thread between a call and its copy shows it, a race no test opens without a seam in the product. Managed suite **434 passed** / 0 failed /
+1 skipped (421 before, 13 cases added; `CLAUDE.md` had said 420); app suite unchanged, 884 passed.
+
 #### The tests share their fakes, and the tests of a recording that processes run on a short one
 
 Items 4 and 5 of the efficiency and practice review of 2026-11-25 (tests only, no change to the application):
@@ -94,6 +142,20 @@ Items 4 and 5 of the efficiency and practice review of 2026-11-25 (tests only, n
 - **Docs:** the guide's paragraph on `Support/` and the write-test skill name them, and the skill says when to take `ShortRecordings`.
 
 **How it was checked.** App suite 912 in all, 34 not run, 0 failed (878 passed, unchanged). The kept mutants of the classes that moved to the short recording and the shared fakes (`add-recording.json`, `keep-imports.json`, `pre-release-tidy.json`) were run again against them: 34 mutants, 34 caught.
+
+#### The scripts hold the Visual Studio 2022 pin themselves, CI needs no third-party action, and the installer clears a dead `.ch10` association
+
+From a read-only review of the scripts, CI, the installer and the docs (2026-11-25); no change to the application.
+
+- **The toolset pin is enforced, not only asked for.** `Initialize-MsvcEnvironment` (`eng/common.ps1`) loaded `eng\env.ps1`, which asks vswhere for `[17.0,18.0)`, only when `msbuild` was missing, so a Visual Studio 2026 developer prompt built with its own toolset (both projects use `$(DefaultPlatformToolset)`): the silent move the pin exists to stop. Now `Assert-PinnedVisualStudio` refuses a shell whose `VisualStudioVersion` is outside the range (`Get-PinnedVsRange`: `TMDQ_VS_RANGE`, else `[17.0,18.0)`, read by `Test-VsVersionInRange`), with a message saying what to do; env.ps1 takes the range from there, refuses another Visual Studio's prompt before importing 2022 over it, and checks what it imported. A shell that names no Visual Studio has env.ps1 loaded even when `msbuild` is on PATH. `eng\mutate.ps1` goes through the same function.
+- **CI uses only GitHub's own actions.** `ilammy/msvc-dev-cmd` is gone from both jobs (the user's choice): every native script loads MSVC itself through env.ps1, as on a developer's machine, and the Toolchain versions step dot-sources env.ps1 to log the versions and still fails on anything but Visual Studio 17.0. The .NET builds never needed the developer environment (`eng\WindowsSdkTools.targets` finds `mt.exe`). Also: a push to `main` no longer cancels the run of the push before it (`cancel-in-progress` only for pull requests), and the checkouts keep no token (`persist-credentials: false`; no step uses git with it). The workflow's header now describes its two jobs.
+- **The Debug core stays in the `ci` job.** The review called it unused there; it is not: `ReleaseCoreGuardTests.TheRealCoresAreToldApart("Debug")`, in the managed suite, runs `eng\check_release_core.ps1` on `out\Debug\tmdq_core.dll` and skips when it is missing, so moving the build to `native-debug` would have turned that case into a silent skip in CI. Left as it was; the step's comment says why.
+- **PSScriptAnalyzer is pinned** to 1.25.0 (`eng\check_scripts.ps1`, installed and imported at that version), so a new release's rules cannot turn CI red on a commit that changed nothing.
+- **The installer:** declining the association on an upgrade deleted the `tmDataQualityAnalyzer.ch10` ProgID but left `.ch10`'s default value naming it. That value is now deleted too, only when it names our ProgID (`Ch10NamesOurProgId` in a new `[Code]` section), so another application's association is left alone.
+- **`eng\gen_third_party_notices.ps1`** found the packages in `NUGET_PACKAGES` or `%USERPROFILE%\.nuget\packages`; it now reads the folders restore used from the app's `obj\project.assets.json` (`packageFolders`, as `eng\check_package_licences.ps1` does), so a NuGet.config that moves them is followed. `-PackagesFolder` still names one folder (the tests use it).
+- **Docs:** the guide's test catalog names `ReleaseCoreGuardTests` and `TitleBarThemeTests`; it says the app tests are in area folders (since #384); the soak (guide and `eng\run_soak.ps1`) is described as the `qt` blocks it is since #380, v2.14.2's values on each column's sample grid, not v2.14.2's bytes; the CI paragraph names the script analyzer and the scripts' own MSVC set-up; Common Issues names the pin's refusal. README lists Python 3 (the package script generates the manual with `py eng\embed_manual_images.py`). The cut-release skill's packaging summary names the manual generation that runs first, the ReadyToRun publish and the symbols ZIP. `eng\run_throughput_bench.ps1` no longer says a run takes several minutes (the last logged one spent 34 s in its timed runs, before #343 made them faster).
+
+**How it was checked.** `eng\check_scripts.ps1` clean (PSScriptAnalyzer 1.25.0); `eng\check_release_consistency.ps1` passes; `eng\ci_local.ps1 -KeepGoing -SkipDebugCore -SkipDebugTests` from a plain shell (no developer prompt: every native step loaded MSVC through env.ps1, as CI now does) says CI would pass: native 551 passed / 1 skipped, managed 422 in all / 0 failed / 2 skipped (the Debug core was not built here, so `ReleaseCoreGuardTests`' Debug case skipped), app 918 in all / 0 failed / 34 not run. No baseline moved. The pin, by hand under Windows PowerShell 5.1: `Test-VsVersionInRange` on nine ranges (bracket and parenthesis bounds, open bounds, a bare minimum) and a range it cannot read (refused); `VisualStudioVersion=18.0` refused with the message; a plain shell loads Visual Studio 2022's `MSBuild.exe` and passes; `TMDQ_VS_RANGE=[18.0,19.0)` refuses 2022. The notices generator on the app's real deps file writes the same 17 packages with the folders read from the assets file as with `-PackagesFolder`, and refuses a missing assets file. The installer script compiles with ISCC 6 against a stand-in staging folder, and a `Check:` naming a missing function fails the compile; it was not run (an install would touch this machine's `.ch10` association), so the declined-association upgrade is unverified, and `deploy\sandbox\verify_install.ps1` installs with the default tasks, so its expectations are untouched. The workflow's changes (no MSVC action, the concurrency rule, the checkouts) show only on GitHub's runners. **Mutation check:** a new kept list, `eng/mutants/third-party-notices.json` (app suite, `ThirdPartyNoticesTests`; no list of that suite covered the scripts): N1 and N2 caught. One more, run and not kept: ignoring the assets file's folders survives, since every case passes `-PackagesFolder`; that branch was checked by hand as above. The pin's functions have no repo test, so no mutant applies to them.
 
 #### The plot's recordings are a type of their own: `PlotSources`
 

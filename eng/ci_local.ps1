@@ -17,16 +17,17 @@
         7. the native tests, Debug (the workflow's second job, which runs beside the first; here it runs last)
 
     It stops at the first step that fails, as CI does; -KeepGoing runs the rest anyway and lists every failure. The
-    hosted job also installs .NET 10 and the MSVC environment: here they are whatever is installed, and eng\env.ps1
-    (which the build scripts load themselves) pins Visual Studio 2022, as the hosted job does.
+    hosted job also installs .NET 10: here it is whatever is installed. MSVC is loaded the same way in both places: the
+    build scripts load it themselves through eng\env.ps1, which pins Visual Studio 2022, and refuse a shell of another
+    (a Visual Studio 2026 developer prompt).
 
     Each step runs in a child Windows PowerShell, as CI's do. Works under Windows PowerShell 5.1 and PowerShell 7.
 
     Usage:
         powershell -ExecutionPolicy Bypass -File eng\ci_local.ps1 [-KeepGoing] [-SkipDebugCore] [-SkipDebugTests]
         ... -KeepGoing      run every step even after one fails, then list the failures
-        ... -SkipDebugCore  leave out the Debug build of the core (CI builds it only to see that Debug compiles
-                            warning-free); the hosted run still does
+        ... -SkipDebugCore  leave out the Debug build of the core (CI builds it to see that Debug compiles warning-free,
+                            and for ReleaseCoreGuardTests' Debug case, which skips without it); the hosted run still does
         ... -SkipDebugTests leave out the native tests in Debug (about 100 s); the hosted run still runs them
 #>
 param(

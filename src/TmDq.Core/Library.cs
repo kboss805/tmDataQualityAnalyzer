@@ -27,7 +27,7 @@ public static unsafe class Library
     public const int ExpectedVersion = 2;
 
     /// <summary>The lowest revision of that version this binding needs (TMDQ_ABI_REVISION).</summary>
-    public const int MinimumRevision = 4;   // 1: the receiver-parameters file (plan step 4.1a); 2: the chart's geometry (4.3a); 3: a series' index; 4: a phased array log (US10.0)
+    public const int MinimumRevision = 4;   // 1: the receiver-parameters file (plan step 4.1a); 2: the chart's geometry (4.3a); 3: a series' index; 4: a phased array log (US10.0) and tmdq_chart_round_ticks
 
     private static readonly object s_lock = new();
     private static string? s_path;
@@ -70,9 +70,11 @@ public static unsafe class Library
     /// Loads the DLL at <paramref name="dllPath"/> and verifies it: the ABI version and revision, and that
     /// every struct this binding mirrors has the size the DLL reports. A second call with the same path does
     /// nothing; with another path it throws, because P/Invoke binds to one module for the life of the process.
-    /// A call that fails because the file is not a loadable library leaves nothing behind, so another path may
-    /// be tried; one that fails because the DLL loads but does not match this binding cannot be undone (the
-    /// runtime keeps the module it bound), and the process should report it and exit.
+    /// A call that fails because the file is not a loadable library loads nothing, and leaves no path recorded, so another
+    /// path may be tried. A library that loads but has no <c>tmdq_abi_version</c> is refused the same way and leaves no
+    /// path recorded either, but it stays mapped into the process (nothing unloads it). One that fails because the DLL
+    /// loads but does not match this binding cannot be undone (the runtime keeps the module it bound), and the process
+    /// should report it and exit.
     /// </summary>
     /// <exception cref="FileNotFoundException">There is no file at the path.</exception>
     /// <exception cref="InvalidOperationException">A different DLL is already loaded, or the DLL does not match this binding.</exception>
