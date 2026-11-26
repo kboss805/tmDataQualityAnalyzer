@@ -242,13 +242,14 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _isLoading, value);
     }
 
-    /// <summary>Reads an exported CSV and shows it in place of whatever was shown (US6.3); false,
-    /// with nothing changed, for a file that is not one.</summary>
-    public bool LoadCsv(string path, CsvKind kind = CsvKind.TelemetryReceivers, string? sourceLabel = null)
+    /// <summary>Reads an exported CSV and shows it in place of whatever was shown (US6.3), or, with <paramref name="add"/> (and
+    /// always for an antenna's log, US10.0), adds it to what is shown as a recording of its own; false, with nothing changed,
+    /// for a file that is not one.</summary>
+    public bool LoadCsv(string path, CsvKind kind = CsvKind.TelemetryReceivers, string? sourceLabel = null, bool add = false)
     {
         CsvData? data = PlotCsv.Parse(path, kind);
         if (data is null) return false;
-        ShowCsv(data, kind, sourceLabel);
+        ShowCsv(data, kind, sourceLabel, add);
         return true;
     }
 
@@ -256,7 +257,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// <see cref="LoadCsv"/> with the file read off the UI thread and <see cref="IsLoading"/> set meanwhile. A
     /// request while one is being read is dropped, as v2.x dropped it.
     /// </summary>
-    public async Task<CsvLoad> LoadCsvAsync(string path, CsvKind kind = CsvKind.TelemetryReceivers, string? sourceLabel = null)
+    public async Task<CsvLoad> LoadCsvAsync(string path, CsvKind kind = CsvKind.TelemetryReceivers, string? sourceLabel = null, bool add = false)
     {
         if (IsLoading) return CsvLoad.Dropped;
         IsLoading = true;
@@ -264,7 +265,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         {
             CsvData? data = await Task.Run(() => PlotCsv.Parse(path, kind));
             if (data is null) return CsvLoad.Failed;
-            ShowCsv(data, kind, sourceLabel);
+            ShowCsv(data, kind, sourceLabel, add);
             return CsvLoad.Loaded;
         }
         finally
@@ -277,12 +278,14 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// Shows a parsed CSV as a run's series would be shown (<see cref="PlotCsv.Series"/>), with the clock from the
     /// file; then a warning for any rows skipped, since a partly loaded file must not pass for a whole one.
     /// </summary>
-    private void ShowCsv(CsvData data, CsvKind kind, string? sourceLabel)
+    private void ShowCsv(CsvData data, CsvKind kind, string? sourceLabel, bool add)
     {
-        // An antenna's log is added to what the plot shows, to be compared with it (US10.0); every other CSV replaces it.
-        bool added = kind == CsvKind.PhasedArrayAntenna && _series.Count > 0;
+        // An antenna's log is always added to what the plot shows, to be compared with it (US10.0); any other CSV is when the
+        // caller asks (the main window does, whenever the plot holds something) and replaces it otherwise.
+        bool added = (add || kind == CsvKind.PhasedArrayAntenna) && _series.Count > 0;
         _timeBase ??= new TimeBase();
         int? sourceId = null;
+        Dictionary<int, int>? sourceMap = null;
         double shift = 0.0;
         if (added)
         {
@@ -305,8 +308,25 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
                 start = 0.0;
             }
             shift = start;
-            sourceId = Sources.NextId;
-            if (sourceLabel is not null) SetSourceLabel(sourceId.Value, sourceLabel);
+            int first = Sources.NextId;
+            if (kind == CsvKind.PhasedArrayAntenna)
+            {
+                sourceId = first;   // a log is one recording, whatever its columns say
+                if (sourceLabel is not null) SetSourceLabel(sourceId.Value, sourceLabel);
+            }
+            else
+            {
+                // An export holds one recording or several (a batch's, each column qualified "S<n>| "): each of its numbers
+                // is given the next free one, so that none is a recording already on the plot, and is named for the file.
+                List<int> inFile = data.Series.Select(s => s.SourceId).Distinct().Order().ToList();
+                sourceMap = new Dictionary<int, int>();
+                for (int i = 0; i < inFile.Count; i++)
+                {
+                    sourceMap[inFile[i]] = first + i;
+                    if (sourceLabel is not null)
+                        SetSourceLabel(first + i, inFile.Count == 1 ? sourceLabel : string.Create(CultureInfo.InvariantCulture, $"{sourceLabel}, Source {inFile[i]}"));
+                }
+            }
         }
         else
         {
@@ -317,7 +337,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         }
         _window.ClearHistory();
         _readoutSeriesId = null;
-        List<PlotSeries> imported = PlotCsv.Series(data, _lockAxisView, ref _nextId, kind, sourceId, shift);
+        List<PlotSeries> imported = PlotCsv.Series(data, _lockAxisView, ref _nextId, kind, sourceId, shift, sourceMap);
         ShowOnlyTheCombinedChannels(imported);   // as a run's are: the rest are a click away in Customize View
         _series.AddRange(imported);
         // A file of one recording is named for it in Plot File and Remove File; one that holds several (a batch's export) keeps "Source N".

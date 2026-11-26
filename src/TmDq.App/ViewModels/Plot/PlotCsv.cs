@@ -62,10 +62,12 @@ internal static class PlotCsv
     /// the core's stream order (<c>assignImportedStreamOrders</c>), so its two metrics share a colour and each stream
     /// has its own; shown as <paramref name="view"/> shows a run's. A file added to a plot that already shows data
     /// (<paramref name="sourceId"/> its own recording, <paramref name="shift"/> the seconds its first sample comes after the
-    /// plot's elapsed zero) has its times moved there, once for each array the series share.
+    /// plot's elapsed zero) has its times moved there, once for each array the series share. <paramref name="sourceMap"/>, for a
+    /// file that holds several recordings (an export of a batch, whose columns carry <c>S&lt;n&gt;| </c> qualifiers), gives each
+    /// of the file's source numbers the number it has on the plot it is added to, so that none meets a recording already there.
     /// </summary>
     public static List<PlotSeries> Series(CsvData data, LockAxisView view, ref int nextId, CsvKind kind = CsvKind.TelemetryReceivers,
-                                          int? sourceId = null, double shift = 0.0)
+                                          int? sourceId = null, double shift = 0.0, IReadOnlyDictionary<int, int>? sourceMap = null)
     {
         bool phasedArray = kind == CsvKind.PhasedArrayAntenna;
         IReadOnlyList<int> orders = ImportedStreams.AssignOrders(data.Series);
@@ -87,7 +89,7 @@ internal static class PlotCsv
                 ReceiverIndex = c.ReceiverIndex,
                 ChannelIndex = c.ChannelIndex,
                 StreamOrder = orders[i],   // an SNR series keeps its own; the core gives the others theirs
-                SourceId = sourceId ?? c.SourceId,
+                SourceId = sourceId ?? (sourceMap is not null ? sourceMap[c.SourceId] : c.SourceId),
                 IsPhasedArray = phasedArray,
                 X = c.X,
                 Y = c.Y,

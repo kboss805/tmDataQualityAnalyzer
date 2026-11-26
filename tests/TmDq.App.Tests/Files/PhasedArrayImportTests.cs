@@ -444,9 +444,10 @@ public sealed class PhasedArrayImportTests
     }
 
     [Fact]
-    public async Task ACsvOfTheApplicationsOwnStillReplacesWhatIsShown()
+    public async Task ACsvOfTheApplicationsOwnJoinsAnAntennasLogAndBothStay()
     {
-        string first = WriteLog("replaced", Noon, 10);
+        // The order the user found it in: the antenna's log first, then an export of this application's own.
+        string first = WriteLog("log-first", Noon, 10);
         string ours = WriteOwnExport();
         try
         {
@@ -456,11 +457,17 @@ public sealed class PhasedArrayImportTests
             MainWindowViewModel vm = Window(kinds);
             await vm.ImportCsvAsync(first);
             Assert.Equal(6, vm.Plot.Series.Count);
+            string title = vm.Plot.Title;
             await vm.ImportCsvAsync(ours);
 
-            PlotSeries only = Assert.Single(vm.Plot.Series);   // it replaced the log
-            Assert.False(only.IsPhasedArray);
-            Assert.Equal(MetricType.FrameSyncLock, only.Metric);
+            Assert.Equal(7, vm.Plot.Series.Count);                                  // the log is still there, and the export with it
+            Assert.Equal(6, vm.Plot.Series.Count(s => s.IsPhasedArray));
+            PlotSeries added = Assert.Single(vm.Plot.Series, s => !s.IsPhasedArray);
+            Assert.Equal(MetricType.FrameSyncLock, added.Metric);
+            Assert.NotEqual(vm.Plot.Series.First(s => s.IsPhasedArray).SourceId, added.SourceId);   // a recording of its own
+            Assert.Equal(title, vm.Plot.Title);                                     // the title stays, as it does for a log
+            Assert.Equal(new[] { Path.GetFileNameWithoutExtension(first), Path.GetFileNameWithoutExtension(ours) },
+                         vm.Plot.SourceList().Select(s => s.Label));
         }
         finally
         {

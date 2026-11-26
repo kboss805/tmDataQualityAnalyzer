@@ -301,10 +301,10 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     }
 
     /// <summary>
-    /// Shows an exported CSV in place of whatever was shown (US6.3): the plot cleared, the file
-    /// read off the UI thread with "Loading..." over the chart, then titled with its name. A file that is not an
-    /// exported CSV is an error, and nothing is shown. An antenna's log (US10.0) is added to the plot instead, as a recording of
-    /// its own named for the file, the title and the rest left as they were. Ignored while busy.
+    /// Shows an exported CSV (US6.3): the file read off the UI thread with "Loading..." over the chart. A file that is not an
+    /// exported CSV is an error, and nothing is shown. Into an empty plot it is shown with the plot titled with its name; into a
+    /// plot that shows anything it is added (an antenna's log, US10.0, and an exported CSV alike), as a recording of its own named
+    /// for the file, the title and everything shown left as they were, so that imports stack. Ignored while busy.
     /// </summary>
     public async Task ImportCsvAsync(string path, CsvKind? kind = null)
     {
@@ -323,11 +323,12 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         try
         {
             Log.Add("Importing CSV: " + name);
-            // An antenna's log joins what the plot shows, so that the two can be compared (US10.0); any other CSV replaces it.
-            bool joins = chosen == CsvKind.PhasedArrayAntenna && Plot.HasData;
+            // Whatever is imported joins what the plot shows, so that imports stack and can be compared (US6.3, US10.0); an
+            // empty plot is where one starts.
+            bool joins = Plot.HasData;
             if (!joins) ClearRun();
             NativeCore.EnsureLoaded();
-            if (await Plot.LoadCsvAsync(path, chosen, BaseName(name)) == CsvLoad.Loaded)
+            if (await Plot.LoadCsvAsync(path, chosen, joins ? UniqueSourceLabel(BaseName(name)) : BaseName(name), add: joins) == CsvLoad.Loaded)
             {
                 _shell.AddRecentFile(path);
                 if (!joins) Plot.Title = BaseName(name);

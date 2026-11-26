@@ -424,7 +424,8 @@ columns. Hide to make the <em>picture</em> readable, not to filter the <em>data<
 
 <ul>
   <li><strong>Import/Export → Import from CSV…</strong> loads a CSV straight onto the plot, with
-      no reprocessing. Dropping a <code>.csv</code> onto the window, or choosing one under
+      no reprocessing, beside whatever the plot already shows: imports stack, each as a recording of its own
+      that <strong>Remove File</strong> takes out again. Dropping a <code>.csv</code> onto the window, or choosing one under
       <strong>File → Recent Files</strong>, does the same. Because it
       skips processing entirely, revisiting an old result takes seconds rather than re-reading
       a multi-gigabyte recording.</li>
@@ -503,7 +504,8 @@ stay. Import the log before or after processing the recording: processing a reco
 processed before it, and keeps what was imported (the log, or an exported CSV), so the two can be compared
 either way round. A log imported into an empty plot is simply what the plot then shows. If the log does not
 overlap what is shown in time, the log says so and the log is added anyway, on the same axis with a large gap
-between them. A telemetry CSV still replaces the plot.
+between them. An exported CSV is added the same way: every import joins what the plot shows, so imports stack, and
+<strong>Remove File</strong> takes one out again.
 
 <div class="note"><strong>An antenna's log is never exported as data.</strong> The antenna's own system
 writes it, so there is nothing for this application to hand back: <strong>Export → Data (CSV)</strong>
