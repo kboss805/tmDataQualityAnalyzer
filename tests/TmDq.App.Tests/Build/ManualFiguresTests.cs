@@ -697,23 +697,15 @@ public sealed class ManualFiguresTests : IDisposable
     }
 
     [AvaloniaFact]
-    public async Task AnAntennasLogImportedAfterTheQuestionEveryImportAsks()
+    public async Task AnAntennasLogImported()
     {
         string sample = Repo.Recording("av_snr_log.csv");
-
-        // The question every import asks first, as the dialog words it for this file.
-        var question = new ChoiceWindow("Import CSV", $"What kind of file is '{Path.GetFileName(sample)}'?", CsvKinds.All.Select(CsvKinds.Title).ToList());
-        question.Choices.SelectedIndex = CsvKinds.All.ToList().IndexOf(CsvKind.PhasedArrayAntenna);   // the answer for this file
-        Window ask = Shown(question);
-        Save("walk-csv-01-kind.png", ask);
-        ask.Close();
 
         // The log on an empty plot: 30 streams of H, V and C is 90 series, and only the 30 combined ones are shown.
         AppServices s = AppServices.Any;
         var vm = new MainWindowViewModel(new MainWindowServices
         {
             Picker = s, Files = s, ExportDialog = s, TemplateFiles = s, TemplateDialogs = s, AppRoot = Repo.Root, Clock = new FigureClock(),
-            CsvKinds = new FakeCsvKinds { Always = CsvKind.PhasedArrayAntenna },
         });
         await vm.ImportCsvAsync(sample);
         Assert.Equal(90, vm.Plot.Series.Count);

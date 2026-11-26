@@ -2,7 +2,7 @@
   "suite": "app",
   "args": [
     "-class",
-    "TmDq.App.Tests.AddRecordingTests",
+    "TmDq.App.Tests.OpenStacksTests",
     "-class",
     "TmDq.App.Tests.ImportedDataKeptTests",
     "-class",
@@ -37,60 +37,44 @@
       "note": "a recording that fails to open takes the import with it"
     },
     {
-      "id": "K4",
-      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "if (Plot.SourceList().All(s => processed.Contains(s.Id)))",
-      "new": "if (Plot.SourceList().Any(s => processed.Contains(s.Id)))",
-      "expect": "caught",
-      "note": "the plot is cleared whenever it holds a processed recording, imports or not"
-    },
-    {
-      "id": "K5",
-      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "        Plot.RemoveSources(processed);   // one redraw for all of them\n",
-      "new": "        _ = processed.Count;\n",
-      "expect": "caught",
-      "note": "the recordings processed before stay beside the new one"
-    },
-    {
       "id": "A1",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "bool keep = add && Plot.HasData;",
+      "old": "bool keep = Plot.HasData;",
       "new": "bool keep = false;",
       "expect": "caught",
-      "note": "Add Recording replaces the plot, as Open does"
+      "note": "Open replaces the plot, as it did before it stacked"
     },
     {
       "id": "A2",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "bool keep = add && Plot.HasData;",
-      "new": "bool keep = add;",
+      "old": "bool keep = Plot.HasData;",
+      "new": "bool keep = true;",
       "expect": "caught",
       "note": "added to an empty plot, the title and the rest are never set"
     },
     {
       "id": "A3",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "            if (!keep) ClearProcessedRun();\n        }",
-      "new": "            ClearProcessedRun();\n        }",
+      "old": "            if (!keep) ClearRun();\n        }",
+      "new": "            ClearRun();\n        }",
       "expect": "caught",
-      "note": "the recordings processed before are removed when one is added"
+      "note": "a recording opened onto a plot that shows something clears it"
     },
     {
       "id": "A4",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
       "old": "        catch (RecordingException e)\n        {\n            ClearUnlessAdding();",
-      "new": "        catch (RecordingException e)\n        {\n            ClearProcessedRun();",
+      "new": "        catch (RecordingException e)\n        {\n            ClearRun();",
       "expect": "caught",
-      "note": "a recording that will not open takes the plot's recordings with it"
+      "note": "a recording that will not open clears the plot"
     },
     {
       "id": "A5",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
       "old": "        catch (OperationCanceledException)\n        {\n            ClearUnlessAdding();",
-      "new": "        catch (OperationCanceledException)\n        {\n            ClearProcessedRun();",
+      "new": "        catch (OperationCanceledException)\n        {\n            ClearRun();",
       "expect": "caught",
-      "note": "a run cancelled in the progress dialog takes the plot's recordings with it"
+      "note": "a run cancelled in the progress dialog clears the plot"
     },
     {
       "id": "A6",
@@ -135,26 +119,26 @@
     {
       "id": "A11",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "AddRecordingCommand = new AsyncRelayCommand(AddRecordingAsync, () => !IsBusy && _picker is not null);",
-      "new": "AddRecordingCommand = new AsyncRelayCommand(AddRecordingAsync, () => !IsBusy);",
+      "old": "OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy && _picker is not null);",
+      "new": "OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy);",
       "expect": "caught",
-      "note": "Add Recording is offered with no picker to ask"
+      "note": "Open is offered with no picker to ask"
     },
     {
       "id": "A12",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "await LoadAsync(path, add: true);",
-      "new": "await LoadAsync(path, add: false);",
+      "old": "if (path is not null) await LoadAsync(path);\n    }\n\n    private async Task PickAndImportAsync()",
+      "new": "if (path is not null) _ = path;\n    }\n\n    private async Task PickAndImportAsync()",
       "expect": "caught",
-      "note": "the menu entry opens the recording instead of adding it"
+      "note": "the menu entry asks for a recording and does nothing with it"
     },
     {
       "id": "A13",
       "file": "src/TmDq.App/Views/MainWindow.axaml",
-      "old": "Command=\"{Binding AddRecordingCommand}\"",
-      "new": "Command=\"{Binding OpenCommand}\"",
+      "old": "Command=\"{Binding OpenCommand}\" InputGesture=\"Ctrl+O\"",
+      "new": "Command=\"{Binding ImportCsvCommand}\" InputGesture=\"Ctrl+O\"",
       "expect": "caught",
-      "note": "the menu item is Open"
+      "note": "the Open menu item is Import from CSV"
     },
     {
       "id": "P1",

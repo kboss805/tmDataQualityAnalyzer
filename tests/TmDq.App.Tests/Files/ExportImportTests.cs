@@ -177,7 +177,7 @@ public sealed class ExportImportTests
         return count;
     }
 
-    private static Rect LegendBox(PlotView view) => new(view.Legend.Position, view.Legend.Bounds.Size);
+    private static Rect LegendBox(PlotLegend legend) => new(legend.Position, legend.Bounds.Size);
 
     private static async Task<SKBitmap> PngOf(PlotView view)
     {
@@ -201,25 +201,45 @@ public sealed class ExportImportTests
         (PlotView view, Window window) = Show(plot);
         using SKBitmap first = await PngOf(view);
         Assert.Equal((600, 400), (first.Width, first.Height));
-        Rect topRight = LegendBox(view);
+        Rect topRight = LegendBox(view.SnrLegend);
         Assert.True(Near(first, topRight, LineColour) > 20, "no swatch where the legend is");
         Assert.True(Near(first, new Rect(0, view.Chart.RightToPixel(10) - 3, 600, 6), LineColour) > 200, "no line");
 
         // Dragged, it is drawn where it was put, and nowhere else.
-        Point grab = Frames.InWindow(view.Legend, window).Center;
+        Point grab = Frames.InWindow(view.SnrLegend, window).Center;
         window.MouseDown(grab, MouseButton.Left, RawInputModifiers.None);
         window.MouseMove(grab + new Point(-300, 120), RawInputModifiers.LeftMouseButton);
         window.MouseUp(grab + new Point(-300, 120), MouseButton.Left, RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
         using SKBitmap moved = await PngOf(view);
-        Assert.True(Near(moved, LegendBox(view), LineColour) > 20, "no swatch where the legend was dragged");
+        Assert.True(Near(moved, LegendBox(view.SnrLegend), LineColour) > 20, "no swatch where the legend was dragged");
         Assert.Equal(0, Near(moved, topRight, LineColour));
 
         // Hidden, it is not drawn.
         plot.LegendVisible = false;
         Dispatcher.UIThread.RunJobs();
         using SKBitmap hidden = await PngOf(view);
-        Assert.Equal(0, Near(hidden, LegendBox(view), LineColour));
+        Assert.Equal(0, Near(hidden, LegendBox(view.SnrLegend), LineColour));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task APngHoldsBothLegendsEachAtItsOwnCorner()
+    {
+        Color blue = Color.FromRgb(30, 90, 220);
+        PlotViewModel plot = LowLine();
+        plot.SetSeries(plot.Series.Concat(new[] { PlotFixtures.Lock(1, "lock", 5, 1, new[] { 0.0, 2.0 }, new[] { 20.0, 20.0 }) }).ToArray());
+        plot.RecolorSeries(0, LineColour);
+        plot.RecolorSeries(1, blue);
+        (PlotView view, Window window) = Show(plot);
+        using SKBitmap image = await PngOf(view);
+        Rect framesync = LegendBox(view.FrameSyncLegend), snr = LegendBox(view.SnrLegend);
+        Assert.True(framesync.Right < snr.Left, "the legends meet");
+        Assert.True(Near(image, framesync, blue) > 20, "no Framesync swatch where its legend is");
+        Assert.True(Near(image, snr, LineColour) > 20, "no SNR swatch where its legend is");
+        // Each legend holds only its own metric's swatch.
+        Assert.Equal(0, Near(image, framesync, LineColour));
+        Assert.Equal(0, Near(image, snr, blue));
         window.Close();
     }
 
@@ -790,7 +810,7 @@ public sealed class ExportImportTests
     }
 
     [Fact]
-    public async Task ACsvThatIsNotAnExportIsAnErrorAndLeavesThePlotEmpty()
+    public async Task ACsvThatIsNotAnExportIsAnErrorAndLeavesThePlotAsItWas()
     {
         string path = WriteCsv("Day,Time,A Lock (%)\r\n001,00:00:00.000,90\r\n");
         try
@@ -801,11 +821,64 @@ public sealed class ExportImportTests
             int before = vm.Log.Entries.Count;
             await vm.ImportCsvAsync(path);
             string name = Path.GetFileName(path);
-            string error = "ERROR: '" + name + "' is not a recognized exported CSV (expected a 'Time (DOY:HH:MM:SS.mmm)' column with data rows). Nothing was imported.";
+            string error = "ERROR: '" + name + "' is not a recognized CSV: neither an export of this application (a 'Time (DOY:HH:MM:SS.mmm)' column) nor an " +
+                           "AV Phased Array Antenna log (the header 'Time, Name, Polarity, Stream 1, ...'), with data rows. Nothing was imported.";
             Assert.Equal(new[] { "Info Importing CSV: " + name, "Error " + error }, LinesOf(vm, before));
             Assert.Equal(error, vm.Status);
-            Assert.False(vm.Plot.HasData);   // cleared before the file was read, as v2.14.2 cleared it
-            Assert.Equal(PlotViewModel.DefaultTitle, vm.Plot.Title);
+            Assert.True(vm.Plot.HasData);   // an import adds to the plot, so a file that is refused takes nothing away
+            Assert.Equal("earlier", vm.Plot.Title);
+        }
+        finally
+        {
+            TempFiles.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task TwoExportedCsvsStackEachNamedForItsFileAndTheFirstIsNotReplaced()
+    {
+        string a = WriteCsv("Time (DOY:HH:MM:SS.mmm),Ch5 Lock (%)\r\n120:00:00:00.000,5\r\n120:00:00:01.000,6\r\n");
+        string b = WriteCsv("Time (DOY:HH:MM:SS.mmm),Ch7 Lock (%)\r\n120:00:00:00.000,7\r\n120:00:00:01.000,8\r\n");
+        try
+        {
+            var vm = new MainWindowViewModel();
+            await vm.ImportCsvAsync(a);
+            string title = vm.Plot.Title;
+            Assert.Equal(Path.GetFileNameWithoutExtension(a), title);   // the first, into an empty plot, titles it
+            await vm.ImportCsvAsync(b);
+
+            Assert.Equal(new[] { "Ch5", "Ch7" }, vm.Plot.Series.Select(s => s.Name.Replace(" Lock (%)", "")));
+            Assert.Equal(title, vm.Plot.Title);
+            Assert.Equal(new[] { Path.GetFileNameWithoutExtension(a), Path.GetFileNameWithoutExtension(b) },
+                         vm.Plot.SourceList().Select(s => s.Label));
+            // The same file again is not mistaken for the one already there: the second is named apart.
+            await vm.ImportCsvAsync(a);
+            Assert.Equal(3, vm.Plot.SourceList().Count);
+            Assert.Equal(3, vm.Plot.SourceList().Select(s => s.Label).Distinct().Count());
+        }
+        finally
+        {
+            TempFiles.Delete(a);
+            TempFiles.Delete(b);
+        }
+    }
+
+    [Fact]
+    public void AnExportOfSeveralRecordingsAddedToAPlotTakesTheNextFreeSourcesAndKeepsWhatWasThere()
+    {
+        // A batch's export: two recordings in one file, their columns qualified S3| and S5| (numbers the plot does not hand out).
+        string path = WriteCsv("Time (DOY:HH:MM:SS.mmm),S3| Ch5 Lock (%),S5| Ch5 Lock (%)\r\n120:00:00:00.000,1,2\r\n120:00:00:01.000,3,4\r\n");
+        try
+        {
+            var plot = new PlotViewModel();
+            plot.SetSeries(new[] { PlotFixtures.Lock(0, "kept", 1, 0, X2, X2) });   // source 0
+            Assert.True(plot.LoadCsv(path, sourceLabel: "batch", add: true));
+
+            PlotSeries kept = Assert.Single(plot.Series, s => s.Name == "kept");
+            Assert.Equal(0, kept.SourceId);
+            Assert.Equal(new[] { 1, 2 }, plot.Series.Where(s => s.Name != "kept").Select(s => s.SourceId).OrderBy(i => i));
+            Assert.Equal(new[] { (0, "Source 0"), (1, "batch, Source 3"), (2, "batch, Source 5") },
+                         plot.SourceList().Select(s => (s.Id, s.Label)));
         }
         finally
         {

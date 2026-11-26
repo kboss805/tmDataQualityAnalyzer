@@ -9,7 +9,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using TmDq.App.Models.Export;
 using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Settings;
@@ -41,7 +40,6 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     private readonly IStreamConfigurator _configurator;
     private readonly IProcessingDialog? _processingDialog;
     private readonly IDataFilePicker? _files;
-    private readonly ICsvKindDialog? _csvKinds;
     private readonly IExportDialog? _exportDialog;
     private readonly ITemplateFilePicker? _templateFiles;
     private readonly ITemplateDialogs? _templateDialogs;
@@ -52,7 +50,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     private readonly string _appRoot;
     private readonly List<ProcessedSource> _sources = new();
     // The recording the last run read, which a "does not overlap" warning names: set where every run goes (RunWithDialogAsync),
-    // Open, Add Recording and a batch alike, so no caller has to remember it.
+    // Open and a batch alike, so no caller has to remember it.
     private string _lastRunFile = string.Empty;
     private List<MenuChoice>? _recentMenu;
     private string _status = "Open a Chapter 10 recording.";
@@ -69,7 +67,6 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         _configurator = services.Configurator ?? new FirstChannelRun();
         _processingDialog = services.ProcessingDialog;
         _files = services.Files;
-        _csvKinds = services.CsvKinds;
         _exportDialog = services.ExportDialog;
         _templateFiles = services.TemplateFiles;
         _templateDialogs = services.TemplateDialogs;
@@ -79,7 +76,6 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         _appRoot = services.AppRoot ?? AppContext.BaseDirectory;
         _batch = new BatchRunner(this, Plot, Log, _export, _appRoot);
         OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy && _picker is not null);
-        AddRecordingCommand = new AsyncRelayCommand(AddRecordingAsync, () => !IsBusy && _picker is not null);
         ImportCsvCommand = new AsyncRelayCommand(PickAndImportAsync, () => !IsBusy && _files is not null);
         ExportCommand = new AsyncRelayCommand(ExportAsync, () => !IsBusy && Plot.HasData && _exportDialog is not null);
         SaveTemplateCommand = new AsyncRelayCommand(SaveTemplateAsync, () => !IsBusy && _sources.Count > 0 && _templateFiles is not null);
@@ -220,7 +216,6 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         {
             if (!SetProperty(ref _isBusy, value)) return;
             OpenCommand.NotifyCanExecuteChanged();
-            AddRecordingCommand.NotifyCanExecuteChanged();
             ImportCsvCommand.NotifyCanExecuteChanged();
             ExportCommand.NotifyCanExecuteChanged();
             SaveTemplateCommand.NotifyCanExecuteChanged();
@@ -229,7 +224,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         }
     }
 
-    /// <summary>The recordings processed this session and still on the plot, as a template is captured from them; Open and a batch replace them, Add Recording appends. No view
+    /// <summary>The recordings processed this session and still on the plot, as a template is captured from them; Open appends, a batch replaces them. No view
     /// reads it: it is kept public as the tests' only window onto what Save Template would capture (a source's id and path
     /// are not written into the template), as audit D8 decided.</summary>
     public IReadOnlyList<ProcessedSource> Sources => _sources;
@@ -258,11 +253,6 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
 
     public IAsyncRelayCommand OpenCommand { get; }
 
-    /// <summary>Add Recording: configures and processes another recording as Open does, but keeps everything already on the
-    /// plot (the recordings processed before and what was imported), each recording its own entry in Plot File and Remove File.
-    /// With an empty plot it is Open.</summary>
-    public IAsyncRelayCommand AddRecordingCommand { get; }
-
     /// <summary>Help &gt; User Manual: the full manual beside the application, else the base one.</summary>
     public IAsyncRelayCommand OpenManualCommand { get; }
 
@@ -276,22 +266,14 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     /// US6.2). Available once there is data.</summary>
     public IAsyncRelayCommand ExportCommand { get; }
 
-    private static readonly CompositeFormat NotAnExportedCsv = CompositeFormat.Parse(
-        "ERROR: '{0}' is not a recognized exported CSV (expected a 'Time (DOY:HH:MM:SS.mmm)' column with data rows). Nothing was imported.");
-
-    private static readonly CompositeFormat NotAPhasedArrayLog = CompositeFormat.Parse(
-        "ERROR: '{0}' is not a recognized AV Phased Array Antenna log (expected the header 'Time, Name, Polarity, Stream 1, ...' with data rows). Nothing was imported.");
+    private static readonly CompositeFormat NotARecognizedCsv = CompositeFormat.Parse(
+        "ERROR: '{0}' is not a recognized CSV: neither an export of this application (a 'Time (DOY:HH:MM:SS.mmm)' column) nor an " +
+        "AV Phased Array Antenna log (the header 'Time, Name, Polarity, Stream 1, ...'), with data rows. Nothing was imported.");
 
     private async Task OpenAsync()
     {
         string? path = await _picker!.PickRecordingAsync();
         if (path is not null) await LoadAsync(path);
-    }
-
-    private async Task AddRecordingAsync()
-    {
-        string? path = await _picker!.PickRecordingAsync();
-        if (path is not null) await LoadAsync(path, add: true);
     }
 
     private async Task PickAndImportAsync()
@@ -301,33 +283,27 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     }
 
     /// <summary>
-    /// Shows an exported CSV in place of whatever was shown (US6.3): the plot cleared, the file
-    /// read off the UI thread with "Loading..." over the chart, then titled with its name. A file that is not an
-    /// exported CSV is an error, and nothing is shown. An antenna's log (US10.0) is added to the plot instead, as a recording of
-    /// its own named for the file, the title and the rest left as they were. Ignored while busy.
+    /// Shows a CSV, an export of this application (US6.3) or an AV phased array antenna's log (US10.0), told apart by the file and
+    /// not asked: the file read off the UI thread with "Loading..." over the chart. A file that is neither is an error, and nothing is
+    /// shown. Into an empty plot it is shown with the plot titled with its name; into a plot that shows anything it is added, as a
+    /// recording of its own named for the file, the title and everything shown left as they were, so that imports stack. Ignored
+    /// while busy.
     /// </summary>
-    public async Task ImportCsvAsync(string path, CsvKind? kind = null)
+    public async Task ImportCsvAsync(string path)
     {
         if (IsBusy) return;
         string name = Path.GetFileName(path);
-        // Every way in asks what the file is (US10.0), each time: the menu, a drop, Recent Files. Cancel imports nothing. A host with no
-        // dialog reads it as the application's own export, which is all a CSV was before.
-        if (kind is null && _csvKinds is not null)
-        {
-            kind = await _csvKinds.ChooseAsync(name);
-            if (kind is null || IsBusy) return;
-        }
-        CsvKind chosen = kind ?? CsvKind.TelemetryReceivers;
         LastFolder = Path.GetDirectoryName(Path.GetFullPath(path));
         IsBusy = true;
         try
         {
             Log.Add("Importing CSV: " + name);
-            // An antenna's log joins what the plot shows, so that the two can be compared (US10.0); any other CSV replaces it.
-            bool joins = chosen == CsvKind.PhasedArrayAntenna && Plot.HasData;
+            // Whatever is imported joins what the plot shows, so that imports stack and can be compared (US6.3, US10.0); an
+            // empty plot is where one starts.
+            bool joins = Plot.HasData;
             if (!joins) ClearRun();
             NativeCore.EnsureLoaded();
-            if (await Plot.LoadCsvAsync(path, chosen, BaseName(name)) == CsvLoad.Loaded)
+            if (await Plot.LoadCsvAsync(path, joins ? UniqueSourceLabel(BaseName(name)) : BaseName(name), add: joins) == CsvLoad.Loaded)
             {
                 _shell.AddRecentFile(path);
                 if (!joins) Plot.Title = BaseName(name);
@@ -336,8 +312,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
             }
             else
             {
-                string error = string.Format(CultureInfo.InvariantCulture,
-                    chosen == CsvKind.PhasedArrayAntenna ? NotAPhasedArrayLog : NotAnExportedCsv, name);
+                string error = string.Format(CultureInfo.InvariantCulture, NotARecognizedCsv, name);
                 Report(error, LogLevel.Error);
                 Log.Error(error);
             }
@@ -542,20 +517,22 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
 
     /// <summary>Opens <paramref name="path"/>, asks what to process, processes it and shows the result or the reason it
     /// failed, logging each step as v2.x did. The progress dialog is up for the run, and its Cancel
-    /// stops every stream. Cancelling Configure Streams leaves the last result on screen. Ignored while busy. With
-    /// <paramref name="add"/> (Add Recording) and something on the plot, nothing on the plot is removed and the recording is
-    /// added beside it, named in Plot File and Remove File, the plot's title unchanged.</summary>
-    public async Task LoadAsync(string path, bool add = false)
+    /// stops every stream. Cancelling Configure Streams leaves the last result on screen. Ignored while busy. Nothing on the
+    /// plot is removed: with something on it the recording is added beside it (the recordings processed before and what was
+    /// imported), named in Plot File and Remove File, the plot's title unchanged; an empty plot is where a recording starts, and
+    /// is titled with its name.</summary>
+    public async Task LoadAsync(string path)
     {
         if (IsBusy) return;
         string name = Path.GetFileName(path);
-        // Add Recording keeps everything on the plot; with nothing on it, there is nothing to keep and it is Open.
-        bool keep = add && Plot.HasData;
+        // Opening stacks, as an import does: with something on the plot there is something to keep.
+        bool keep = Plot.HasData;
         string verb = keep ? "Adding" : "Opening";
-        // What the run, and a failure or a cancel, clear: the recordings processed before, unless this one is added to them.
+        // What the run, and a failure or a cancel, clear: nothing when the recording is added to what is shown, and the
+        // plot's leftovers (a record of recordings, a title) when it starts one.
         void ClearUnlessAdding()
         {
-            if (!keep) ClearProcessedRun();
+            if (!keep) ClearRun();
         }
         LastFolder = Path.GetDirectoryName(Path.GetFullPath(path));
         IsBusy = true;
@@ -680,24 +657,6 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     private void ClearRun()
     {
         Plot.Clear();
-        SetSources(Array.Empty<ProcessedSource>());
-    }
-
-    /// <summary>
-    /// A new recording to process, or one that failed: the recordings processed before are removed from the plot and from
-    /// <see cref="Sources"/>, and what was imported from CSV files stays, so a recording can be processed beside data
-    /// imported earlier (an antenna's log, an export) and compared with it. With nothing imported this is
-    /// <see cref="ClearRun"/>: the plot starts again, its title and view with it.
-    /// </summary>
-    private void ClearProcessedRun()
-    {
-        var processed = new HashSet<int>(_sources.Select(s => s.SourceId));
-        if (Plot.SourceList().All(s => processed.Contains(s.Id)))
-        {
-            ClearRun();
-            return;
-        }
-        Plot.RemoveSources(processed);   // one redraw for all of them
         SetSources(Array.Empty<ProcessedSource>());
     }
 

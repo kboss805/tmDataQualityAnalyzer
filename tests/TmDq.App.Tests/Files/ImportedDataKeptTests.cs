@@ -2,7 +2,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
-using TmDq.App.Models.Export;
 using TmDq.App.Models.Processing;
 using TmDq.App.ViewModels;
 using TmDq.Core;
@@ -34,17 +33,10 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
 
     private string PrnName => MainWindowViewModel.BaseName(Path.GetFileName(Prn));
 
-    private static MainWindowViewModel Window(params CsvKind[] answers)
-    {
-        var kinds = new FakeCsvKinds();
-        foreach (CsvKind answer in answers) kinds.Answers.Enqueue(answer);
-        return new MainWindowViewModel(new MainWindowServices { CsvKinds = kinds });
-    }
-
     [AvaloniaFact]
     public async Task AnAntennasLogImportedBeforeARecordingIsProcessedStaysOnThePlot()
     {
-        MainWindowViewModel vm = Window(CsvKind.PhasedArrayAntenna);
+        MainWindowViewModel vm = new MainWindowViewModel();
         await vm.ImportCsvAsync(AntennaLog);
         Assert.Equal(90, vm.Plot.Series.Count);
 
@@ -52,7 +44,7 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
 
         Assert.Equal(90, vm.Plot.Series.Count(s => s.IsPhasedArray));   // the log is all still there
         Assert.Contains(vm.Plot.Series, s => s.Metric == MetricType.FrameSyncLock);   // and so is the run
-        Assert.Equal(PrnName, vm.Plot.Title);                          // the title is the recording's, as it is for a run
+        Assert.Equal("av_snr_log", vm.Plot.Title);                     // the log named the plot first, and an Open adds beside it
         Assert.Equal(new[] { "av_snr_log", PrnName }, vm.Plot.SourceList().Select(x => x.Label));
         Assert.Single(vm.Sources);                                      // Save Template is offered the recording, not the log
         int runId = vm.Sources[0].SourceId;
@@ -60,19 +52,20 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
-    public async Task AnotherRecordingReplacesTheLastOneAndTheImportStillStays()
+    public async Task AnotherRecordingIsAddedBesideTheLastOneAndTheImportStays()
     {
-        MainWindowViewModel vm = Window(CsvKind.PhasedArrayAntenna);
+        MainWindowViewModel vm = new MainWindowViewModel();
         await vm.ImportCsvAsync(AntennaLog);
         await vm.LoadAsync(Prn);
         int once = vm.Plot.Series.Count;
+        int run = once - 90;
 
         await vm.LoadAsync(Prn);
 
-        Assert.Equal(once, vm.Plot.Series.Count);                       // the recording again, not two of it
+        Assert.Equal(90 + 2 * run, vm.Plot.Series.Count);               // the recording again, beside the first: nothing replaced
         Assert.Equal(90, vm.Plot.Series.Count(s => s.IsPhasedArray));
-        Assert.Single(vm.Sources);
-        Assert.Equal(2, vm.Plot.SourceList().Count);
+        Assert.Equal(2, vm.Sources.Count);
+        Assert.Equal(3, vm.Plot.SourceList().Count);
     }
 
     [AvaloniaFact]
@@ -87,7 +80,7 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
             Assert.True(maker.Plot.ExportCsv(csv));
             int exported = maker.Plot.Series.Count;
 
-            MainWindowViewModel vm = Window(CsvKind.TelemetryReceivers);
+            MainWindowViewModel vm = new MainWindowViewModel();
             await vm.ImportCsvAsync(csv);
             int[] importedIds = vm.Plot.Series.Select(s => s.SourceId).Distinct().ToArray();
             Assert.Equal(exported, vm.Plot.Series.Count);
@@ -116,7 +109,7 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
             await maker.LoadAsync(Prn);
             Assert.True(maker.Plot.ExportCsv(csv));
 
-            MainWindowViewModel vm = Window(CsvKind.TelemetryReceivers);
+            MainWindowViewModel vm = new MainWindowViewModel();
             await vm.ImportCsvAsync(csv);
 
             Assert.Equal(MainWindowViewModel.BaseName(Path.GetFileName(csv)), Assert.Single(vm.Plot.SourceList()).Label);
@@ -149,22 +142,23 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
-    public async Task ARecordingThatFailsToOpenRemovesTheLastRunButKeepsTheImport()
+    public async Task ARecordingThatFailsToOpenChangesNothing()
     {
         string junk = TempFiles.NewPath("junk", ".ch10");
         File.WriteAllText(junk, "not a recording");
         try
         {
-            MainWindowViewModel vm = Window(CsvKind.PhasedArrayAntenna);
+            MainWindowViewModel vm = new MainWindowViewModel();
             await vm.ImportCsvAsync(AntennaLog);
             await vm.LoadAsync(Prn);
             Assert.Single(vm.Sources);
+            int series = vm.Plot.Series.Count;
 
             await vm.LoadAsync(junk);
 
-            Assert.Empty(vm.Sources);
-            Assert.Equal(90, vm.Plot.Series.Count);                     // only the log is left
-            Assert.All(vm.Plot.Series, s => Assert.True(s.IsPhasedArray));
+            Assert.Single(vm.Sources);                                  // the run and the log are both still there
+            Assert.Equal(series, vm.Plot.Series.Count);
+            Assert.Equal(90, vm.Plot.Series.Count(s => s.IsPhasedArray));
         }
         finally
         {
@@ -173,7 +167,7 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
-    public async Task WithNothingImportedANewRecordingStillStartsThePlotAgain()
+    public async Task TheSameRecordingOpenedAgainIsStackedAndTheTitleStays()
     {
         var vm = new MainWindowViewModel();
         await vm.LoadAsync(Prn);
@@ -181,26 +175,32 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
 
         await vm.LoadAsync(Prn);
 
-        Assert.Equal(PrnName, vm.Plot.Title);
-        Assert.Single(vm.Sources);
-        Assert.Single(vm.Plot.SourceList());
-        Assert.Equal(0, vm.Sources[0].SourceId);                        // numbered from 0 as before
+        Assert.Equal("my title", vm.Plot.Title);                        // the title the user gave is not replaced
+        Assert.Equal(2, vm.Sources.Count);
+        Assert.Equal(2, vm.Plot.SourceList().Count);
+        Assert.Equal(new[] { 0, 1 }, vm.Sources.Select(s => s.SourceId));   // numbered after what the plot holds
     }
 
     [AvaloniaFact]
-    public async Task AnImportedCsvStillReplacesWhatTheRunShowed()
+    public async Task AnImportedCsvJoinsWhatTheRunShowedAndTheRunStays()
     {
-        string csv = TempFiles.NewPath("replaces", ".csv");
+        string csv = TempFiles.NewPath("joins", ".csv");
         try
         {
-            var vm = Window(CsvKind.TelemetryReceivers);
+            var vm = new MainWindowViewModel();
             await vm.LoadAsync(Prn);
+            int run = vm.Plot.Series.Count;
             Assert.True(vm.Plot.ExportCsv(csv));
 
             await vm.ImportCsvAsync(csv);
 
-            Assert.Empty(vm.Sources);                                   // an import of this application's own export replaces the run
-            Assert.DoesNotContain(vm.Plot.Series, s => s.IsPhasedArray);
+            Assert.NotEmpty(vm.Sources);                                // the run stays: imports stack, they do not replace
+            Assert.True(vm.Plot.Series.Count > run);
+            Assert.Equal(PrnName, vm.Plot.Title);
+            // The imported series are a recording of their own, named for the file and not the run's number.
+            int[] ids = vm.Plot.Series.Select(s => s.SourceId).Distinct().Order().ToArray();
+            Assert.Equal(2, ids.Length);
+            Assert.Equal(Path.GetFileNameWithoutExtension(csv), vm.Plot.SourceList().Single(s => s.Id == ids[1]).Label);
         }
         finally
         {

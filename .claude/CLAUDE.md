@@ -62,7 +62,7 @@ themselves). Use the **PowerShell** tool.
   `ManualFiguresTests` into `docs\manual_images`: after a change to what a figure shows, and after every version bump (four figures show the log's version line;
   `docs\manual_images\rendered-version.txt` names the version that rendered them and the consistency check refuses another), rebuild with
   `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1` (`-NoCapture` reuses the figures: prose changes only). CI runs the
-  app suite. Green baseline **906 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases (xunit's `Total: 940` counts them, so
+  app suite. Green baseline **914 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases (xunit's `Total: 948` counts them, so
   passed is the total less 34).
   **The side-by-side soak:** `powershell -ExecutionPolicy Bypass -File eng\run_soak.ps1 [-NoBuild]
   [-Only <run>,...]` runs every run in `tests\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a
@@ -85,7 +85,9 @@ themselves). Use the **PowerShell** tool.
   unsigned file), adds the VC++ runtime DLLs `tmdq_core.dll` imports, generates `THIRD-PARTY-NOTICES.txt`
   (`eng\gen_third_party_notices.ps1`, from the publish's deps file), and builds the portable ZIP and the **MSI**
   (`deploy\tmDataQualityAnalyzer.wxs`, built by `deploy\build_msi.ps1` with WiX 6.0.2, a repo-local dotnet tool
-  pinned in `dotnet-tools.json`: **per-machine only**, silent switches `ASSOCIATE_CH10=0` `FULLMANUAL=0`
+  pinned in `dotnet-tools.json`: **per-user or per-machine** (elevated, e.g. a deployment tool: per-machine; a user without admin
+  rights: per-user, no elevation; `build_msi.ps1` deletes the `MSIINSTALLPERUSER=1` WiX writes, or an elevated silent install
+  would be per-user), silent switches `ASSOCIATE_CH10=0` `FULLMANUAL=0`
   `DESKTOPSHORTCUT=1`, `settings\` never overwritten or removed, and it **refuses to install beside an Inno Setup install**
   (every release before the MSI used one: no upgrade path, by the user's choice). The package script's release gate
   refuses while `docs/changelog.md` has an Unreleased section, so a build for testing is staged by hand). It runs

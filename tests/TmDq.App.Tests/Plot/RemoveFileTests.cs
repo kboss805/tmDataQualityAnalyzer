@@ -210,6 +210,60 @@ public sealed class RemoveFileTests : IDisposable
     }
 
     [Fact]
+    public async Task ClearPlotAsksOnceWithNothingChosenAndOnYesEmptiesThePlotWithItsTitle()
+    {
+        PlotViewModel plot = ThreeRecordings();
+        plot.Title = "three";
+        var prompts = new FakePrompts();
+        prompts.Answers.Enqueue(0);   // "Everything on the plot"
+        using var commands = new PlotCommands(plot, prompts);
+
+        await commands.ClearPlotCommand.ExecuteAsync(null);
+
+        Assert.Equal("Clear Plot", prompts.LastChoice.Title);
+        Assert.Equal(new[] { "Everything on the plot" }, prompts.LastChoice.Choices);
+        Assert.Equal(-1, prompts.LastChoice.Selected);          // nothing to press Enter on: it removes every series
+        Assert.Contains("All 3 files", prompts.LastChoice.Label, StringComparison.Ordinal);
+        Assert.False(plot.HasData);
+        Assert.Empty(plot.SourceList());
+        Assert.Equal(PlotViewModel.DefaultTitle, plot.Title);   // the title goes with what it named
+    }
+
+    [Fact]
+    public async Task CancellingClearPlotChangesNothingAndOneFileIsAskedAboutInTheSingular()
+    {
+        PlotViewModel plot = ThreeRecordings();
+        var prompts = new FakePrompts();
+        prompts.Answers.Enqueue(null);   // Cancel
+        using (var commands = new PlotCommands(plot, prompts))
+        {
+            await commands.ClearPlotCommand.ExecuteAsync(null);
+        }
+        Assert.Equal(3, plot.Series.Count);
+        Assert.Equal(3, plot.SourceList().Count);
+
+        var single = new PlotViewModel();
+        single.SetSeries(new[] { PlotFixtures.Make(0, "a", MetricType.Snr, 1, 0, new[] { 0.0, 2.0 }, new[] { 10.0, 20.0 }) });
+        var singlePrompts = new FakePrompts();
+        singlePrompts.Answers.Enqueue(0);
+        using var singleCommands = new PlotCommands(single, singlePrompts);
+        await singleCommands.ClearPlotCommand.ExecuteAsync(null);
+        Assert.Contains("Its one file", singlePrompts.LastChoice.Label, StringComparison.Ordinal);
+        Assert.False(single.HasData);
+    }
+
+    [Fact]
+    public async Task ClearPlotIsUnavailableWithoutData()
+    {
+        var prompts = new FakePrompts();
+        using var commands = new PlotCommands(new PlotViewModel(), prompts);
+        Assert.False(commands.ClearPlotCommand.CanExecute(null));
+        await commands.ClearPlotAsync();   // asked directly, it still asks nothing
+
+        Assert.Empty(prompts.Asked);
+    }
+
+    [Fact]
     public async Task RemoveFileIsUnavailableWithoutData()
     {
         var prompts = new FakePrompts();
@@ -275,7 +329,7 @@ public sealed class RemoveFileTests : IDisposable
     }
 
     [Fact]
-    public async Task RemoveFileStartsOnNothingChosenWithSeveralOverlaidOnTheOneShownAndOnTheOnlyOne()
+    public async Task RemoveFileStartsOnTheFirstWithSeveralOverlaidOnTheOneShownAndOnTheOnlyOne()
     {
         PlotViewModel plot = ThreeRecordings();
         var prompts = new FakePrompts();
@@ -285,7 +339,8 @@ public sealed class RemoveFileTests : IDisposable
         using var commands = new PlotCommands(plot, prompts);
 
         await commands.RemoveFileCommand.ExecuteAsync(null);
-        Assert.Equal(-1, prompts.LastChoice.Selected);          // Enter must not remove the first by accident
+        Assert.Equal(-1, plot.VisibleSource);                   // every one overlaid
+        Assert.Equal(0, prompts.LastChoice.Selected);           // the list does not open blank: the first file is chosen
 
         plot.SetVisibleSource(1);
         await commands.RemoveFileCommand.ExecuteAsync(null);
@@ -309,7 +364,7 @@ public sealed class RemoveFileTests : IDisposable
         none.Choices.SelectedIndex = 1;
         Assert.True(none.OkButton.IsEnabled);
 
-        var first = new TmDq.App.Views.Dialogs.ChoiceWindow("Import CSV", "Which?", new[] { "a", "b" });   // as every other use
+        var first = new TmDq.App.Views.Dialogs.ChoiceWindow("Choose", "Which?", new[] { "a", "b" });   // as a caller that gives no choice does
         Assert.Equal(0, first.Choices.SelectedIndex);
         Assert.True(first.OkButton.IsEnabled);
 

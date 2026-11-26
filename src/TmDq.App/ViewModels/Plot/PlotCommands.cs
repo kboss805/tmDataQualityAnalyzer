@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -49,6 +50,7 @@ public sealed class PlotCommands : ObservableObject, IDisposable
         ZoomInCommand = new RelayCommand(() => _plot.ZoomWindow(PlotViewModel.KeyZoomFactor), hasData);
         ZoomOutCommand = new RelayCommand(() => _plot.ZoomWindow(1.0 / PlotViewModel.KeyZoomFactor), hasData);
         RemoveFileCommand = new AsyncRelayCommand(RemoveFileAsync, hasData);
+        ClearPlotCommand = new AsyncRelayCommand(ClearPlotAsync, hasData);
         ShowSourceCommand = new RelayCommand<int>(_plot.SetVisibleSource);
         PinReadoutCommand = new RelayCommand<int?>(id => _plot.ReadoutSeriesId = id);
         _all = new IRelayCommand[]
@@ -56,7 +58,7 @@ public sealed class PlotCommands : ObservableObject, IDisposable
             SetTitleCommand, CustomizeCommand, SetTimeWindowCommand, SetLeftMinCommand, SetLeftMaxCommand, SetRightMinCommand,
             SetRightMaxCommand, ToggleLegendCommand, ToggleViewModeCommand, ShowLockPercentCommand, ShowMissedFramesCommand,
             ZoomBackCommand, ResetSpanCommand, ResetYCommand, ResetViewCommand, PanEarlierCommand, PanLaterCommand,
-            ZoomInCommand, ZoomOutCommand, RemoveFileCommand,
+            ZoomInCommand, ZoomOutCommand, RemoveFileCommand, ClearPlotCommand,
         };
         SyncChoices();
         _plot.SeriesChanged += OnSeriesChanged;
@@ -152,6 +154,10 @@ public sealed class PlotCommands : ObservableObject, IDisposable
     /// of it (<see cref="PlotViewModel.RemoveSource"/>).</summary>
     public IAsyncRelayCommand RemoveFileCommand { get; }
 
+    /// <summary>Clear Plot...: asks, and on a deliberate yes removes everything from the plot: every recording, batch file and
+    /// imported CSV, the title and the view with them (<see cref="ClearPlotAsync"/>).</summary>
+    public IAsyncRelayCommand ClearPlotCommand { get; }
+
     /// <summary>Readout's entries: a series' id, or null for the nearest.</summary>
     public IRelayCommand<int?> PinReadoutCommand { get; }
 
@@ -165,11 +171,30 @@ public sealed class PlotCommands : ObservableObject, IDisposable
         string label = sources.Count == 1
             ? "Remove everything of this file from the plot? Process it again to bring it back."
             : "Remove every series of this file from the plot, and keep the others? Process it again to bring it back.";
-        // Nothing is chosen for the operator to press Enter on, since this removes data: the one file there is, or the one shown
-        // alone, starts chosen; with several overlaid, none does and OK waits for a choice.
-        int selected = sources.Count == 1 ? 0 : sources.ToList().FindIndex(s => s.Id == _plot.VisibleSource);
+        // The one shown alone starts chosen; with several overlaid (or only one there), the first does, so the list never opens
+        // blank (the user's choice: OK still asks before anything goes).
+        int shown = sources.ToList().FindIndex(s => s.Id == _plot.VisibleSource);
+        int selected = Math.Max(shown, 0);
         int? chosen = await _prompts.ChooseAsync("Remove File", label, sources.Select(s => s.Label).ToList(), selected);
         if (chosen is int index && index >= 0 && index < sources.Count) _plot.RemoveSource(sources[index].Id);
+    }
+
+    private static readonly string[] ClearPlotChoices = { "Everything on the plot" };
+
+    /// <summary>Clear Plot...: the way to start again now that nothing replaces the plot (Open and imports stack). It asks as
+    /// Remove File does, with nothing chosen for the operator to press Enter on, since it removes every series: the one entry,
+    /// "Everything on the plot", has to be picked before OK is offered. On OK every recording, batch file and imported CSV goes
+    /// from the plot and from what the next export writes, and the title, the view and the zoom history with them. Nothing on
+    /// disk changes; process or import the files again to bring them back. Cancel changes nothing.</summary>
+    public async Task ClearPlotAsync()
+    {
+        IReadOnlyList<(int Id, string Label)> sources = _plot.SourceList();
+        if (sources.Count == 0) return;
+        string label = sources.Count == 1
+            ? "Clear the plot? Its one file is removed, with the title and the view. Process or import it again to bring it back."
+            : string.Create(CultureInfo.InvariantCulture, $"Clear the plot? All {sources.Count} files are removed, with the title and the view. Process or import them again to bring them back.");
+        int? chosen = await _prompts.ChooseAsync("Clear Plot", label, ClearPlotChoices, -1);
+        if (chosen is 0) _plot.RemoveSources(sources.Select(s => s.Id));
     }
 
     public async Task SetTitleAsync()

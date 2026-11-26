@@ -52,8 +52,9 @@ public sealed class PlotChart : Control
     // The dotted grid's and the crosshair's dash patterns (a pen reads them and never changes them).
     private static readonly double[] GridDashes = { 1.0, 2.0 };
 
-    /// <summary>A dotted series' dashes, in multiples of its line's width: a dot, then twice as long a gap.</summary>
-    public static readonly IReadOnlyList<double> SeriesDots = new[] { 1.0, 2.0 };
+    /// <summary>A dotted series' dashes, in multiples of its line's width: a dot, then a gap as long (it was twice as
+    /// long until v3.5.0: the dotted lines are drawn tighter).</summary>
+    public static readonly IReadOnlyList<double> SeriesDots = new[] { 1.0, 1.0 };
     private static readonly double[] CrosshairDashes = { 4.0, 2.0 };
 
     public const byte BandAlpha = 90, BandEdgeAlpha = 190, CrosshairAlpha = 140, ZoomBandAlpha = 45;
@@ -188,11 +189,18 @@ public sealed class PlotChart : Control
         Plot is { HasData: true, RightAxisVisible: true } vm ? ChartGeometry.RoundTicks(vm.RightMin, vm.RightMax, YTickCount) : Array.Empty<double>();
 
     /// <summary>
-    /// Where the legend's right edge may reach in a chart of <paramref name="size"/>: the chart's own right edge, or, while
-    /// the right axis is shown, the plot area's, so that the legend does not cover that axis's labels and title. A hidden
-    /// axis reserves no gutter, so there is nothing to keep clear.
+    /// Where the SNR legend's right edge may reach in a chart of <paramref name="size"/>: the plot area's, so that it does not
+    /// cover the right axis's labels and title. (That legend lists Receiver SNR, which is what shows the right axis; a hidden
+    /// axis reserves no gutter, so the area then reaches the chart's own edge less its margin.)
     /// </summary>
-    public double LegendRightEdge(Size size) => Plot?.RightAxisVisible == true ? AreaFor(size).Right : size.Width;
+    public double LegendRightEdge(Size size) => AreaFor(size).Right;
+
+    /// <summary>Where the left legend's left edge may reach: the plot area's, so that it does not cover the left axis's labels.</summary>
+    public double LegendLeftEdge(Size size) => AreaFor(size).Left;
+
+    /// <summary>The top of both legends' place: the plot area's, which leaves the corner above it to the chips (View Mode,
+    /// Reset view) and the title.</summary>
+    public double LegendTop(Size size) => AreaFor(size).Top + PlotLegend.EdgeMargin;
 
     private Rect AreaFor(Size size)
     {

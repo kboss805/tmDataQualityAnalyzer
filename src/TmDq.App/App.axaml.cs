@@ -76,7 +76,6 @@ public sealed class App : Application
             Configurator = configurator,
             ProcessingDialog = new WindowProcessingDialog(window),
             Files = new StorageDataFilePicker(window),
-            CsvKinds = new WindowCsvKindDialog(window),
             ExportDialog = new WindowExportDialog(window),
             ImageExporter = new PlotViewImageExporter(window.PlotView),
             TemplateFiles = new StorageTemplateFilePicker(window),

@@ -6,7 +6,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
-using TmDq.App.Models.Export;
 using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
 using TmDq.App.ViewModels;
@@ -18,7 +17,7 @@ using Xunit;
 namespace TmDq.App.Tests;
 
 /// <summary>
-/// Importing a phased array antenna's SNR log (US10.0): the question every import asks, what kind of file it is; the log's
+/// Importing a phased array antenna's SNR log (US10.0): told from this application's own export by the file, with no question; the log's
 /// 30 streams shown as 90 series that read H, V and C and not as receivers; and nothing of them ever exported. The format is
 /// the core's (<c>test_phasedarraylog.cpp</c>, <c>PhasedArrayLogTests</c> in the library's tests); these hold what the application does with it.
 /// </summary>
@@ -29,27 +28,41 @@ public sealed class PhasedArrayImportTests
 
     private static string Sample => Repo.Recording("av_snr_log.csv");
 
-    private static MainWindowViewModel Window(FakeCsvKinds kinds) => new(new MainWindowServices { CsvKinds = kinds });
-
     [Fact]
-    public void TheDialogOffersTheTwoKindsUnderTheTitlesTheStoryGivesThem()
+    public void EachLayoutIsReadAsWhatItIsAndAFileOfNeitherIsNothing()
     {
-        Assert.Equal(new[] { CsvKind.TelemetryReceivers, CsvKind.PhasedArrayAntenna }, CsvKinds.All);
-        Assert.Equal("Standalone Telemetry Receivers…", CsvKinds.Title(CsvKind.TelemetryReceivers));
-        Assert.Equal("AV Phased Array Antenna…", CsvKinds.Title(CsvKind.PhasedArrayAntenna));
+        // No one says which: each reader refuses the other's file at its first line, so the file decides.
+        var log = new PlotViewModel();
+        Assert.True(log.LoadCsv(Sample));
+        Assert.All(log.Series, s => Assert.True(s.IsPhasedArray));
+        string ours = WriteOwnExport();
+        string neither = WriteNeither();
+        try
+        {
+            var export = new PlotViewModel();
+            Assert.True(export.LoadCsv(ours));
+            PlotSeries only = Assert.Single(export.Series);
+            Assert.False(only.IsPhasedArray);
+            Assert.Equal(MetricType.FrameSyncLock, only.Metric);
+            var none = new PlotViewModel();
+            Assert.False(none.LoadCsv(neither));
+            Assert.Empty(none.Series);
+        }
+        finally
+        {
+            TempFiles.Delete(ours);
+            TempFiles.Delete(neither);
+        }
     }
 
     [Fact]
     public async Task TheSampleImportsAsNinetySeriesTitledByItsNameAndIsRemembered()
     {
-        var kinds = new FakeCsvKinds();
-        kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
-        MainWindowViewModel vm = Window(kinds);
+        var vm = new MainWindowViewModel();
         int before = vm.Log.Entries.Count;
 
         await vm.ImportCsvAsync(Sample);
 
-        Assert.Equal(new[] { "av_snr_log.csv" }, kinds.Asked);
         Assert.Equal(new[] { "Info Importing CSV: av_snr_log.csv", "Success Imported CSV: av_snr_log.csv" },
                      vm.Log.Entries.Skip(before).Select(e => e.Level + " " + e.Text));
         Assert.Equal(90, vm.Plot.Series.Count);
@@ -66,68 +79,43 @@ public sealed class PhasedArrayImportTests
     }
 
     [Fact]
-    public async Task EveryWayOfImportingAsksWhatTheFileIsAndCancelImportsNothing()
+    public async Task EveryWayOfImportingReadsTheLogWithNoQuestion()
     {
-        var kinds = new FakeCsvKinds();
-        kinds.Answers.Enqueue(null);                            // the menu, cancelled
-        kinds.Answers.Enqueue(null);                            // a drop or Recent Files, cancelled
-        kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);      // Recent Files again, answered
-        MainWindowViewModel vm = Window(kinds);
-        int before = vm.Log.Entries.Count;
+        var vm = new MainWindowViewModel();
 
-        await vm.ImportCsvAsync(Sample);
-        await vm.OpenPathAsync(Sample);
-        Assert.Equal(before, vm.Log.Entries.Count);   // nothing was said, nothing was cleared, nothing was read
-        Assert.False(vm.Plot.HasData);
-        Assert.False(vm.IsBusy);
-
-        await vm.OpenPathAsync(Sample);
-        Assert.Equal(3, kinds.Asked.Count);           // asked each time: the kind is not remembered with the file
+        await vm.ImportCsvAsync(Sample);   // the menu
         Assert.Equal(90, vm.Plot.Series.Count);
+        await vm.OpenPathAsync(Sample);    // a drop or Recent Files: the same log again, added beside the first
+        Assert.Equal(180, vm.Plot.Series.Count);
+        Assert.All(vm.Plot.Series, s => Assert.True(s.IsPhasedArray));
+        Assert.False(vm.IsBusy);
     }
 
     [Fact]
-    public async Task AFileOfTheOtherKindIsAnErrorThatNamesTheKindChosen()
+    public async Task AFileOfNeitherLayoutIsOneErrorThatNamesBoth()
     {
-        var kinds = new FakeCsvKinds();
-        MainWindowViewModel vm = Window(kinds);
-
-        kinds.Answers.Enqueue(CsvKind.TelemetryReceivers);
-        await vm.ImportCsvAsync(Sample);   // the antenna's log, said to be this application's own export
-        Assert.StartsWith("ERROR: 'av_snr_log.csv' is not a recognized exported CSV", vm.Status, StringComparison.Ordinal);
-        Assert.False(vm.Plot.HasData);
-
-        string ours = TempFiles.NewPath("ours", ".csv");
-        File.WriteAllText(ours, "Time (DOY:HH:MM:SS.mmm),A Lock (%)\r\n120:00:00:00.000,5\r\n");
+        var vm = new MainWindowViewModel();
+        string neither = WriteNeither();
         try
         {
-            kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
-            await vm.ImportCsvAsync(ours);   // this application's export, said to be the antenna's
-            Assert.Equal($"ERROR: '{Path.GetFileName(ours)}' is not a recognized AV Phased Array Antenna log (expected the header 'Time, Name, Polarity, Stream 1, ...' with data rows). Nothing was imported.", vm.Status);
+            await vm.ImportCsvAsync(neither);
+            Assert.Equal($"ERROR: '{Path.GetFileName(neither)}' is not a recognized CSV: neither an export of this application (a 'Time (DOY:HH:MM:SS.mmm)' column) " +
+                         "nor an AV Phased Array Antenna log (the header 'Time, Name, Polarity, Stream 1, ...'), with data rows. Nothing was imported.", vm.Status);
             Assert.Equal(LogLevel.Error, vm.StatusLevel);
             Assert.False(vm.Plot.HasData);
+            Assert.DoesNotContain(neither, vm.RecentFiles);
         }
         finally
         {
-            TempFiles.Delete(ours);
+            TempFiles.Delete(neither);
         }
     }
 
-    [Fact]
-    public async Task WithNoDialogACsvIsReadAsTheApplicationsOwn()
-    {
-        var vm = new MainWindowViewModel();
-        await vm.ImportCsvAsync(Sample);   // the antenna's log, with no one to say what it is
-        Assert.StartsWith("ERROR: ", vm.Status, StringComparison.Ordinal);
-        Assert.False(vm.Plot.HasData);
-    }
 
     [Fact]
     public async Task CustomizeViewReadsTheAntennasStreamsWithHVAndCAndNotAsReceivers()
     {
-        var kinds = new FakeCsvKinds();
-        kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
-        MainWindowViewModel vm = Window(kinds);
+        var vm = new MainWindowViewModel();
         await vm.ImportCsvAsync(Sample);
 
         var customize = new CustomizeViewModel(vm.Plot, new NoPlotPrompts());
@@ -151,9 +139,7 @@ public sealed class PhasedArrayImportTests
     [Fact]
     public async Task NothingOfAnAntennaIsEverExportedNotEvenBesideASeriesThatIs()
     {
-        var kinds = new FakeCsvKinds();
-        kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
-        MainWindowViewModel vm = Window(kinds);
+        var vm = new MainWindowViewModel();
         await vm.ImportCsvAsync(Sample);
         string only = TempFiles.NewPath("array-only", ".csv");
         string mixed = TempFiles.NewPath("array-mixed", ".csv");
@@ -181,10 +167,8 @@ public sealed class PhasedArrayImportTests
     [Fact]
     public async Task ExportDataCannotBeTickedWhileTheAntennasLogIsAllThePlotHolds()
     {
-        var kinds = new FakeCsvKinds();
-        kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
         var dialog = new FakeExportDialog();
-        var vm = new MainWindowViewModel(new MainWindowServices { CsvKinds = kinds, ExportDialog = dialog });
+        var vm = new MainWindowViewModel(new MainWindowServices { ExportDialog = dialog });
         await vm.ImportCsvAsync(Sample);
 
         Assert.False(vm.Plot.HasExportableData);
@@ -227,12 +211,18 @@ public sealed class PhasedArrayImportTests
         return path;
     }
 
-    /// <summary>A window that answers every kind question with <paramref name="kind"/>, and what its plot warned of.</summary>
-    private static (MainWindowViewModel Vm, List<string> Warnings) WindowAnswering(CsvKind kind)
+    /// <summary>A file that is neither layout: a CSV, but no one's this application reads.</summary>
+    private static string WriteNeither()
     {
-        var kinds = new FakeCsvKinds();
-        for (int i = 0; i < 4; i++) kinds.Answers.Enqueue(kind);
-        MainWindowViewModel vm = Window(kinds);
+        string path = TempFiles.NewPath("neither", ".csv");
+        File.WriteAllText(path, "Date, Value\r\n2026-11-13, 5\r\n");
+        return path;
+    }
+
+    /// <summary>A window, and what its plot warned of.</summary>
+    private static (MainWindowViewModel Vm, List<string> Warnings) NewWindow()
+    {
+        var vm = new MainWindowViewModel();
         var warnings = new List<string>();
         vm.Plot.Warning += (_, message) => warnings.Add(message);
         return (vm, warnings);
@@ -245,7 +235,7 @@ public sealed class PhasedArrayImportTests
         string second = WriteLog("second", Noon.AddSeconds(10), 20);   // 19:00:10 to 19:00:29
         try
         {
-            (MainWindowViewModel vm, List<string> warnings) = WindowAnswering(CsvKind.PhasedArrayAntenna);
+            (MainWindowViewModel vm, List<string> warnings) = NewWindow();
             await vm.ImportCsvAsync(first);
             await vm.ImportCsvAsync(second);
 
@@ -278,7 +268,7 @@ public sealed class PhasedArrayImportTests
         string second = WriteLog("early", Noon.AddSeconds(-5), 20);    // 18:59:55 to 19:00:14
         try
         {
-            (MainWindowViewModel vm, List<string> warnings) = WindowAnswering(CsvKind.PhasedArrayAntenna);
+            (MainWindowViewModel vm, List<string> warnings) = NewWindow();
             await vm.ImportCsvAsync(first);
             int[] versions = vm.Plot.Series.Select(s => s.Version).ToArray();
             await vm.ImportCsvAsync(second);
@@ -305,7 +295,7 @@ public sealed class PhasedArrayImportTests
         string second = WriteLog("early", Noon.AddSeconds(-5), 20);    // 18:59:55 to 19:00:14
         try
         {
-            (MainWindowViewModel vm, _) = WindowAnswering(CsvKind.PhasedArrayAntenna);
+            (MainWindowViewModel vm, _) = NewWindow();
             await vm.ImportCsvAsync(first);
             await vm.ImportCsvAsync(second);
             PlotSeries late = vm.Plot.Series[0];
@@ -333,7 +323,7 @@ public sealed class PhasedArrayImportTests
         string first = WriteLog("first", Noon, 5), second = WriteLog("second", Noon.AddSeconds(2), 5);
         try
         {
-            (MainWindowViewModel vm, _) = WindowAnswering(CsvKind.PhasedArrayAntenna);
+            (MainWindowViewModel vm, _) = NewWindow();
             await vm.ImportCsvAsync(first);
             PlotSeries shown = vm.Plot.Series[0];
             vm.Plot.RecolorSeries(shown.Id, Avalonia.Media.Colors.Teal);
@@ -357,7 +347,7 @@ public sealed class PhasedArrayImportTests
         string second = WriteLog("tomorrow", Noon.AddDays(1), 10);
         try
         {
-            (MainWindowViewModel vm, List<string> warnings) = WindowAnswering(CsvKind.PhasedArrayAntenna);
+            (MainWindowViewModel vm, List<string> warnings) = NewWindow();
             await vm.ImportCsvAsync(first);
             await vm.ImportCsvAsync(second);
 
@@ -376,9 +366,7 @@ public sealed class PhasedArrayImportTests
     [AvaloniaFact]
     public async Task ALogJoinsAProcessedRecordingAndEveryPointKeepsItsOwnClockTime()
     {
-        var kinds = new FakeCsvKinds();
-        kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
-        MainWindowViewModel vm = Window(kinds);
+        var vm = new MainWindowViewModel();
         await vm.LoadAsync(Repo.Recording("prn_testfile, sample.ch10"));
         PlotSeries lockSeries = Assert.Single(PlotFixtures.Locks(vm));
         int processed = vm.Plot.Series.Count;                            // its lock percentage and missed frames
@@ -406,7 +394,7 @@ public sealed class PhasedArrayImportTests
         string second = WriteLog("yesterday", Noon.AddDays(-1), 10);
         try
         {
-            (MainWindowViewModel vm, List<string> warnings) = WindowAnswering(CsvKind.PhasedArrayAntenna);
+            (MainWindowViewModel vm, List<string> warnings) = NewWindow();
             await vm.ImportCsvAsync(first);
             await vm.ImportCsvAsync(second);
 
@@ -422,15 +410,15 @@ public sealed class PhasedArrayImportTests
     }
 
     [Fact]
-    public async Task AFileThatIsNotALogLeavesWhatIsShownAlone()
+    public async Task AFileOfNeitherLayoutLeavesWhatIsShownAlone()
     {
         string first = WriteLog("kept", Noon, 10);
-        string notALog = WriteOwnExport();
+        string neither = WriteNeither();
         try
         {
-            (MainWindowViewModel vm, _) = WindowAnswering(CsvKind.PhasedArrayAntenna);
+            (MainWindowViewModel vm, _) = NewWindow();
             await vm.ImportCsvAsync(first);
-            await vm.ImportCsvAsync(notALog);
+            await vm.ImportCsvAsync(neither);
 
             Assert.StartsWith("ERROR: ", vm.Status, StringComparison.Ordinal);
             Assert.Equal(6, vm.Plot.Series.Count);                      // the plot is as it was, not cleared first
@@ -439,28 +427,32 @@ public sealed class PhasedArrayImportTests
         finally
         {
             TempFiles.Delete(first);
-            TempFiles.Delete(notALog);
+            TempFiles.Delete(neither);
         }
     }
 
     [Fact]
-    public async Task ACsvOfTheApplicationsOwnStillReplacesWhatIsShown()
+    public async Task ACsvOfTheApplicationsOwnJoinsAnAntennasLogAndBothStay()
     {
-        string first = WriteLog("replaced", Noon, 10);
+        // The order the user found it in: the antenna's log first, then an export of this application's own.
+        string first = WriteLog("log-first", Noon, 10);
         string ours = WriteOwnExport();
         try
         {
-            var kinds = new FakeCsvKinds();
-            kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
-            kinds.Answers.Enqueue(CsvKind.TelemetryReceivers);
-            MainWindowViewModel vm = Window(kinds);
+            var vm = new MainWindowViewModel();
             await vm.ImportCsvAsync(first);
             Assert.Equal(6, vm.Plot.Series.Count);
+            string title = vm.Plot.Title;
             await vm.ImportCsvAsync(ours);
 
-            PlotSeries only = Assert.Single(vm.Plot.Series);   // it replaced the log
-            Assert.False(only.IsPhasedArray);
-            Assert.Equal(MetricType.FrameSyncLock, only.Metric);
+            Assert.Equal(7, vm.Plot.Series.Count);                                  // the log is still there, and the export with it
+            Assert.Equal(6, vm.Plot.Series.Count(s => s.IsPhasedArray));
+            PlotSeries added = Assert.Single(vm.Plot.Series, s => !s.IsPhasedArray);
+            Assert.Equal(MetricType.FrameSyncLock, added.Metric);
+            Assert.NotEqual(vm.Plot.Series.First(s => s.IsPhasedArray).SourceId, added.SourceId);   // a recording of its own
+            Assert.Equal(title, vm.Plot.Title);                                     // the title stays, as it does for a log
+            Assert.Equal(new[] { Path.GetFileNameWithoutExtension(first), Path.GetFileNameWithoutExtension(ours) },
+                         vm.Plot.SourceList().Select(s => s.Label));
         }
         finally
         {

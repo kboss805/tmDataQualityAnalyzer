@@ -6,15 +6,12 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Styling;
-using Avalonia.Threading;
-using TmDq.App.Models.Export;
 using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Settings;
 using TmDq.App.Platform;
 using TmDq.App.ViewModels;
 using TmDq.App.Views;
-using TmDq.App.Views.Dialogs;
 using TmDq.App.Views.Plot;
 using TmDq.Core.Tests;
 using Xunit;
@@ -74,18 +71,10 @@ public class CompositionRootTests : IDisposable
         File.WriteAllText(csv, Csv, new UTF8Encoding(false));
         try
         {
-            // The kind-of-CSV question (US10.0) is wired: an import with no kind given opens it over the shown window, and
-            // Cancel imports nothing. (Started, looked at and closed: a test never awaits a modal dialog.)
+            // An import asks nothing (the file says what it is, US10.0): no window opens over the main one.
             window.Show();
-            Task asking = vm.ImportCsvAsync(csv);
-            Dispatcher.UIThread.RunJobs();
-            ChoiceWindow question = Assert.IsType<ChoiceWindow>(Assert.Single(window.OwnedWindows));
-            Assert.Equal("Import CSV", question.Title);
-            question.Close(null);
-            await asking;
-            Assert.False(vm.ExportCommand.CanExecute(null));
-
-            await vm.ImportCsvAsync(csv, CsvKind.TelemetryReceivers);
+            await vm.ImportCsvAsync(csv);
+            Assert.Empty(window.OwnedWindows);
             Assert.True(vm.ExportCommand.CanExecute(null));
         }
         finally

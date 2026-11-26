@@ -87,16 +87,16 @@
     {
       "id": "R10",
       "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
-      "old": "        string label = sources.Count == 1\n",
-      "new": "        string label = sources.Count == 2\n",
+      "old": "        string label = sources.Count == 1\n            ? \"Remove everything of this file",
+      "new": "        string label = sources.Count == 2\n            ? \"Remove everything of this file",
       "expect": "caught",
       "note": "one recording is asked about as if others were kept"
     },
     {
       "id": "R11",
       "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
-      "old": "        if (sources.Count == 0) return;\n        string label = sources.Count == 1",
-      "new": "        string label = sources.Count == 1",
+      "old": "        if (sources.Count == 0) return;\n        string label = sources.Count == 1\n            ? \"Remove everything of this file",
+      "new": "        string label = sources.Count == 1\n            ? \"Remove everything of this file",
       "expect": "caught",
       "note": "Remove File asks, with nothing in the plot, which recording to remove"
     },
@@ -135,10 +135,10 @@
     {
       "id": "P6",
       "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
-      "old": "int selected = sources.Count == 1 ? 0 : sources.ToList().FindIndex(s => s.Id == _plot.VisibleSource);",
-      "new": "int selected = sources.Count == 1 ? -1 : sources.ToList().FindIndex(s => s.Id == _plot.VisibleSource);",
+      "old": "int selected = Math.Max(shown, 0);",
+      "new": "int selected = shown;",
       "expect": "caught",
-      "note": "the only recording starts unchosen"
+      "note": "with several overlaid, the list opens blank"
     },
     {
       "id": "P7",
@@ -146,7 +146,7 @@
       "old": "sources.ToList().FindIndex(s => s.Id == _plot.VisibleSource);",
       "new": "sources.ToList().FindIndex(s => true);",
       "expect": "caught",
-      "note": "with several overlaid, the first starts chosen and Enter removes it"
+      "note": "the one shown alone is not the one that starts chosen"
     },
     {
       "id": "P8",
@@ -193,7 +193,7 @@
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
       "old": "        PlotColors.Assign(added, _lockColours);",
       "new": "        PlotColors.Assign(_series, _lockColours);",
-      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.ReusingTheTemplatesLooksKeepsEveryFilesNamesAndColoursNotOnlyTheLasts", "-method", "TmDq.App.Tests.AddRecordingTests.AddingARecordingLeavesTheColoursShownAndColoursTheNewOneAsItWouldBeAlone" ],
+      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.ReusingTheTemplatesLooksKeepsEveryFilesNamesAndColoursNotOnlyTheLasts", "-method", "TmDq.App.Tests.OpenStacksTests.OpeningASecondRecordingLeavesTheColoursShownAndColoursTheNewOneAsItWouldBeAlone" ],
       "expect": "caught",
       "note": "each stream a run adds colours every series again: a batch's earlier files lose the template's colours, a recording added the user's"
     },
@@ -331,6 +331,46 @@
       "args": [ "-method", "TmDq.App.Tests.ChartViewTests.TheTextTheLayoutIsMadeOfIsMeasuredOnceUntilTheThemeChanges" ],
       "expect": "caught",
       "note": "a theme with another font keeps the last theme's measurements"
+    },
+    {
+      "id": "CP1",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
+      "old": "if (chosen is 0) _plot.RemoveSources(sources.Select(s => s.Id));",
+      "new": "_plot.RemoveSources(sources.Select(s => s.Id));",
+      "expect": "caught",
+      "note": "Clear Plot empties the plot whatever the answer: a Cancel clears it"
+    },
+    {
+      "id": "CP2",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
+      "old": "ClearPlotChoices, -1);",
+      "new": "ClearPlotChoices, 0);",
+      "expect": "caught",
+      "note": "the one entry starts chosen, so Enter clears the plot"
+    },
+    {
+      "id": "CP3",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
+      "old": "_plot.RemoveSources(sources.Select(s => s.Id));",
+      "new": "_plot.RemoveSource(sources[0].Id);",
+      "expect": "caught",
+      "note": "Clear Plot removes only the first recording"
+    },
+    {
+      "id": "CP4",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
+      "old": "ClearPlotCommand = new AsyncRelayCommand(ClearPlotAsync, hasData);",
+      "new": "ClearPlotCommand = new AsyncRelayCommand(ClearPlotAsync, () => true);",
+      "expect": "caught",
+      "note": "Clear Plot is offered with nothing on the plot"
+    },
+    {
+      "id": "CP5",
+      "file": "src/TmDq.App/Views/Plot/PlotView.axaml",
+      "old": "Command=\"{Binding ClearPlotCommand}\"",
+      "new": "Command=\"{Binding RemoveFileCommand}\"",
+      "expect": "caught",
+      "note": "the Clear Plot menu item removes one file"
     }
   ]
 }

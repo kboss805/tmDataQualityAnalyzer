@@ -17,9 +17,9 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 - **Chapter 10 File Support**: Read, parse, and process IRIG 106 Chapter 10 telemetry files
 - **Channel Selection**: Choose the time channel and one or more PCM channels for processing
-- **Drag-and-Drop**: Drop `.ch10` or exported `.csv` files directly onto the application window, or open them from the ☰ menu (**File > Open…** for recordings, **File > Add Recording…** to add one beside what is already plotted, **Import/Export > Import from CSV…** for exports)
+- **Drag-and-Drop**: Drop `.ch10` or exported `.csv` files directly onto the application window, or open them from the ☰ menu (**File > Open…** for recordings, each added beside what is already plotted, **Import/Export > Import from CSV…** for exports)
 - **Recent Files**: Up to 5 entries under the ☰ menu (File > Recent Files), persisted across sessions
-- **CSV Import**: Re-open a CSV this application previously exported straight into the plot — no re-processing of the source `.ch10` file (☰ menu > Import/Export > **Import from CSV…**, or drag-and-drop a `.csv`)
+- **CSV Import**: Re-open a CSV this application previously exported straight into the plot — no re-processing of the source `.ch10` file; imports stack, each added beside what the plot already shows as a recording of its own that **Remove File** takes out again (☰ menu > Import/Export > **Import from CSV…**, or drag-and-drop a `.csv`)
 
 ### Frame Sync Lock
 
@@ -60,18 +60,18 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 ### Plot & Visualization
 
 - **Interactive Plot Window**: Plot showing frame sync lock (%) and/or receiver AGC (dB) series with mouse wheel zoom, click-drag pan (a hand cursor over the data), auto-scale axes, per-series visibility toggles, and an auto-assigned color palette
-- **Color Coding**: one palette of 15 hues for both metrics, told apart by the line: Frame Sync Lock series (and a stream's missed frames) are solid, one hue per PCM channel, and Receiver SNR series are dotted, one hue per receiver (or per channel of a phased array antenna), with the combined channel the strongest and a little thicker and the other two lighter tints of the same hue, so related series stay grouped; a 16th stream of either takes the first hue again
+- **Color Coding**: one palette of 15 hues for both metrics, told apart by the line: Frame Sync Lock series (and a stream's missed frames) are solid, one hue per PCM channel, and Receiver SNR series are dotted, one hue per receiver (or per channel of a phased array antenna) taken from the palette's other end, so receiver 1 is not the colour of PCM channel 1, with the combined channel the strongest and a little thicker and the other two lighter tints of the same hue, so related series stay grouped; a 16th stream of either takes the first hue again
 - **Customize View Dialog**: A tabbed dialog selects which series are visible — a Frame Sync Lock tab (one toggle per stream) and a Receiver SNR tab that presents each stream as a collapsible tree of receivers with L/R/C channel checkboxes, tri-state group toggles, and Expand/Collapse All; streams with many receivers split across two columns
-- **Distraction-Free Plot**: The chart fills the entire plot area - there are no control rows around it. Every control lives in a **right-click context menu** on the chart (Set Plot Title, Plot File, Remove File, View Mode, Customize View, Show Legend, Readout, X Axis, Y Axes, Reset View), in a single on-chart chip bar, or on a key while the chart has focus
+- **Distraction-Free Plot**: The chart fills the entire plot area - there are no control rows around it. Every control lives in a **right-click context menu** on the chart (Set Plot Title, Plot File, Remove File, Clear Plot, View Mode, Customize View, Show Legend, Readout, X Axis, Y Axes, Reset View), in a single on-chart chip bar, or on a key while the chart has focus
 - **On-Chart Chip Bar**: A compact overlay at the chart's top-left holding a one-click **View Mode** chip (labelled with the view it switches to) and a **Reset view** chip that appears only once the view is zoomed or an axis limit is set - so nothing sits there unused
 - **Quick Plot Gestures**: Ctrl+drag or middle-drag rubber-bands a time range to zoom into it, double-click restores the full span, and a dashed crosshair follows the cursor for comparing series at the same instant
 - **View Mode**: The context menu switches the left axis between Frame Sync Lock (%) and Accumulated Missed Frames; the per-stream visibility selection is preserved across the switch
 - **Plot File Selector**: After a batch run, the context menu's **Plot File** submenu selects which processed file to view, or overlays them all (disabled when only one file is loaded)
 - **Remove File**: The context menu's **Remove File...** asks which recording, batch file or imported CSV to drop and removes every series of it from the plot and from the next CSV export, keeping the others; process the recording again to bring it back
-- **Add Recording**: **File > Add Recording…** configures and processes another `.ch10` as Open does, but keeps everything already on the plot (the recordings processed before and any imported CSV data), each recording its own entry in **Plot File** and **Remove File**; with an empty plot it is Open
-- **Movable On-Plot Legend**: A translucent legend floats inside the chart (defaulting to the top-right, reset each session) and can be dragged clear of the data; it scrolls for dense plots (e.g. 48+ SNR channels) and is composited into exported images at its placed position. **Show Legend** on the right-click menu (or **L**) shows or hides it, and the choice persists between sessions
+- **Opening Stacks**: **File > Open…** (and a dropped `.ch10`, or a Recent Files entry) processes a recording and adds it beside everything already on the plot (the recordings processed before and any imported CSV data), each recording its own entry in **Plot File** and **Remove File**; nothing replaces the plot, so **Clear Plot…** on the right-click menu is how it is emptied, after asking
+- **Movable On-Plot Legends**: Two translucent legends float inside the chart, **Framesync Series** at the top left and **SNR Series** at the top right of the plot area (reset each session), and can be dragged clear of the data; each scrolls for dense plots (e.g. 48+ SNR channels) and both are composited into exported images at their placed positions. **Show Legend** on the right-click menu (or **L**) shows or hides both, and the choice persists between sessions
 - **X-Axis Time Display**: Actual file time (DDD:HH:MM:SS) on the X axis instead of elapsed seconds
-- **Export**: Export the current plot and its data from the ☰ menu (**Export…**) — choose any combination of CSV data (every series), a plot image (PNG/SVG/PDF, exactly what the chart shows, legend included), and the log window contents (text)
+- **Export**: Export the current plot and its data from the ☰ menu (**Export…**) — choose any combination of CSV data (every series), a plot image (PNG/SVG/PDF, exactly what the chart shows, legends included), and the log window contents (text)
 - **Hover Tooltip**: Shows series name, time (DDD:HH:MM:SS), and value (lock % or dB) on mouse hover
 
 ### Logging & Feedback
@@ -93,7 +93,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 ### Deployment
 
-- **Installer & Portable Distribution**: A signed per-machine MSI for managed deployment (Group Policy, SCCM, Intune: silent switches for offering the application for `.ch10` files (Open with; it never takes an association another application holds), the full manual and a desktop shortcut; settings files kept on upgrade and uninstall), and a portable ZIP that keeps its preferences beside itself, for users without admin rights
+- **Installer & Portable Distribution**: A signed MSI that installs per-machine for managed deployment (Group Policy, SCCM, Intune: silent switches for offering the application for `.ch10` files (Open with; it never takes an association another application holds), the full manual and a desktop shortcut; settings files kept on upgrade and uninstall) or per-user, with no administrator rights, to a folder of the user's choosing; and a portable ZIP that keeps its preferences beside itself
 
 ## System Requirements
 

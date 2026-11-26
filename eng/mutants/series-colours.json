@@ -50,11 +50,11 @@
     {
       "id": "C6",
       "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
-      "old": "StreamHues[stream % StreamHues.Count]",
+      "old": "StreamHues[StreamHues.Count - 1 - (stream % StreamHues.Count)]",
       "new": "StreamHues[0]",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
       "expect": "caught",
-      "note": "every stream takes the first hue"
+      "note": "every Receiver SNR stream takes the first hue"
     },
     {
       "id": "C7",
@@ -95,8 +95,8 @@
     {
       "id": "C11",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "s.Color, s.Dotted, s.Strong));",
-      "new": "s.Color));",
+      "old": "s.Color, s.Dotted, s.Strong, s.Metric == MetricType.Snr));",
+      "new": "s.Color, false, false, s.Metric == MetricType.Snr));",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ChartViewTests"],
       "expect": "caught",
       "note": "the legend is never told a series is dotted or strong"
@@ -118,6 +118,33 @@
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
       "expect": "caught",
       "note": "lock streams past the 15th keep the last hue instead of taking the first again"
+    },
+    {
+      "id": "C14",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "StreamHues[StreamHues.Count - 1 - (stream % StreamHues.Count)]",
+      "new": "StreamHues[stream % StreamHues.Count]",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "Receiver SNR takes the hues from the first end again, so receiver 1 is the colour of PCM channel 1"
+    },
+    {
+      "id": "C15",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "StreamHues[StreamHues.Count - 1 - (stream % StreamHues.Count)]",
+      "new": "StreamHues[StreamHues.Count - 1 - Math.Min(stream, StreamHues.Count - 1)]",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "SNR streams past the 15th keep the first hue instead of taking the last again"
+    },
+    {
+      "id": "C16",
+      "file": "src/TmDq.App/Views/Plot/PlotChart.cs",
+      "old": "SeriesDots = new[] { 1.0, 1.0 };",
+      "new": "SeriesDots = new[] { 1.0, 2.0 };",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "the dotted lines are drawn with the loose gap of before v3.5.0 (a dot, then twice as long a gap)"
     }
   ]
 }

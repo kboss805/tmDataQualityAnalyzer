@@ -28,10 +28,6 @@ public sealed class MainWindowServices
     /// <summary>The CSV to import and Export's Browse dialogs; without them Import CSV is unavailable.</summary>
     public IDataFilePicker? Files { get; init; }
 
-    /// <summary>The question every CSV import asks, what kind of file it is (US10.0); without it a CSV is read as one the
-    /// application exported.</summary>
-    public ICsvKindDialog? CsvKinds { get; init; }
-
     /// <summary>The Export dialog; without it Export is unavailable.</summary>
     public IExportDialog? ExportDialog { get; init; }
 

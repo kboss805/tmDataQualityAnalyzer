@@ -1,5 +1,8 @@
 {
   "permissions": {
+    "allow": [
+      "mcp__ccd_pr__set_monitor"
+    ],
     "deny": [
       "Edit(third_party/irig106/**)",
       "Write(third_party/irig106/**)"

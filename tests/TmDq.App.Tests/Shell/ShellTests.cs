@@ -157,7 +157,7 @@ public sealed class ShellTests : IDisposable
         Menus.Open(window);
         // File, Import/Export, Settings, Help: each opens its own list; there is no Exit (the window's close button is it).
         Assert.Equal(new[] { "File", "Import/Export", "Settings", "Help" }, window.MainMenu.Items.Select(Header));
-        Assert.Equal(new[] { "Open...", "Add Recording...", "Recent Files", "-", "Process Multiple Files...", "Save Template..." }, Menus.Headers(Find(window.MainMenu.Items, "File")));
+        Assert.Equal(new[] { "Open...", "Recent Files", "-", "Process Multiple Files...", "Save Template..." }, Menus.Headers(Find(window.MainMenu.Items, "File")));
         Assert.Equal(new[] { "Import from CSV...", "Export..." }, Menus.Headers(Find(window.MainMenu.Items, "Import/Export")));
         Assert.Equal(new[] { "Light Theme", "Dark Theme" }, Menus.Headers(Find(window.MainMenu.Items, "Settings")));
         Assert.Equal(new[] { "User Manual", "-", "About" }, Menus.Headers(Find(window.MainMenu.Items, "Help")));
@@ -167,8 +167,7 @@ public sealed class ShellTests : IDisposable
                       Entry(window, "File", "Save Template...").Command, Entry(window, "Import/Export", "Import from CSV...").Command,
                       Entry(window, "Import/Export", "Export...").Command));
         Assert.Equal(new KeyGesture(Key.O, KeyModifiers.Control), Entry(window, "File", "Open...").InputGesture);
-        Assert.Same(vm.AddRecordingCommand, Entry(window, "File", "Add Recording...").Command);
-        Assert.NotNull(ToolTip.GetTip(Entry(window, "File", "Add Recording...")));
+        Assert.NotNull(ToolTip.GetTip(Entry(window, "File", "Open...")));   // it says that it adds beside what is there
         Assert.Equal(("Import a previously exported CSV file", "Export plot data and images"),
                      ((string)ToolTip.GetTip(Entry(window, "Import/Export", "Import from CSV..."))!, (string)ToolTip.GetTip(Entry(window, "Import/Export", "Export..."))!));
         Assert.NotNull(ToolTip.GetTip(Entry(window, "File", "Save Template...")));
@@ -188,9 +187,6 @@ public sealed class ShellTests : IDisposable
         // Open is the view model's.
         Entry(window, "File", "Open...").Command!.Execute(null);
         Assert.Equal(1, picker.Asked);
-        // Add Recording asks the same picker.
-        Entry(window, "File", "Add Recording...").Command!.Execute(null);
-        Assert.Equal(2, picker.Asked);
         window.Close();
     }
 
@@ -717,10 +713,11 @@ public sealed class ShellTests : IDisposable
             window.RequestedThemeVariant = theme;
             Dispatcher.UIThread.RunJobs();
             Assert.Same(palette, view.Chart.Palette);
-            Assert.Same(palette, view.Legend.Palette);
-            Assert.Equal(palette.LegendBackground, ((ISolidColorBrush)view.Legend.Background!).Color);
-            Assert.Equal(palette.LegendBorder, ((ISolidColorBrush)view.Legend.BorderBrush!).Color);
-            Assert.All(view.Legend.Rows, r => Assert.Equal(palette.LegendText,
+            Assert.Same(palette, view.FrameSyncLegend.Palette);
+            Assert.Same(palette, view.SnrLegend.Palette);
+            Assert.Equal(palette.LegendBackground, ((ISolidColorBrush)view.FrameSyncLegend.Background!).Color);
+            Assert.Equal(palette.LegendBorder, ((ISolidColorBrush)view.FrameSyncLegend.BorderBrush!).Color);
+            Assert.All(view.FrameSyncLegend.Rows, r => Assert.Equal(palette.LegendText,
                 ((ISolidColorBrush)((Panel)r).Children.OfType<TextBlock>().Single().Foreground!).Color));
             // Drawn, not only chosen: the chart's own background, read from a rendered frame, before anything but the
             // theme has changed (the layer painted in the other theme is not reused).
@@ -737,7 +734,7 @@ public sealed class ShellTests : IDisposable
             vm.Plot.SetSeries(new[] { PlotFixtures.Lock(0, "a", 1, 0, new[] { 0.0, 1.0 }, new[] { 50.0, 60.0 }) });
             vm.Plot.SetXViewByUser(0.2, 0.8);
             Dispatcher.UIThread.RunJobs();
-            Assert.All(view.Legend.Rows, r => Assert.Equal(palette.LegendText,
+            Assert.All(view.FrameSyncLegend.Rows, r => Assert.Equal(palette.LegendText,
                 ((ISolidColorBrush)((Panel)r).Children.OfType<TextBlock>().Single().Foreground!).Color));
         }
         window.Close();
@@ -900,7 +897,7 @@ public sealed class ShellTests : IDisposable
         PlotView view = window.FindControl<PlotView>("PlotView")!;
         Assert.Equal((4, 4, 4, 4), (view.ResetChip.CornerRadius.TopLeft, window.MinimizeButton.CornerRadius.TopLeft, window.MenuButton.CornerRadius.TopLeft,
                                    window.SidebarButton.CornerRadius.TopLeft));
-        Assert.Equal((8, 8), (view.Legend.CornerRadius.TopLeft, view.LoadingLabel.CornerRadius.TopLeft));
+        Assert.Equal((8, 8), (view.FrameSyncLegend.CornerRadius.TopLeft, view.LoadingLabel.CornerRadius.TopLeft));
         Assert.Equal(PlotLegend.CornerRadiusPx, Radius("OverlayCornerRadius").TopLeft);
         Assert.Equal(PlotChart.FontSize, Double("CaptionTextBlockFontSize"));
         Assert.Equal(Double("CaptionTextBlockFontSize"), view.ResetChip.FontSize);
@@ -997,7 +994,7 @@ public sealed class ShellTests : IDisposable
         // are what put it there, so a rename on either side would leave Help on the base manual without a word.
         Assert.Equal("UserManual.html", HelpManual.FullManualName);
         string msi = File.ReadAllText(Repo.File(Path.Combine("deploy", "tmDataQualityAnalyzer.wxs")));
-        Assert.Contains("<ComponentGroup Id=\"ManualItems\" Directory=\"INSTALLFOLDER\">", msi);
+        Assert.Contains("<ComponentGroup Id=\"ManualItems\" Directory=\"APPLICATIONFOLDER\">", msi);
         Assert.Contains("Source=\"$(StagingManual)\\" + HelpManual.FullManualName + "\"", msi);
         string package = File.ReadAllText(Repo.File(Path.Combine("deploy", "build_package.ps1")));
         Assert.Contains("Join-Path $Stage 'manual\\" + HelpManual.FullManualName + "'", package);

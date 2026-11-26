@@ -14,11 +14,12 @@ using TmDq.App.ViewModels.Plot;
 namespace TmDq.App.Views.Plot;
 
 /// <summary>
-/// The legend that floats over the chart (plan step 4.4, US4.0): a translucent rounded box of
-/// rows, each a line swatch in the series' colour and its label, that scrolls once it reaches its cap (a fraction of the
-/// chart, so a dense plot cannot bury the data) and can be dragged anywhere inside the chart. It sits at the top right
-/// until it is dragged (left of the right axis's labels, when that axis is shown), and is kept inside the chart afterwards. What it lists is the plot's business
-/// (<see cref="PlotViewModel.LegendEntries"/>); this only lays it out.
+/// A legend that floats over the chart (plan step 4.4, US4.0): a translucent rounded box under a title, of rows, each a line
+/// swatch in the series' colour and its label, that scrolls once it reaches its cap (a fraction of the chart, so a dense plot
+/// cannot bury the data) and can be dragged anywhere inside the chart. The chart has two, "Framesync Series" at the top left
+/// and "SNR Series" at the top right, so which entry is which metric is never a guess. Each sits in its corner of the plot area
+/// until it is dragged (the right one stopping short of the right axis's labels, when that axis is shown), and is kept inside
+/// the chart afterwards. What one lists is the plot's business (<see cref="PlotViewModel.LegendEntries"/>); this only lays it out.
 /// </summary>
 public sealed class PlotLegend : Border
 {
@@ -30,10 +31,17 @@ public sealed class PlotLegend : Border
     // free, so the bar, shown once they overflow, never covers a label (a test holds the theme to it).
     public const double ScrollGutter = 16;
 
+    public const double TitleGap = 4;
+
+    /// <summary>The corner a legend sits in until it is dragged.</summary>
+    public enum Corner { Left, Right }
+
     private readonly StackPanel _rows = new() { Spacing = RowSpacing, Margin = new Thickness(0, 0, ScrollGutter, 0) };
     private readonly ScrollViewer _scroll;
+    private readonly TextBlock _title = new() { FontWeight = FontWeight.SemiBold, FontSize = PlotChart.FontSize, Margin = new Thickness(0, 0, 0, TitleGap) };
     private Size _host;
-    private double _rightEdge;   // where its right edge may reach until it is dragged: the chart's, less the right axis's labels
+    private double _edge;   // the side it sits against until it is dragged: the plot area's left edge, or its right edge, less the right axis's labels
+    private double _top;    // the top of its place until it is dragged
     private bool _dragging, _userMoved;
     private Point _dragStart, _startPos;
 
@@ -53,7 +61,21 @@ public sealed class PlotLegend : Border
             AllowAutoHide = false,
             Content = _rows,
         };
-        Child = _scroll;
+        var body = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(_title, Dock.Top);
+        body.Children.Add(_title);
+        body.Children.Add(_scroll);
+        Child = body;
+    }
+
+    /// <summary>The corner it sits in until it is dragged: the left for the Framesync legend, the right for the SNR one.</summary>
+    public Corner Side { get; set; } = Corner.Right;
+
+    /// <summary>What the legend is called: its heading, over the rows.</summary>
+    public string Title
+    {
+        get => _title.Text ?? "";
+        set => _title.Text = value;
     }
 
     public int RowCount => _rows.Children.Count;
@@ -67,13 +89,15 @@ public sealed class PlotLegend : Border
 
     public Point Position => new(Canvas.GetLeft(this), Canvas.GetTop(this));
 
-    /// <summary>Lists <paramref name="entries"/>, sized and placed in a chart of <paramref name="host"/>. Shown only when
-    /// <paramref name="wanted"/> and there is a row: the user's choice outranks having rows, and an empty legend is
-    /// never drawn.</summary>
-    public void Show(IReadOnlyList<LegendEntry> entries, bool wanted, Size host, double rightEdge)
+    /// <summary>Lists <paramref name="entries"/>, sized and placed in a chart of <paramref name="host"/>: against
+    /// <paramref name="edge"/> (the plot area's left edge for the left corner, its right edge for the right one) and
+    /// <paramref name="top"/>. Shown only when <paramref name="wanted"/> and there is a row: the user's choice outranks
+    /// having rows, and an empty legend is never drawn.</summary>
+    public void Show(IReadOnlyList<LegendEntry> entries, bool wanted, Size host, double edge, double top)
     {
         _host = host;
-        _rightEdge = rightEdge;
+        _edge = edge;
+        _top = top;
         _rows.Children.Clear();
         foreach (LegendEntry e in entries) _rows.Children.Add(Row(e));
         if (entries.Count == 0)
@@ -87,10 +111,11 @@ public sealed class PlotLegend : Border
 
     /// <summary>The chart was resized: the cap follows it, and so does the place (the top right until dragged, inside
     /// the chart after).</summary>
-    public void HostResized(Size host, double rightEdge)
+    public void HostResized(Size host, double edge, double top)
     {
         _host = host;
-        _rightEdge = rightEdge;
+        _edge = edge;
+        _top = top;
         if (RowCount > 0) Fit();
     }
 
@@ -102,6 +127,7 @@ public sealed class PlotLegend : Border
         ChartPalette p = Palette;
         Background = new ImmutableSolidColorBrush(p.LegendBackground);
         BorderBrush = new ImmutableSolidColorBrush(p.LegendBorder);
+        _title.Foreground = new ImmutableSolidColorBrush(p.LegendText);
         foreach (Control row in _rows.Children)
         {
             foreach (TextBlock label in ((Panel)row).Children.OfType<TextBlock>())
@@ -162,15 +188,21 @@ public sealed class PlotLegend : Border
     private void Fit()
     {
         _rows.Measure(Size.Infinity);
+        _title.Measure(Size.Infinity);
         Size content = _rows.DesiredSize;   // includes the scroll gutter, the rows' right margin
+        Size title = _title.DesiredSize;    // includes its gap to the rows; the title stays put while the rows scroll
         double frame = 2 * (ContentMargin + 1);
         double maxW = Math.Max(MinCapWidth, _host.Width * MaxWidthFraction);
         double maxH = Math.Max(MinCapHeight, _host.Height * MaxHeightFraction);
-        Width = Math.Min(Math.Ceiling(content.Width) + frame, maxW);
-        Height = Math.Min(Math.Ceiling(content.Height) + frame, maxH);
-        if (_userMoved) MoveTo(Position);
-        else Canvas.SetLeft(this, Math.Max(EdgeMargin, _rightEdge - Width - EdgeMargin));
-        if (!_userMoved) Canvas.SetTop(this, EdgeMargin);
+        Width = Math.Min(Math.Ceiling(Math.Max(content.Width, title.Width)) + frame, maxW);
+        Height = Math.Min(Math.Ceiling(title.Height + content.Height) + frame, maxH);
+        if (_userMoved)
+        {
+            MoveTo(Position);
+            return;
+        }
+        Canvas.SetLeft(this, Side == Corner.Left ? Math.Max(EdgeMargin, _edge + EdgeMargin) : Math.Max(EdgeMargin, _edge - Width - EdgeMargin));
+        Canvas.SetTop(this, Math.Max(EdgeMargin, _top));
     }
 
     /// <summary>Moves the box, kept a margin inside the chart.</summary>

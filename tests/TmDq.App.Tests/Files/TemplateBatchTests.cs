@@ -654,7 +654,7 @@ public sealed class TemplateBatchTests : IDisposable, IClassFixture<ShortRecordi
     }
 
     [Fact]
-    public async Task WithSeveralRecordingsSaveAsTemplateAsksWhichAndAnOpenForgetsThem()
+    public async Task WithSeveralRecordingsSaveAsTemplateAsksWhichAndAnOpenKeepsThemAndAddsItsOwn()
     {
         string one = Copy("flight 1.ch10"), two = Copy("flight 2.ch10");
         var files = new FakeTemplateFiles { SavePath = Path.Combine(_dir, "chosen.json") };
@@ -671,14 +671,15 @@ public sealed class TemplateBatchTests : IDisposable, IClassFixture<ShortRecordi
         await vm.SaveTemplateCommand.ExecuteAsync(null);
         Assert.Empty(files.Asked);
 
-        // A recording that cannot be read forgets the batch's: there is nothing left to capture.
+        // A recording that cannot be read changes nothing: Open stacks, so what the batch put on the plot is still there to capture.
         string notRecording = Path.Combine(_dir, "not.ch10");
         File.WriteAllText(notRecording, "no");
         await vm.LoadAsync(notRecording);
-        Assert.Empty(vm.Sources);
-        await vm.RunBatchAsync(PrnTemplate(), new[] { one, two }, null, false);
-        await vm.LoadAsync(Prn);   // a new recording: the batch's are gone
-        Assert.Single(vm.Sources);
+        Assert.Equal(2, vm.Sources.Count);
+        await vm.RunBatchAsync(PrnTemplate(), new[] { one, two }, null, false);   // a batch starts the plot again, as it always did
+        Assert.Equal(2, vm.Sources.Count);
+        await vm.LoadAsync(Prn);   // an Open after it is added beside the batch's recordings
+        Assert.Equal(3, vm.Sources.Count);
     }
 
     // ---- the confirmation's state ----------------------------------------------------------------------------------------

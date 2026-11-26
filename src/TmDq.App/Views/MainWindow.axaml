@@ -84,15 +84,14 @@
           Margin="2,0,6,0">
       <Button x:Name="MenuButton" AutomationProperties.Name="Menu" x:FieldModifier="public" Grid.Column="0" Classes="glyph" Content="&#xE700;" ToolTip.Tip="Menu"
               chrome:WindowDecorationProperties.ElementRole="User">
-        <!-- The menu: four submenus. File (Open, Add Recording, Recent Files, then Process Multiple Files and Save Template), Import/Export (Import
+        <!-- The menu: four submenus. File (Open, which stacks, Recent Files, then Process Multiple Files and Save Template), Import/Export (Import
              from CSV, Export), Settings (the theme: Light and Dark, the one in use checked) and Help (the help, About). Every entry
              is available as its command is; the window's close button is the only way out, there is no Exit. -->
         <Button.Flyout>
           <MenuFlyout Placement="BottomEdgeAlignedLeft">
             <MenuItem Header="File">
-              <MenuItem Header="Open..." Command="{Binding OpenCommand}" InputGesture="Ctrl+O" />
-              <MenuItem Header="Add Recording..." Command="{Binding AddRecordingCommand}"
-                        ToolTip.Tip="Process another recording and add it to the plot, keeping what is already there" />
+              <MenuItem Header="Open..." Command="{Binding OpenCommand}" InputGesture="Ctrl+O"
+                        ToolTip.Tip="Process a recording and add it to the plot, beside what is already there" />
               <!-- Each by its name, its path as the tooltip, newest first, then Clear Recent Files; or "(No recent files)",
                    disabled. -->
               <MenuItem Header="Recent Files" ItemsSource="{Binding RecentMenu}" ItemContainerTheme="{StaticResource MenuChoice}" />
