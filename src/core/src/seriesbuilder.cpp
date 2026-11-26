@@ -10,7 +10,6 @@
 #include <map>
 
 #include "constants.h"
-#include "framesetup.h"
 #include "receivernames.h"
 #include "seriescolumnschema.h"
 #include "seriesrange.h"

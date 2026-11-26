@@ -709,6 +709,28 @@ TEST_CASE("ChartGeometry: time ticks land on round times of the clock")
     CHECK(chart::timeTickValues(kNaN, 5.0, 5).empty());
 }
 
+TEST_CASE("ChartGeometry: ticks come back, and promptly, however far from zero the clock or the range is")
+{
+    // The time ticks walked the clock by adding the step to it: with an origin far past what a double resolves to the
+    // second (an imported CSV can set any), or an infinite one, the sum stopped changing and the loop never ended. The
+    // round ticks counted their indices by adding one, which stops counting past 2^53: a range a few units of the last
+    // place wide asked for many ticks hung the same way. Where the clock or the index cannot count, the span is divided
+    // evenly, the honest answer the functions already give where no round step fits. Without the fix this case hangs.
+    using V = std::vector<double>;
+    const V even = chart::tickValues(0.0, 116.0, 5);
+    CHECK(chart::timeTickValues(0.0, 116.0, 5, 1e20) == even);
+    CHECK(chart::timeTickValues(0.0, 116.0, 5, kInf) == even);
+    CHECK(chart::timeTickValues(0.0, 116.0, 5, -1e300) == even);
+
+    // A clock still resolved to the step keeps its round times.
+    const V near = chart::timeTickValues(0.0, 116.0, 5, 1e12);
+    CHECK(near == V{20.0, 50.0, 80.0, 110.0});
+
+    const double tiny = std::nextafter(1.0, 2.0);   // one unit in the last place above 1
+    const V round = chart::roundTickValues(1.0, tiny, 25);
+    CHECK(round == chart::tickValues(1.0, tiny, 25));
+    CHECK(chart::roundTickValues(1e17, 1e17 + 64.0, 25) == chart::tickValues(1e17, 1e17 + 64.0, 25));
+}
 TEST_CASE("ChartGeometry: plain ticks divide the range evenly, both ends included")
 {
     CHECK(chart::tickValues(0.0, 100.0, 5) == std::vector<double>{0.0, 25.0, 50.0, 75.0, 100.0});

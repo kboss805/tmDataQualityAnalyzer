@@ -127,8 +127,8 @@
     {
       "id": "S16",
       "file": "src/core/src/ch10packetreader.cpp",
-      "old": "        m_report.error(\"File read error; aborting parsing.\");\n        return false;\n    }",
-      "new": "        m_report.error(\"File read error.\");\n        return false;\n    }",
+      "old": "        m_report.error(\"File read error; aborting parsing.\");\n        return false;\n",
+      "new": "        m_report.error(\"File read error.\");\n        return false;\n",
       "expect": "caught",
       "note": "the text of a failed packet read in a run"
     },

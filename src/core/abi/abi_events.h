@@ -67,8 +67,13 @@ public:
         {
             return;   // nobody to hand it to
         }
-        auto* result = new tmdq_stream_result{std::make_shared<const ProcessedStreamData>(std::move(data))};
-        deliver([&] { m_callbacks.stream_done(m_callbacks.user, result); });
+        // Built outside deliver(), on purpose: a result that cannot be allocated (std::bad_alloc on a huge run) must not
+        // be swallowed as a callback's failure would be, which would end the run "successful" with a stream the host
+        // never got. It propagates to the stream's thread boundary (PipelineRunner::runStream), which reports it and
+        // fails the run. Owned here until the host takes it, so nothing leaks on the way.
+        auto result = std::make_unique<tmdq_stream_result>(
+            tmdq_stream_result{std::make_shared<const ProcessedStreamData>(std::move(data))});
+        deliver([&] { m_callbacks.stream_done(m_callbacks.user, result.release()); });
     }
 
     void processingFinished(bool success) override

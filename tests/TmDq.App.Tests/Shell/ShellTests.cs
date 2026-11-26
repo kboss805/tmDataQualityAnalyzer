@@ -936,7 +936,7 @@ public sealed class ShellTests : IDisposable
     public void TheLightThemeDrawsOnlyTheYellowOfThePrimariesDarkerAndTheDarkThemeNone()
     {
         Color yellow = PlotColors.StreamHues[9];   // the gold, the one hue of them that is pale on white
-        foreach (Color primary in PlotColors.FrameSyncLock.Concat(PlotColors.StreamHues).Where(c => c != yellow))
+        foreach (Color primary in PlotColors.StreamHues.Where(c => c != yellow))
         {
             Assert.Equal(primary, ChartPalette.Light.SeriesColor(primary));
             Assert.True(ChartPalette.Contrast(primary, Colors.White) >= ChartPalette.Light.MinSeriesContrast, $"{primary} is below the least");
@@ -949,14 +949,14 @@ public sealed class ShellTests : IDisposable
         Assert.True(drawn.R <= yellow.R && drawn.G <= yellow.G && drawn.B <= yellow.B);
         Assert.True(drawn.R > drawn.G && drawn.G > drawn.B, "no longer a yellow");
 
-        foreach (Color c in PlotColors.FrameSyncLock.Concat(PlotColors.StreamHues).Concat(new[] { Colors.White, Colors.Yellow }))
+        foreach (Color c in PlotColors.StreamHues.Concat(new[] { Colors.White, Colors.Yellow }))
             Assert.Equal(c, ChartPalette.Dark.SeriesColor(c));
     }
 
     [Fact]
     public void EveryShadeIsLegibleInTheLightThemeAndTheShadesOfAPrimaryStayDistinct()
     {
-        foreach (Color primary in PlotColors.FrameSyncLock.Concat(PlotColors.StreamHues))
+        foreach (Color primary in PlotColors.StreamHues)
         {
             // The levels a stream's first four channels take (PlotColors.Weakness): the combined channel, the other two, a fourth.
             // Past them the shades of a hue are nearly one colour already, and darkening can make two of them one.

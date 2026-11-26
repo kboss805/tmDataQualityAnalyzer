@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -10,6 +11,8 @@
 #include "channeldata.h"
 #include "chapter10reader.h"
 #include "doctest.h"
+#include "irig106ch10.h"
+#include "irig106lock.h"
 #include "test_support.h"
 
 using namespace tmdq_test;
@@ -517,4 +520,70 @@ TEST_CASE("Chapter10Reader: getFirstPCMChannelID returns a valid id")
     const int first_pcm = reader.getFirstPCMChannelID();
     CHECK(first_pcm != -1);
     CHECK(first_pcm == currentPcm(reader));
+}
+
+namespace {
+
+/// The irig106 handles open in the process: slots of the library's hundred-entry table in use.
+int openIrig106Handles()
+{
+    const auto lock = lockIrig106Setup();
+    int open = 0;
+    for (const auto& slot : Irig106::g_suI106Handle)
+    {
+        open += slot.bInUse ? 1 : 0;
+    }
+    return open;
+}
+
+} // namespace
+
+TEST_CASE("Chapter10Reader: a load gives its irig106 handle back however it ends, and a destroyed reader holds none")
+{
+    // The library has a hundred handles for the whole process, so one a reader keeps is gone for good. Every way a load
+    // can end closes the file it opened; the reader's destructor closes one a load left open (only a throw part-way, a
+    // std::bad_alloc while listing the channels, can) under the setup lock, as Ch10PacketReader's does.
+    const std::string original = readBytes(recordingFile("step_cal, example.ch10"));
+    std::string corrupt_tmats = original;
+    setPacketDataLength(corrupt_tmats, 0, firstPacketLength(original));
+    TempDir dir;
+    struct Row { const char* name; std::string bytes; bool loads; };
+    const Row rows[] = {
+        {"a recording that loads", original, true},
+        {"cut before time can be established", original.substr(0, 100), false},
+        {"a TMATS packet whose data length is corrupt", corrupt_tmats, false},
+        {"not a recording", "this is not a recording\n", false},
+    };
+    const int before = openIrig106Handles();
+    for (const Row& row : rows)
+    {
+        INFO(row.name);
+        const fs::path path = dir.file("generated.ch10");
+        writeBytes(path, row.bytes);
+        {
+            Chapter10Reader reader;
+            CHECK(reader.loadChannels(path) == row.loads);
+            CHECK(openIrig106Handles() == before);
+            CHECK(reader.loadChannels(path) == row.loads);   // loaded again, by the same reader
+            CHECK(openIrig106Handles() == before);
+        }
+        CHECK(openIrig106Handles() == before);
+    }
+
+    // A reader whose load closed its file does not close it again when it goes: by then the library may have given that
+    // slot to someone else (it hands out the lowest free one), whose file it would close.
+    const fs::path path = recordingFile("step_cal, example.ch10");
+    auto meta = std::make_unique<Chapter10Reader>();
+    REQUIRE(meta->loadChannels(path));
+    int other = -1;
+    {
+        const auto lock = lockIrig106Setup();
+        const Irig106::EnI106Status opened = Irig106::enI106Ch10Open(&other, path.string().c_str(), Irig106::I106_READ);
+        REQUIRE((opened == Irig106::I106_OK || opened == Irig106::I106_OPEN_WARNING));
+    }
+    CHECK(openIrig106Handles() == before + 1);
+    meta.reset();
+    CHECK(openIrig106Handles() == before + 1);
+    const auto lock = lockIrig106Setup();
+    Irig106::enI106Ch10Close(other);
 }

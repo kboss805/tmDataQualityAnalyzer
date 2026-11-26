@@ -231,6 +231,27 @@ inline std::uint32_t firstPacketLength(const std::string& bytes)
     return length;
 }
 
+/// Rewrites the data-length field (bytes 8 to 11) of the packet header at @p offset in @p bytes, and its header checksum
+/// (bytes 22 and 23) to match, the way irig106 checks it: the 16-bit sum of the header's first eleven little-endian
+/// words. The result is a header the library accepts that claims @p data_length bytes of data.
+inline void setPacketDataLength(std::string& bytes, std::size_t offset, std::uint32_t data_length)
+{
+    REQUIRE(offset + 24 <= bytes.size());
+    for (std::size_t i = 0; i < 4; ++i)
+    {
+        bytes[offset + 8 + i] = static_cast<char>((data_length >> (8 * i)) & 0xFF);
+    }
+    std::uint16_t sum = 0;
+    for (std::size_t word = 0; word < 11; ++word)
+    {
+        const auto lo = static_cast<std::uint8_t>(bytes[offset + 2 * word]);
+        const auto hi = static_cast<std::uint8_t>(bytes[offset + 2 * word + 1]);
+        sum = static_cast<std::uint16_t>(sum + (lo | (hi << 8)));
+    }
+    bytes[offset + 22] = static_cast<char>(sum & 0xFF);
+    bytes[offset + 23] = static_cast<char>(sum >> 8);
+}
+
 /// Copies step_cal's recording with edits made to its TMATS text. Each edit is a (needle, replacement) pair of the SAME
 /// length, so no packet length or checksum changes (this recording carries no data checksum, and the header is
 /// untouched). Fails the case when an edit does not apply exactly once.

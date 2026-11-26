@@ -57,6 +57,10 @@ internal sealed class BatchRunner
     {
         int processed = 0, skipped = 0, nextSourceId = 0;
         var sources = new List<ProcessedSource>();
+        // Each file's name in Plot File and for its CSV and images: its name up to the first dot, made different from every one
+        // given before in this batch ("2024 (2)"), so two files of one base name (2024.11.05_run1 and _run2) never write one CSV.
+        var names = new Dictionary<int, string>();
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);   // as Windows compares file names
         _log.Success(string.Create(CultureInfo.InvariantCulture, $"Processing {files.Count} file(s)..."));
         foreach (string path in files)
         {
@@ -68,6 +72,7 @@ internal sealed class BatchRunner
             }
             string name = Path.GetFileName(path), baseName = MainWindowViewModel.BaseName(name);
             int sourceId = nextSourceId++;
+            string label = MainWindowViewModel.UniqueName(baseName, taken);
             try
             {
                 _host.SetStatus($"Opening {name}...");
@@ -86,7 +91,9 @@ internal sealed class BatchRunner
                 processed++;
                 sources.Add(new ProcessedSource(sourceId, path, template.TimeChannelIndex, template.SwapBytes,
                                                 template.Entries.Select(e => e.Config).ToList()));
-                _plot.SetSourceLabel(sourceId, baseName);
+                taken.Add(label);
+                names[sourceId] = label;
+                _plot.SetSourceLabel(sourceId, label);
                 if (reuseAppearance) PlotTemplates.ApplyAppearance(template, sourceId, _plot);
             }
             catch (Exception e) when (e is OperationCanceledException or RecordingException)
@@ -96,11 +103,11 @@ internal sealed class BatchRunner
             }
         }
 
-        if (outputFolder is not null) await ExportEachAsync(sources, outputFolder);
+        if (outputFolder is not null) await ExportEachAsync(sources, names, outputFolder);
 
         // The plot opens on the first file; "All files (overlaid)" is in the Plot File selector.
         if (sources.Count > 1) _plot.SetVisibleSource(sources[0].SourceId);
-        if (sources.Count > 0) _plot.Title = MainWindowViewModel.BaseName(Path.GetFileName(sources[0].FilePath));
+        if (sources.Count > 0) _plot.Title = names[sources[0].SourceId];   // the first file's name is never changed: none came before it
         string headline = string.Create(CultureInfo.InvariantCulture, $"Batch complete: {processed} processed, {skipped} skipped.");
         string summary = headline + (outputFolder is null ? "" : " Output written to " + outputFolder + ".");
         return new BatchResult(sources, summary, headline, skipped);
@@ -108,15 +115,16 @@ internal sealed class BatchRunner
 
     /// <summary>
     /// Each recording on its own, as v2.x's batch wrote it: its CSV (every series of that recording), then with
-    /// frame-sync data an image of the lock % and one of the missed frames, else one image; the view put back after.
+    /// frame-sync data an image of the lock % and one of the missed frames, else one image; the view put back after. Each
+    /// file's are named with its name in Plot File (<paramref name="names"/>), which no other file of the batch has.
     /// </summary>
-    private async Task ExportEachAsync(IReadOnlyList<ProcessedSource> sources, string folder)
+    private async Task ExportEachAsync(IReadOnlyList<ProcessedSource> sources, Dictionary<int, string> names, string folder)
     {
         LockAxisView original = _plot.LockAxisView;
         bool frameSync = _plot.HasLockSeries || _plot.HasMissedFramesSeries;
         foreach (ProcessedSource source in sources)
         {
-            string baseName = MainWindowViewModel.BaseName(Path.GetFileName(source.FilePath));
+            string baseName = names[source.SourceId];
             _plot.SetVisibleSource(source.SourceId);
             await _export.SourceCsvAsync(Path.Combine(folder, baseName + ".csv"), source.SourceId);
 

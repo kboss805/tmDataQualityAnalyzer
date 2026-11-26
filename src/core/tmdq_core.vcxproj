@@ -122,6 +122,7 @@
   <ItemGroup>
     <ClInclude Include="include\constants.h" />
     <ClInclude Include="include\containerutil.h" />
+    <ClInclude Include="include\exceptionboundary.h" />
     <ClInclude Include="include\textformat.h" />
     <ClInclude Include="include\textparse.h" />
     <ClInclude Include="include\tmatswalk.h" />

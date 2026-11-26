@@ -365,6 +365,19 @@ public class SeriesTests
         Assert.Contains(q, x => x[2] == "0");
     }
 
+    [Fact]
+    public void AKeyTheLibraryNeverMakesIsWhereTheCoreAndEqualityPart()
+    {
+        // What IsSameStream's documentation says of keys whose label is no string the library makes.
+        StreamKey none = default;                                  // a null label
+        var empty = new StreamKey(0, string.Empty, 0);
+        Assert.True(none.IsSameStream(empty));                     // the core reads null as ""
+        Assert.False(none == empty);                               // == does not
+
+        TmdqException nul = Assert.Throws<TmdqException>(() => new StreamKey(0, "A\0B", 1).IsSameStream(new StreamKey(0, "A", 1)));
+        Assert.Equal(Status.BadArgument, nul.Status);              // refused, not cut short to "A" and found the same
+    }
+
     // --- the order an imported CSV's streams are given
 
     [Fact]

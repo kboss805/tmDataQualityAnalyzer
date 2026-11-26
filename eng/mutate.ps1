@@ -40,7 +40,8 @@
         a test exe) stays in the tree: a suite run next in the worktree once failed against a mutant.
       * Each kept list in eng\mutants must go on matching: the managed suite (RepoFilesTests) fails when
         a mutant's old text is no longer in its file exactly once. Re-anchor it in the change that moved
-        the text.
+        the text. This script sets TMDQ_MUTATING for the suite it runs, and that check skips while it is
+        set: the applied mutant has taken its own text out, so it would catch every managed mutant.
 
     The list is JSON:
         {
@@ -167,8 +168,8 @@ function Say([string]$line) {
 }
 
 # ---- the tools ----------------------------------------------------------------------------------------------
-if (-not (Get-Command msbuild -ErrorAction SilentlyContinue)) { . (Join-Path $root 'eng\env.ps1') *> $null }
-if (-not (Get-Command msbuild -ErrorAction SilentlyContinue)) { Fail 2 'msbuild not found (install the Visual Studio 2022 C++ build tools)' }
+# msbuild from Visual Studio 2022, the pinned toolset (eng\common.ps1): a Visual Studio 2026 prompt is refused, not built in.
+try { Initialize-MsvcEnvironment $PSScriptRoot } catch { Fail 2 $_.Exception.Message }
 
 $outDir = Join-Path $root 'out\Release'
 $coreDll = Join-Path $outDir 'tmdq_core.dll'
@@ -259,6 +260,10 @@ function Invoke-Suite([string[]]$arguments, $variables) {
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
     if ($suite -ne 'native') { $psi.EnvironmentVariables['TMDQ_CORE_DLL'] = $coreDll }
+    # A mutant takes its own "old" text out of its file, which the managed suite's anchor guard (RepoFilesTests'
+    # EveryKeptMutantStillNamesTextThatIsInItsFileExactlyOnce) reports as a moved anchor: every managed mutant would be
+    # "caught" by that guard alone. It skips while this is set, so a verdict is a real test's.
+    $psi.EnvironmentVariables['TMDQ_MUTATING'] = '1'
     foreach ($k in $variables.Keys) { $psi.EnvironmentVariables[$k] = $variables[$k] }
     $p = [System.Diagnostics.Process]::Start($psi)
     $so = $p.StandardOutput.ReadToEndAsync(); $se = $p.StandardError.ReadToEndAsync()

@@ -60,7 +60,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 ### Plot & Visualization
 
 - **Interactive Plot Window**: Plot showing frame sync lock (%) and/or receiver AGC (dB) series with mouse wheel zoom, click-drag pan (a hand cursor over the data), auto-scale axes, per-series visibility toggles, and an auto-assigned color palette
-- **Color Coding**: Frame Sync Lock series use purple/blue/green primaries (one per stream) and Receiver SNR series use 15 hues (one per receiver, or per channel of a phased array antenna: the first 15 solid, the next 15 dotted), with the combined channel the strongest and a little thicker and the other two a lighter tint of the same hue, so related series stay grouped
+- **Color Coding**: one palette of 15 hues for both metrics, told apart by the line: Frame Sync Lock series (and a stream's missed frames) are solid, one hue per PCM channel, and Receiver SNR series are dotted, one hue per receiver (or per channel of a phased array antenna), with the combined channel the strongest and a little thicker and the other two lighter tints of the same hue, so related series stay grouped; a 16th stream of either takes the first hue again
 - **Customize View Dialog**: A tabbed dialog selects which series are visible — a Frame Sync Lock tab (one toggle per stream) and a Receiver SNR tab that presents each stream as a collapsible tree of receivers with L/R/C channel checkboxes, tri-state group toggles, and Expand/Collapse All; streams with many receivers split across two columns
 - **Distraction-Free Plot**: The chart fills the entire plot area - there are no control rows around it. Every control lives in a **right-click context menu** on the chart (Set Plot Title, Plot File, Remove File, View Mode, Customize View, Show Legend, Readout, X Axis, Y Axes, Reset View), in a single on-chart chip bar, or on a key while the chart has focus
 - **On-Chart Chip Bar**: A compact overlay at the chart's top-left holding a one-click **View Mode** chip (labelled with the view it switches to) and a **Reset view** chip that appears only once the view is zoomed or an axis limit is set - so nothing sits there unused
@@ -104,6 +104,10 @@ Results are plotted in an interactive chart. The UI allows the user to configure
     (`src/TmDq.Core`).
   - **MSVC 2022** (Visual Studio 2022 C++ Build Tools, workload "Desktop development with C++", with the Windows SDK) -
     the native core, `tmdq_core.dll` (`src/core`, C++20, MSBuild).
+  - **Python 3** (the `py` launcher) - only for the release package: `deploy\build_package.ps1` generates the full manual
+    with `eng\build_manual.ps1`, which embeds its figures with `py eng\embed_manual_images.py` (the standard library only;
+    Pillow, in `eng\requirements.txt`, is for `eng\gen_app_icon.py` alone, run when the icon's artwork changes). Also for
+    `py eng/gen_compile_flags.py`, the clangd setup.
   - **WiX 6.0.2** - only for the MSI: a repo-local dotnet tool (`dotnet-tools.json`) that `deploy\build_msi.ps1` restores,
     with its UI extension, so there is nothing to install first.
 

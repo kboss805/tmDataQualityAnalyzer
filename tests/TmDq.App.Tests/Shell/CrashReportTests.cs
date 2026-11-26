@@ -275,6 +275,9 @@ public class CrashReportTests : IDisposable
         Assert.Contains("hit an unexpected error and has to close", saved);
         Assert.Contains("A report was saved to:\nC:\\Users\\x\\crash-1.txt", saved);
         Assert.Contains("send that file", saved);
+        // The report holds the log's and the stack's full paths: the user is told before being asked to send it.
+        Assert.Contains("contains the full paths of the files and folders you used", saved);
+        Assert.Contains("Read it before sending it", saved);
 
         string failed = CrashHandling.Message(null, @"C:\Users\x");
         Assert.Contains("The report could not be saved: the folder C:\\Users\\x cannot be written to.", failed);

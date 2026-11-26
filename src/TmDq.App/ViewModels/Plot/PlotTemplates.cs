@@ -18,7 +18,7 @@ public static class PlotTemplates
     /// </summary>
     public static ProcessingTemplate Build(ProcessedSource source, PlotViewModel plot) => new(
         AppInfo.Version,
-        TemplateBatch.BaseName(Path.GetFileName(source.FilePath)),
+        MainWindowViewModel.BaseName(Path.GetFileName(source.FilePath)),
         source.TimeChannelIndex,
         source.SwapBytes,
         source.Rows.Select(row => new TemplateEntry(

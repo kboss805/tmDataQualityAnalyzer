@@ -1,4 +1,4 @@
 # The third-party Python packages the scripts in eng\ use: one, by one script.
 # gen_app_icon.py (run only when the icon's artwork changes; assets\icon.ico is committed) needs Pillow.
 # Everything else in eng\ (ch10_triage.py, embed_manual_images.py, gen_compile_flags.py) uses only the standard library.
-Pillow==12.1.1
+Pillow==13.0.0

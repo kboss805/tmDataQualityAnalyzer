@@ -90,7 +90,6 @@ public sealed class PlotTests
     [Fact]
     public void TheShadesStartFromThePrimaries()
     {
-        Assert.Equal(new[] { "106,13,173", "67,97,238", "46,184,92" }, PlotColors.FrameSyncLock.Select(c => $"{c.R},{c.G},{c.B}"));
         Assert.Equal(new[] { "204,0,0", "30,90,220", "20,150,60", "255,140,0", "120,40,190", "0,170,200", "210,30,140", "130,170,20", "0,140,120", "230,190,0", "70,50,200", "240,80,120", "160,80,20", "70,160,255", "10,100,50" },
                      PlotColors.StreamHues.Select(c => $"{c.R},{c.G},{c.B}"));
     }
@@ -98,9 +97,9 @@ public sealed class PlotTests
     [AvaloniaFact]
     public void EachStreamAndEachReceiverTakesItsColour()
     {
-        // Four lock streams: the three primaries, then the first again a shade lighter; a stream's missed frames share
-        // its lock colour. SNR: each receiver its own hue of the 15, a channel the hue made lighter (the third, the
-        // combined one, not at all: it is the strongest).
+        // Four lock streams: the first four of the 15 hues, in stream order; a stream's missed frames share its lock colour.
+        // SNR: each receiver its own hue of the same 15 (receiver 1 the first hue, as the first lock stream: the line tells
+        // them apart), a channel the hue made lighter (the third, the combined one, not at all: it is the strongest).
         double[] x = { 0, 1 }, y = { 1, 2 };
         var plot = new PlotViewModel();
         plot.SetSeries(new[]
@@ -112,12 +111,14 @@ public sealed class PlotTests
             PlotFixtures.Snr(9, "r4c0", 20, 4, 4, 0, x, y), PlotFixtures.Snr(10, "r4c2", 20, 4, 4, 2, x, y),
         });
         Color ColorOf(int id) => plot.Series.Single(s => s.Id == id).Color;
-        Assert.Equal(Rgb("106,13,173"), ColorOf(0));
-        Assert.Equal(ColorOf(0), ColorOf(1));
-        Assert.Equal(Rgb("67,97,238"), ColorOf(2));
-        Assert.Equal(Rgb("46,184,92"), ColorOf(3));
-        Assert.Equal(Rgb("135,60,193"), ColorOf(4));
         IReadOnlyList<Color> hues = PlotColors.StreamHues;
+        Assert.Equal(hues[0], ColorOf(0));
+        Assert.Equal(ColorOf(0), ColorOf(1));
+        Assert.Equal(hues[1], ColorOf(2));
+        Assert.Equal(hues[2], ColorOf(3));
+        Assert.Equal(hues[3], ColorOf(4));
+        Assert.All(new[] { 0, 1, 2, 3, 4 }, id => Assert.False(plot.Series.Single(s => s.Id == id).Dotted));   // lock curves: solid
+        Assert.All(new[] { 5, 6, 7, 8, 9, 10 }, id => Assert.True(plot.Series.Single(s => s.Id == id).Dotted)); // SNR: dotted
         Assert.Equal(PlotColors.Shade(hues[0], 1), ColorOf(5));    // receiver 1, its first channel: one tint
         Assert.Equal(PlotColors.Shade(hues[0], 2), ColorOf(6));    // its second: two
         Assert.Equal(PlotColors.Shade(hues[1], 1), ColorOf(7));    // receiver 2 has its own hue
@@ -126,8 +127,20 @@ public sealed class PlotTests
         Assert.Equal(hues[3], ColorOf(10));                        // receiver 4's third channel, the combined one: the hue itself
     }
 
+    [AvaloniaFact]
+    public void LockStreamsTakeTheFifteenHuesInOrderAndTheSixteenthTakesTheFirstAgainSolid()
+    {
+        double[] x = { 0, 1 }, y = { 1, 2 };
+        var plot = new PlotViewModel();
+        plot.SetSeries(Enumerable.Range(0, 17).Select(k => PlotFixtures.Lock(k, $"ch{k}", 10 + k, k, x, y)));
+        IReadOnlyList<Color> hues = PlotColors.StreamHues;
+        Assert.Equal(hues, plot.Series.Take(15).Select(s => s.Color));
+        Assert.Equal((hues[0], hues[1]), (plot.Series[15].Color, plot.Series[16].Color));
+        Assert.All(plot.Series, s => Assert.Equal((false, false), (s.Dotted, s.Strong)));
+    }
+
     [Fact]
-    public void TheFifteenHuesRunSolidAndThenDottedAndTheCombinedChannelIsTheStrongest()
+    public void EverySnrStreamIsDottedTheHuesComeRoundAgainAfterFifteenAndTheCombinedChannelIsTheStrongest()
     {
         double[] x = { 0, 1 }, y = { 1, 2 };
         var plot = new PlotViewModel();
@@ -138,9 +151,8 @@ public sealed class PlotTests
 
         for (int stream = 1; stream <= 31; stream++)
         {
-            // The first 15 solid, the second 15 dotted, the 31st solid again; every channel of a stream alike.
-            bool dotted = stream is >= 16 and <= 30;
-            Assert.All(Enumerable.Range(0, 3), channel => Assert.Equal(dotted, Of(stream, channel).Dotted));
+            // Every SNR stream dotted, whichever round of the hues it is in; every channel of a stream alike.
+            Assert.All(Enumerable.Range(0, 3), channel => Assert.True(Of(stream, channel).Dotted));
             // One hue to a stream, repeated every 15; its combined channel the hue itself, the other two tints of it.
             Color hue = PlotColors.StreamHues[(stream - 1) % 15];
             Assert.Equal(hue, Of(stream, 2).Color);
@@ -148,7 +160,8 @@ public sealed class PlotTests
             Assert.Equal(PlotColors.Shade(hue, 2), Of(stream, 1).Color);
             Assert.Equal(new[] { false, false, true }, Enumerable.Range(0, 3).Select(channel => Of(stream, channel).Strong));
         }
-        Assert.Equal(Of(1, 2).Color, Of(16, 2).Color);   // the 16th stream is the first's hue, dotted
+        Assert.Equal(Of(1, 2).Color, Of(16, 2).Color);   // the 16th stream is the first's hue again, as the 31st is
+        Assert.Equal(Of(1, 2).Color, Of(31, 2).Color);
         Assert.NotEqual(Of(1, 0).Color, Of(1, 1).Color);   // the two lighter tints are told apart, in every hue
         Assert.All(PlotColors.StreamHues, hue => Assert.Equal(3, new[] { hue, PlotColors.Shade(hue, 1), PlotColors.Shade(hue, 2) }.Distinct().Count()));
         // How many times lighter each channel is: L or H once, R or V twice, C not at all, then one more for each channel beyond.
@@ -1036,14 +1049,14 @@ public sealed class PlotTests
     [AvaloniaFact]
     public void ThePaleYellowLineIsDrawnDarkerInTheLightThemeAndAsItWasInTheDark()
     {
-        Color yellow = PlotColors.StreamHues[9];   // the gold: pale on the light theme
+        Color yellow = PlotColors.StreamHues[9];   // the gold: pale on the light theme; a lock curve, so a solid line to read the colour along
         Color darker = ChartPalette.Light.SeriesColor(yellow);
         Assert.NotEqual(yellow, darker);
         var plot = new PlotViewModel();
-        plot.SetSeries(new[] { PlotFixtures.Snr(0, "yellow", 1, 0, 1, 0, new[] { 0.0, 2.0 }, new[] { 45.0, 45.0 }) });
+        plot.SetSeries(new[] { PlotFixtures.Lock(0, "yellow", 1, 0, new[] { 0.0, 2.0 }, new[] { 45.0, 45.0 }) });
         plot.RecolorSeries(0, yellow);
-        plot.SetRightMinOverride(0);
-        plot.SetRightMaxOverride(100);
+        plot.SetLeftMinOverride(0);
+        plot.SetLeftMaxOverride(100);
         Shown s = Show(plot);
 
         // The colour the line is drawn in, read back: down a column through the line its coverage adds up to the pen's width
@@ -1053,7 +1066,7 @@ public sealed class PlotTests
         {
             using ILockedFramebuffer fb = s.Frame();
             Rect a = s.Area;
-            int lineY = (int)(s.Chart.RightToPixel(45) + Frames.InWindow(s.Chart, s.Window).Y);   // off the grid's lines
+            int lineY = (int)(s.Chart.LeftToPixel(45) + Frames.InWindow(s.Chart, s.Window).Y);   // off the grid's lines
             var columns = new List<(double R, double G, double B)>();
             for (int x = (int)a.X + 20; x < a.Right - 20; x += 37)
             {
@@ -1157,12 +1170,12 @@ public sealed class PlotTests
         plot.SetSeries(new[] { PlotFixtures.Lock(0, "flat", 1, 0, new[] { 0.0, 1.0, 2.0 }, new[] { 100.0, 100.0, 100.0 }) });
         plot.Title = "Flight 7";
         Shown s = Show(plot);
-        Color purple = PlotColors.FrameSyncLock[0];
+        Color first = PlotColors.StreamHues[0];
         Rect a = s.Area;
         using (ILockedFramebuffer fb = s.Frame())
         {
-            Assert.True(Frames.Near(fb, new Rect(a.Left + 10, a.Top - 3, a.Width - 20, 6), purple) > 100);
-            Assert.Equal(0, Frames.Near(fb, new Rect(a.Left + 10, a.Bottom - 6, a.Width - 20, 6), purple));
+            Assert.True(Frames.Near(fb, new Rect(a.Left + 10, a.Top - 3, a.Width - 20, 6), first) > 100);
+            Assert.Equal(0, Frames.Near(fb, new Rect(a.Left + 10, a.Bottom - 6, a.Width - 20, 6), first));
             Assert.True(Frames.Near(fb, new Rect(a.Left, 0, a.Width, a.Top - PlotChart.TopInset), ChartPalette.Light.Title) > 20, "no title");
         }
         s.Window.Close();
@@ -1196,12 +1209,12 @@ public sealed class PlotTests
         var plot = new PlotViewModel();
         plot.SetSeries(new[] { PlotFixtures.Lock(0, "flat", 1, 0, new[] { 0.0, 1.0, 2.0 }, new[] { 50.0, 50.0, 50.0 }) });
         Shown s = Show(plot);
-        Color purple = PlotColors.FrameSyncLock[0];
+        Color first = PlotColors.StreamHues[0];
         Rect a = s.Area;
         int LineAt(double y)
         {
             using ILockedFramebuffer fb = s.Frame();
-            return Frames.Near(fb, new Rect(a.Left + 10, y - 3, a.Width - 20, 6), purple);
+            return Frames.Near(fb, new Rect(a.Left + 10, y - 3, a.Width - 20, 6), first);
         }
         double low = a.Bottom - a.Height / 6;
         Assert.True(LineAt(a.Center.Y) > 100, "the 50 % line is not mid-plot");

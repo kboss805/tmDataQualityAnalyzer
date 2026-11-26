@@ -5,28 +5,20 @@ using Avalonia.Media;
 namespace TmDq.App.ViewModels.Plot;
 
 /// <summary>
-/// The series colours of US4.0: Frame Sync Lock in purple, blue and green, one per stream, and beyond them progressively
-/// lighter shades; Receiver SNR in 15 hues, one per stream (a receiver, or a channel of a phased array antenna), the
-/// first 15 streams solid and the next 15 dotted, and within a stream the combined channel in the full hue and a little
-/// thicker, with its other two lighter tints of it.
+/// The series colours of US4.0. One palette of 15 hues serves both metrics, and the line tells them apart: a Frame Sync Lock
+/// stream (a PCM channel, its lock percentage and its missed frames alike) is drawn solid in its hue, and a Receiver SNR stream
+/// (a receiver, or a channel of a phased array antenna) dotted, with its combined channel in the full hue and a little thicker
+/// and its other two channels lighter tints of it. Streams beyond the 15th take the hues again from the first.
 /// <para>A shade is made in 16-bit HSV, converted in <c>float</c> and rounded half away from zero: the arithmetic
 /// of the colour class v2.x drew with, step for step, so every shade is the very colour v2.x drew.
 /// <c>PlotTests</c> holds it to 84 shades v2.14.2 printed, round the whole hue wheel.</para>
 /// </summary>
 public static class PlotColors
 {
-    /// <summary>The Frame Sync Lock primaries.</summary>
-    public static readonly IReadOnlyList<Color> FrameSyncLock = new[]
-    {
-        Color.FromRgb(106, 13, 173),   // purple
-        Color.FromRgb(67, 97, 238),    // blue
-        Color.FromRgb(46, 184, 92),    // green
-    };
-
     /// <summary>
-    /// The hues of a Receiver SNR stream, 15 of them, each a saturated colour so that its two lighter tints (the stream's
-    /// polarizations, see <see cref="Assign"/>) stay different from it and from each other. A stream is a receiver, or a
-    /// channel of a phased array antenna; the 16th stream takes the first hue again, dotted.
+    /// The 15 hues, each a saturated colour so that its two lighter tints (an SNR stream's other channels, see
+    /// <see cref="Assign(IEnumerable{PlotSeries})"/>) stay different from it and from each other. Frame Sync Lock streams take
+    /// them in stream order and SNR streams by receiver (or antenna channel); the 16th stream of either takes the first again.
     /// </summary>
     public static readonly IReadOnlyList<Color> StreamHues = new[]
     {
@@ -52,13 +44,21 @@ public static class PlotColors
 
     /// <summary>
     /// Colours every series, in order: the left-axis metrics share one colour per stream (by its stream order, the
-    /// PCM channel), so a stream's lock and missed-frames curves match, and each new stream takes the next Frame
-    /// Sync Lock primary, then shades of them; an SNR series takes its receiver's primary, shaded by its receiver's
-    /// cycle through the primaries and by its channel.
+    /// PCM channel), so a stream's lock and missed-frames curves match, and each new stream takes the next of the hues,
+    /// drawn solid; an SNR series takes its receiver's hue, lighter by its channel, drawn dotted.
     /// </summary>
-    internal static void Assign(IEnumerable<PlotSeries> series)
+    internal static void Assign(IEnumerable<PlotSeries> series) => Assign(series, new Dictionary<int, int>());
+
+    /// <summary>
+    /// Colours <paramref name="series"/> only, as <see cref="Assign(IEnumerable{PlotSeries})"/> colours a whole plot, with
+    /// <paramref name="leftIndex"/> the Frame Sync Lock colour each stream order has already been given: a stream order in it
+    /// keeps its colour, and one not in it takes the next and is added. The plot keeps it between calls, so a recording or a
+    /// stream added later is coloured on its own and the series already shown keep the colours they have (the user's, or a
+    /// template's); colouring one recording's streams one at a time, in job order, gives the colours colouring them together
+    /// does.
+    /// </summary>
+    internal static void Assign(IEnumerable<PlotSeries> series, Dictionary<int, int> leftIndex)
     {
-        var leftIndex = new Dictionary<int, int>();
         foreach (PlotSeries s in series)
         {
             if (s.IsLeftAxis)
@@ -68,16 +68,16 @@ public static class PlotColors
                     idx = leftIndex.Count;
                     leftIndex[s.StreamOrder] = idx;
                 }
-                int n = FrameSyncLock.Count;
-                s.Color = Shade(FrameSyncLock[idx % n], idx / n);
+                // A PCM channel's Frame Sync Lock and missed frames: solid, in the next hue, the 16th stream the first's again.
+                s.Color = StreamHues[idx % StreamHues.Count];
                 s.Dotted = false;
                 s.Strong = false;
                 continue;
             }
-            int hues = StreamHues.Count;
+            // Receiver SNR, of a recording or an antenna's log: always dotted, so it never reads as a lock curve of the same hue.
             int stream = Math.Max(0, s.ReceiverIndex - 1);
-            s.Color = Shade(StreamHues[stream % hues], Weakness(s.ChannelIndex));
-            s.Dotted = stream / hues % 2 == 1;
+            s.Color = Shade(StreamHues[stream % StreamHues.Count], Weakness(s.ChannelIndex));
+            s.Dotted = true;
             s.Strong = s.ChannelIndex == CombinedChannelIndex;
         }
     }

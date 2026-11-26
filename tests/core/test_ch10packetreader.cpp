@@ -4,11 +4,13 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <format>
 #include <memory>
 #include <mutex>
 #include <regex>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #ifndef NOMINMAX
@@ -1065,6 +1067,156 @@ TEST_CASE("Ch10PacketReader: only the channels a stream asked for reach its queu
         if (i > 0)
         {
             CHECK(e.progress[i] >= e.progress[i - 1]);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// A header whose lengths cannot be trusted, and a TMATS that cannot time the bits
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Ch10PacketReader: a PCM packet whose data length does not fit it stops the read with the reason")
+{
+    // The reader copied ulDataLen - 4 bytes of each PCM packet out of a buffer that holds the packet: a header claiming
+    // more read past it (a heap over-read; four billion, a crash). It is refused now, as a read error is: the packets
+    // before it are delivered, the reason is said, and the stream still gets its end marker.
+    const StepCalFixture fx = loadStepCalFixture();
+    const std::string original = readBytes(fx.path);
+    const std::vector<PacketAt> packets = walkPackets(original);
+    REQUIRE_MESSAGE(!packets.empty(), "the header walk must tile the fixture exactly");
+
+    constexpr std::size_t kSkip = 40;
+    const PacketAt* target = nullptr;
+    for (std::size_t i = kSkip; i < packets.size() && target == nullptr; ++i)
+    {
+        if (packets[i].channel == fx.pcm_id)
+        {
+            target = &packets[i];
+        }
+    }
+    REQUIRE(target != nullptr);
+    const std::uint32_t body = target->length - 24;   // step_cal's packets have no secondary header
+    int packets_before = 0;
+    for (const PacketAt& pk : packets)
+    {
+        if (pk.channel == fx.pcm_id && pk.offset < target->offset)
+        {
+            ++packets_before;
+        }
+    }
+
+    struct Row { const char* name; std::uint32_t data; };
+    const Row rows[] = {
+        {"a hundred bytes past the packet", body + 100},
+        {"shorter than the channel-specific word", 2},
+    };
+    for (const Row& row : rows)
+    {
+        INFO(row.name);
+        std::string bytes = original;
+        setPacketDataLength(bytes, static_cast<std::size_t>(target->offset), row.data);
+        TempDir dir;
+        const fs::path corrupt = dir.file("corrupt.ch10");
+        writeBytes(corrupt, bytes);
+
+        PacketQueue q;
+        ProcessingParams p = paramsFor(fx, &q);
+        std::vector<ProcessingParams*> list{&p};
+        Ch10PacketReader r;
+        Events e;
+        listen(r, e);
+        std::string prepare_error;
+        REQUIRE_MESSAGE(r.prepare(corrupt, fx.time_id, list, prepare_error), prepare_error);
+
+        Drain drain(q);
+        r.run();
+        drain.join();
+        REQUIRE_MESSAGE(!drain.m_timed_out, "the reader never posted its end marker");
+
+        CHECK(e.errors == Strings{std::format("A packet on channel {} claims {} bytes of data but carries {}: the "
+                                              "recording is corrupt; aborting parsing.",
+                                              fx.pcm_id, row.data, body)});
+        CHECK(drain.m_packets.load() == packets_before);
+        CHECK(drain.m_end_markers.load() == 1);
+        REQUIRE(!e.progress.empty());
+        CHECK(e.progress.back() == 100);
+    }
+}
+
+TEST_CASE("Ch10PacketReader: a TMATS packet whose data length does not fit it is refused by both readers")
+{
+    const StepCalFixture fx = loadStepCalFixture();
+    std::string bytes = readBytes(fx.path);
+    setPacketDataLength(bytes, 0, firstPacketLength(bytes));   // the whole packet, header included: 24 bytes too many
+    TempDir dir;
+    const fs::path corrupt = dir.file("corrupt-tmats.ch10");
+    writeBytes(corrupt, bytes);
+    const std::string reason = "The TMATS packet's data length does not fit the packet: the recording is corrupt.";
+
+    PacketQueue q;
+    ProcessingParams p = paramsFor(fx, &q);
+    std::vector<ProcessingParams*> list{&p};
+    Ch10PacketReader r;
+    std::string error;
+    CHECK_FALSE(r.prepare(corrupt, fx.time_id, list, error));
+    CHECK(error == reason);
+
+    Chapter10Reader meta;
+    CHECK_FALSE(meta.loadChannels(corrupt));
+    CHECK(meta.lastError() == reason);
+}
+
+TEST_CASE("Ch10PacketReader: a stream whose TMATS cannot time its bits is refused at setup unless the Data Rate is given")
+{
+    // irig106 times a bit as 1e7 / P-x\D2 hundred-nanosecond units: with no D2 that is infinity, and with no P record at
+    // all the attributes stay zeroed (a bit of no time, words of no length). The run used to start, and every stream then
+    // failed with "the recording's time jumps ahead by inf s", blaming the time channel; with no P record every receiver
+    // word was masked to 0. Same-length edits of step_cal's TMATS: its PCM source is P-16, channel 26.
+    const StepCalFixture fx = loadStepCalFixture();
+    REQUIRE(fx.pcm_id == 26);
+    const std::string refusal = "Channel 26's TMATS gives no bit rate (P-x\\D2): enter the stream's Data Rate.";
+
+    struct Row { const char* name; std::pair<std::string, std::string> edit; };
+    const Row rows[] = {
+        {"the P record has no bit rate", {R"(P-16\D2:800000;)", R"(P-16\XX:800000;)"}},
+        {"the data source has no P record", {R"(P-16\DLN:MrgStream-16;)", R"(P-16\DLN:MrgStream-99;)"}},
+    };
+    for (const Row& row : rows)
+    {
+        INFO(row.name);
+        TempDir dir;
+        const fs::path path = writePatchedStepCal(dir, {row.edit});
+
+        {
+            PacketQueue q;
+            ProcessingParams p = paramsFor(fx, &q);
+            std::vector<ProcessingParams*> list{&p};
+            Ch10PacketReader r;
+            std::string error;
+            CHECK_FALSE(r.prepare(path, fx.time_id, list, error));
+            CHECK(error == refusal);
+            CHECK_FALSE(p.resolvedAttrs.resolved);
+        }
+        {
+            // The operator's rate times the bits, and the word is the 16 bits it always is: the stream sets up and reads
+            // every packet of the unedited recording.
+            PacketQueue q;
+            ProcessingParams p = paramsFor(fx, &q);
+            p.dataRateBps = 800000.0;
+            std::vector<ProcessingParams*> list{&p};
+            Ch10PacketReader r;
+            std::string error;
+            REQUIRE_MESSAGE(r.prepare(path, fx.time_id, list, error), error);
+            CHECK(p.resolvedAttrs.delta100ns == doctest::Approx(12.5));
+            CHECK(p.resolvedAttrs.wordLen == 16u);
+            CHECK(p.resolvedAttrs.wordMask == 0xFFFFu);
+
+            Drain drain(q);
+            r.run();
+            drain.join();
+            REQUIRE_MESSAGE(!drain.m_timed_out, "the reader never posted its end marker");
+            CHECK(drain.m_packets.load() == kFixturePackets);
+            CHECK(drain.m_end_markers.load() == 1);
         }
     }
 }

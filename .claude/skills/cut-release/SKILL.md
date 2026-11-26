@@ -159,15 +159,18 @@ Run the release script from the project root under **Windows PowerShell 5.1** (`
 powershell -ExecutionPolicy Bypass -File deploy\build_package.ps1
 ```
 
-It performs (and prints progress for) all of: the consistency check (`-ReleaseMode`) → the signing
-pre-flight → `tmdq_core.dll` in Release, checked (`eng\check_release_core.ps1`: it must not import the debug
-C runtime, which is what a Debug core looks like; checked again on the staged copy) → a self-contained
-**single-file** publish → the manifest check
+It performs (and prints progress for) all of: the full manual generated (`eng\build_manual.ps1 -NoCapture`:
+`UserManual.html` from the base manual, the walkthroughs and the committed figures; it fails if that changes the tracked
+base manual, which means a stale one: run `eng\build_manual.ps1` and commit) → the consistency check (`-ReleaseMode` and
+`-FullManual`) → the signing pre-flight → `tmdq_core.dll` in Release, checked (`eng\check_release_core.ps1`: it must not
+import the debug C runtime, which is what a Debug core looks like; checked again on the staged copy) → a self-contained
+**single-file, ReadyToRun** publish (the managed code precompiled inside our exe) → the manifest check
 (UTF-8 code page) → staging (settings, the VC++ runtime the DLL imports, the licence, the generated
 `THIRD-PARTY-NOTICES.txt`) → signing **our two binaries only** (the exe and `tmdq_core.dll`; it refuses to
 sign anything else it finds unsigned) → verifying every PE file's signature → a smoke run of the staged
 app on the PRN sample → the portable ZIP and the MSI (`deploy\tmDataQualityAnalyzer.wxs`, built by
-`deploy\build_msi.ps1` and signed). It reads the version from `constants.h`, so there is no version argument.
+`deploy\build_msi.ps1` and signed), and the symbols ZIP (the `.pdb` files of the exe's managed code and of
+`tmdq_core.dll`, not shipped). It reads the version from `constants.h`, so there is no version argument.
 
 - **Signing:** uses the cert SHA-1 in `$env:SIGN_CERT_SHA1` (falls back to the bundled Certum OSS
   thumbprint). To build unsigned, pass `-SignCertSha1 ''`. Any signing failure is a listed problem and
@@ -189,6 +192,8 @@ The script prints the final paths. Expect, in `deploy/`:
 
 - `tmDataQualityAnalyzer-vX.Y.Z_portable.zip`
 - `tmDataQualityAnalyzer-vX.Y.Z_setup.msi`
+- `tmDataQualityAnalyzer-vX.Y.Z_symbols.zip` (`tmDataQualityAnalyzer.pdb`, `TmDq.Core.pdb`, `tmdq_core.pdb` and a README):
+  never shipped to users; attach it to the GitHub release so a crash report of that version can be read.
 
 **Verify by hand — do NOT trust the script's summary.** It once printed "Build and packaging
 complete!" and listed an installer path that was never written, exiting 0, while signing had failed

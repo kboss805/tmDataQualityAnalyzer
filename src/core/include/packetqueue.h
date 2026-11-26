@@ -118,6 +118,14 @@ public:
         return item;
     }
 
+    /// The items waiting to be dequeued (a sentinel posted counts). A snapshot: a test's way to see the reader has
+    /// handed a stream work.
+    std::size_t size() const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_queue.size();
+    }
+
     /// Closes the queue and wakes all blocked producers/consumers.
     void close()
     {
@@ -130,7 +138,7 @@ public:
 private:
     static constexpr int kDefaultMaxDepth = 64; ///< Max packets buffered per stream.
 
-    std::mutex              m_mutex;
+    mutable std::mutex      m_mutex;
     std::condition_variable m_not_full;
     std::condition_variable m_not_empty;
     std::deque<PacketItem>  m_queue;

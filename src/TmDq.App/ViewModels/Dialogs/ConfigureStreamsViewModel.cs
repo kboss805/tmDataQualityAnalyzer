@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -49,7 +48,6 @@ public sealed class ConfigureStreamsViewModel : DialogViewModel
 
     public string Recording { get; }
 
-    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Bound from the window's XAML, which binds to an instance.")]
     public const string Title = "Configure Streams";
 
     public ObservableCollection<StreamRowViewModel> Rows { get; }

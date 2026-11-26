@@ -68,6 +68,21 @@ public static class StreamsRun
         return file;
     }
 
+    /// <summary>The size of the recording at <paramref name="path"/>, in bytes, for the log.</summary>
+    /// <exception cref="RecordingException">The file cannot be read now (gone, or locked, since it was opened): the recording is
+    /// what failed, not the processing core.</exception>
+    public static long FileSize(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            throw new RecordingException($"{Path.GetFileName(path)} could not be read: {e.Message}", e);
+        }
+    }
+
     /// <summary>Runs <paramref name="request"/> on a worker thread. Progress is reported on
     /// <paramref name="progress"/>'s own context (the UI thread, for a <see cref="Progress{T}"/> made there).</summary>
     /// <exception cref="OperationCanceledException"><paramref name="cancel"/> stopped the run before any stream

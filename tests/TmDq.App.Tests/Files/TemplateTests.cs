@@ -347,7 +347,7 @@ public sealed class TemplateTests : IDisposable
         string twoTime = Recordings.WriteTwoTimeChannels(Path.Combine(_dir, "two-time.ch10"));
         Ch10File two = StreamsRun.Open(twoTime);
         Assert.Equal(16, TemplateBatch.ToRunRequest(prn with { TimeChannelIndex = 1 }, twoTime, two, 0, null).TimeChannelId);
-        Assert.Equal("flight", TemplateBatch.BaseName("flight"));
+        Assert.Equal("flight", ViewModels.MainWindowViewModel.BaseName("flight"));
     }
 
     // ---- the plot: several recordings, and Plot File -------------------------------------------------------------------

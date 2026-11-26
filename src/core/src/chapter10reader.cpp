@@ -36,15 +36,28 @@ Chapter10Reader::Chapter10Reader() :
     m_buffer.resize(PCMConstants::kDefaultBufferSize);
 }
 
-Chapter10Reader::~Chapter10Reader()
+Chapter10Reader::~Chapter10Reader()   // NOLINT(bugprone-exception-escape): only a mutex that cannot be locked throws
 {
+    // A load closes the file on every path it returns by; one that threw (std::bad_alloc while listing the channels)
+    // left it open, and with it one of irig106's hundred handles for the life of the process. Closing takes the setup
+    // lock: it gives the slot back to the library's table.
+    if (m_file_open)
+    {
+        const auto setup_lock = lockIrig106Setup();
+        closeFile();
+    }
     // Touches only this reader's tree (the decoder's statics are read during a decode alone), so it needs no lock.
     enI106_Free_TmatsInfo(&m_tmats_info);
 }
 
 void Chapter10Reader::closeFile()
 {
+    if (!m_file_open)
+    {
+        return;
+    }
     enI106Ch10Close(m_file_handle);
+    m_file_open = false;
 }
 
 void Chapter10Reader::clearSettings()
@@ -63,8 +76,10 @@ bool Chapter10Reader::loadChannels(const std::filesystem::path& filename)
     // The whole load is setup: open, time sync and the TMATS decode all touch irig106's
     // process-wide state, so it is serialised with every other reader's setup.
     const auto setup_lock = lockIrig106Setup();
+    closeFile();   // a load that threw part-way left its handle open: given back before another one is opened
 
     ch10setup::Failure failure = ch10setup::openRecording(setup_lock, filename, m_file_handle, m_status);
+    m_file_open = (failure != ch10setup::Failure::Open);   // anything but a failed open leaves a handle to close
     if (failure == ch10setup::Failure::Open)
     {
         m_last_error = "Error opening file: " + filename.string();

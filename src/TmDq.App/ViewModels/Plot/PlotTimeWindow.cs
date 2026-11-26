@@ -57,6 +57,21 @@ internal sealed class PlotTimeWindow
 
     public void ClearHistory() => _history.Clear();
 
+    /// <summary>Elapsed zero moved <paramref name="seconds"/> later (the earliest recording removed): the span, the window and
+    /// every window in the history move earlier by as much, so they show the same times as before, none before 0. No notice:
+    /// the caller tells the chart.</summary>
+    public void Shift(double seconds)
+    {
+        XMax = Math.Max(0.0, XMax - seconds);
+        ViewMin = Math.Max(0.0, ViewMin - seconds);
+        ViewMax = Math.Max(ViewMin, ViewMax - seconds);
+        for (int i = 0; i < _history.Count; i++)
+        {
+            double min = Math.Max(0.0, _history[i].Min - seconds);
+            _history[i] = (min, Math.Max(min, _history[i].Max - seconds));
+        }
+    }
+
     /// <summary>No data: nothing to show and no history.</summary>
     public void Clear()
     {

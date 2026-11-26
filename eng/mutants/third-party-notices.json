@@ -1,0 +1,22 @@
+{
+  "suite": "app",
+  "args": ["-class", "TmDq.App.Tests.ThirdPartyNoticesTests"],
+  "mutants": [
+    {
+      "id": "N1",
+      "file": "eng/gen_third_party_notices.ps1",
+      "old": "    $packageFolders = @($PackagesFolder)",
+      "new": "    $packageFolders = @()",
+      "expect": "caught",
+      "note": "the folder named with -PackagesFolder dropped: no package is found anywhere"
+    },
+    {
+      "id": "N2",
+      "file": "eng/gen_third_party_notices.ps1",
+      "old": "ForEach-Object { Join-Path $_ $relative } | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1",
+      "new": "ForEach-Object { Join-Path $_ $relative } | Select-Object -First 1",
+      "expect": "caught",
+      "note": "a package missing from every folder taken for found in the first: the error no longer names the package"
+    }
+  ]
+}

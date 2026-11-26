@@ -1,11 +1,18 @@
 name: CI
 
 # Build the native core and run its doctest suite, the managed library's tests and the
-# Avalonia application's tests on every push to main and every PR, in one job on a
-# GitHub-hosted Windows runner (plan step 6.4).
+# Avalonia application's tests on every push to main and every PR, on GitHub-hosted
+# Windows runners (plan step 6.4), in two jobs that run side by side:
+#   ci            the required check: the version literals, the script analyzer, the core in Debug and Release, and
+#                 the native, managed and app suites in Release.
+#   native-debug  the native suite in Debug. Not required yet.
 #
-# One job, on a GitHub-hosted machine (plan step 6.4; a new
-# dependency on anything outside the Windows SDK is caught by the import allow-list in eng\build_core_dll.ps1). The
+# Only GitHub's own actions are used (checkout, setup-dotnet, upload-artifact). MSVC is set up by the scripts
+# themselves, as on a developer's machine: eng\env.ps1 imports vcvars64.bat of the Visual Studio 2022 that vswhere
+# finds, and eng\common.ps1 refuses any other. The .NET builds need no developer environment (they find mt.exe through
+# eng\WindowsSdkTools.targets).
+#
+# A new dependency on anything outside the Windows SDK is caught by the import allow-list in eng\build_core_dll.ps1. The
 # small .ch10 fixtures are committed, so every suite runs here. The heavy PRN throughput
 # benchmark is opt-in (TMDQA_RUN_HEAVY_BENCH) and needs the full recording, which is not
 # committed: it is run at release (eng\run_throughput_bench.ps1), not here.
@@ -25,11 +32,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A newer push to a pull request cancels its older run. A push to main is never cancelled: each commit there keeps the
+# run that checked it.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# The job reads the repository and writes nothing to it.
+# The jobs read the repository and write nothing to it.
 permissions:
   contents: read
 
@@ -44,6 +53,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # No later step uses git with the token, so it is not left in .git\config for the steps that follow.
+          persist-credentials: false
 
       - name: Release consistency (version literals)
         shell: powershell
@@ -64,12 +76,6 @@ jobs:
           powershell -ExecutionPolicy Bypass -File eng\check_scripts.ps1
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
-      - name: Set up MSVC (cl / msbuild / dumpbin / mt)
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-          vsversion: 2022
-
       - name: Set up .NET 10
         uses: actions/setup-dotnet@v4
         with:
@@ -81,10 +87,14 @@ jobs:
           # PS 5.1 turns native-tool stderr into a terminating NativeCommandError
           # (e.g. cl's banner). Failures are gated by explicit $LASTEXITCODE checks.
           $ErrorActionPreference = 'Continue'
+          # No action sets up MSVC: each native script loads it itself through eng\env.ps1 (vcvars64.bat of the
+          # Visual Studio vswhere finds in [17.0,18.0)), in its own process. Loaded here only to log the versions
+          # that will build; env.ps1 throws when what it loaded is outside the pin.
+          . .\eng\env.ps1
           dotnet --version
           cmd /c "cl 2>&1" | Select-Object -First 1
           Write-Host "Visual Studio $env:VisualStudioVersion, MSVC $env:VCToolsVersion"
-          # The pin env.ps1 holds locally ([17.0,18.0)): fail rather than quietly build with another compiler.
+          # The pin, again in so many words, whatever TMDQ_VS_RANGE says: fail rather than quietly build with another compiler.
           if ($env:VisualStudioVersion -ne '17.0') {
             throw "CI must build with Visual Studio 2022 (17.0), as releases are, and got '$env:VisualStudioVersion'"
           }
@@ -96,8 +106,11 @@ jobs:
         shell: powershell
         run: |
           # The core, built by MSBuild (tmdq.sln), then checked: zero warnings, and the DLL's
-          # imports on an allow-list. The scripts dot-source env.ps1 only when msbuild is
-          # missing; msvc-dev-cmd put it on PATH.
+          # imports on an allow-list. The suites run against the Release core; the Debug one is built to see
+          # that Debug compiles warning-free, and the managed suite's ReleaseCoreGuardTests reads it (its
+          # Debug case, that eng\check_release_core.ps1 refuses a real Debug core, skips without it).
+          # The script loads Visual Studio 2022's tools itself (eng\env.ps1, through Initialize-MsvcEnvironment
+          # in eng\common.ps1) and refuses a VisualStudioVersion outside the pin, as the step above does.
           # PS 5.1 turns native-tool stderr into a terminating NativeCommandError, so failures
           # are gated by explicit $LASTEXITCODE checks.
           $ErrorActionPreference = 'Continue'
@@ -153,17 +166,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up MSVC (cl / msbuild / dumpbin / mt)
-        uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: x64
-          vsversion: 2022
+          # No later step uses git with the token, so it is not left in .git\config for the steps that follow.
+          persist-credentials: false
 
       - name: Native tests (doctest), Debug
         shell: powershell
         run: |
-          # The same script and suite as the Release step above, with the Debug runtime: assertions, no optimiser.
+          # The same script and suite as the Release step above, with the Debug runtime: assertions, no optimiser. The
+          # script loads Visual Studio 2022's tools itself (eng\env.ps1) and refuses any other.
           $ErrorActionPreference = 'Continue'
           powershell -ExecutionPolicy Bypass -File eng\test_native.ps1 -Configuration Debug
           if ($LASTEXITCODE -ne 0) { throw "the native tests failed (Debug)" }

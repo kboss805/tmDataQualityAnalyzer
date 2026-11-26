@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -76,6 +77,11 @@ void Ch10PacketReader::requestAbort()
     m_abort_requested.store(true, std::memory_order_relaxed);
 }
 
+void Ch10PacketReader::requestProgress()
+{
+    m_progress_requested.store(true, std::memory_order_relaxed);
+}
+
 void Ch10PacketReader::setEvents(std::shared_ptr<ProcessingEvents> events)
 {
     m_report.setSink(std::move(events));
@@ -133,6 +139,10 @@ EnI106Status Ch10PacketReader::assembleAttributesFromTMATS(SuTmatsInfo* tmats_in
                     status = I106_BUFFER_TOO_SMALL;
                     return tmatswalk::Walk::Stop;
                 }
+                // The status is not what decides: it is I106_INVALID_PARAMETER for a source with no P record (which
+                // leaves the attributes zeroed) and I106_UNSUPPORTED for an LSB-first word order or a sync type other
+                // than FPT (after the bit rate is read; the operator's settings replace the rest). prepare() checks
+                // what a worker would read instead: the bit period, and the word length it supplies itself.
                 (void)Set_Attributes_PcmF1(&data_source, info.pcm.get());
             }
         }
@@ -143,9 +153,10 @@ EnI106Status Ch10PacketReader::assembleAttributesFromTMATS(SuTmatsInfo* tmats_in
 }
 
 /// Reads the packet whose header was just read into m_buffer, saying why if it cannot (the run's own error text).
-bool Ch10PacketReader::readPacket()
+/// @p min_data_length is the fewest data bytes a packet of its type can have (see ch10setup::readPacketData).
+bool Ch10PacketReader::readPacket(std::uint32_t min_data_length)
 {
-    switch (ch10setup::readPacketData(m_file_handle, m_header, m_buffer, m_status))
+    switch (ch10setup::readPacketData(m_file_handle, m_header, min_data_length, m_buffer, m_status))
     {
     case ch10setup::PacketRead::Ok:
         return true;
@@ -154,6 +165,11 @@ bool Ch10PacketReader::readPacket()
         return false;
     case ch10setup::PacketRead::ReadError:
         m_report.error("File read error; aborting parsing.");
+        return false;
+    case ch10setup::PacketRead::BadLength:
+        m_report.error(std::format("A packet on channel {} claims {} bytes of data but carries {}: the recording is "
+                                   "corrupt; aborting parsing.",
+                                   m_header.uChID, m_header.ulDataLen, ch10setup::bodyLength(m_header)));
         return false;
     }
     return false;
@@ -224,7 +240,10 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
             ? static_cast<int64_t>(p->frameSyncMask)
             : static_cast<int64_t>(fullSyncMask(p->syncPatternLength));
 
-        Set_Attributes_Ext_PcmF1(pcm_attrs->psuRDataSrc, pcm_attrs,
+        // Refused (and nothing set) only for a data source with no P record: Set_Attributes_PcmF1 left its attributes
+        // zeroed, psuRDataSrc included. What a worker reads from them is then supplied here instead - the word length
+        // below, and the bit period, which must come from the operator's Data Rate.
+        (void)Set_Attributes_Ext_PcmF1(pcm_attrs->psuRDataSrc, pcm_attrs,
                                  -1, -1,
                                  PCMConstants::kCommonWordLen,
                                  -1, -1, -1,
@@ -244,7 +263,9 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
         ra.syncPatLen    = p->syncPatternLength;
         ra.bitsInFrame   = p->bitsInMinorFrame;
         ra.wordsInFrame  = p->wordsInMinorFrame;
-        ra.wordLen       = pcm_attrs->ulCommonWordLen;
+        // The length handed to the library above, not read back from it: for a data source with no P record the
+        // library takes no settings and leaves its word length 0, which masked every receiver word to 0.
+        ra.wordLen       = PCMConstants::kCommonWordLen;
         // Every bit of a word, built from the word length. NOT the library's ullCommonWordMask: Set_Attributes_Ext_PcmF1
         // ends with `ullCommonWordMask &= ullMinorFrameSyncMask`, tying a receiver word's bits to which SYNC bits the
         // operator marked significant - a sync mask of 0x00FF00FF left every AGC word 8 bits wide, and 0xFFFF0000 would
@@ -266,6 +287,14 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
         if (p->dataRateBps > 0.0)
         {
             delta_100ns = PCMConstants::k100NsPerSecond / p->dataRateBps;
+        }
+        // From the TMATS alone, a P record with no bit rate (P-x\D2) gives 1e7 / 0, infinity, and a data source with no
+        // P record gives 0: every bit then has the same time or none, and the stream later failed with a "time jumps
+        // ahead by inf s" that blamed the time channel. Said here, where the operator can still enter the rate.
+        if (!std::isfinite(delta_100ns) || delta_100ns <= 0.0)
+        {
+            error = std::format("Channel {}'s TMATS gives no bit rate (P-x\\D2): enter the stream's Data Rate.", ch);
+            return false;
         }
         ra.delta100ns = delta_100ns;
 
@@ -331,13 +360,16 @@ void Ch10PacketReader::run()
         // The size test comes first on purpose: it short-circuits, so a file of unknown
         // size never reads the clock at all, as before. This runs once per packet header,
         // so the clock read is the per-iteration cost - one monotonic read either way.
-        if (m_total_file_size > 0 && progress_gate.due())
+        // A requested report (requestProgress()) is a relaxed load per packet, and an exchange only when one was asked.
+        const bool requested = m_progress_requested.load(std::memory_order_relaxed) &&
+                               m_progress_requested.exchange(false, std::memory_order_relaxed);
+        if (m_total_file_size > 0 && (requested || progress_gate.due()))
         {
             progress_gate.reset();
             int64_t current_pos = 0;
             enI106Ch10GetPos(m_file_handle, &current_pos);
             int percent = static_cast<int>(current_pos * kPercent100 / m_total_file_size);
-            if (percent != last_reported_percent)
+            if (percent != last_reported_percent || requested)
             {
                 if (percent / kPercent10 != last_reported_percent / kPercent10 && percent > 0)
                 {
@@ -351,7 +383,7 @@ void Ch10PacketReader::run()
         // IRIG time packets: keep the file handle's time sync current.
         if (m_header.ubyDataType == I106CH10_DTYPE_IRIG_TIME && m_header.uChID == m_time_channel_id)
         {
-            if (!readPacket())
+            if (!readPacket(0))
             {
                 break;
             }
@@ -382,7 +414,8 @@ void Ch10PacketReader::run()
                 continue; // No stream is interested in this channel.
             }
 
-            if (!readPacket())
+            // The channel-specific word, then the PCM bits: a data length shorter than the word is a corrupt header.
+            if (!readPacket(static_cast<std::uint32_t>(sizeof(SuPcmF1_ChanSpec))))
             {
                 break;
             }

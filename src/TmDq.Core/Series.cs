@@ -30,9 +30,10 @@ public sealed record SeriesSpec(
 /// <summary>
 /// A processed stream as series on the shared elapsed axis: lock %, then accumulated missed frames, then one per
 /// receiver channel (a metric the stream has no data for is left out). The values are views of the stream's data
-/// (no copy), valid until <see cref="Dispose"/>; the set keeps that data alive, so the <see cref="StreamResult"/>
-/// it was built from may be disposed first. The samples stay where the host keeps them: this describes and
-/// decides, it does not store.
+/// (no copy), valid only until <see cref="Dispose"/>: a span still in use when another thread disposes the set reads
+/// freed memory, so dispose it only once no span is in use. The set keeps that data alive, so the
+/// <see cref="StreamResult"/> it was built from may be disposed first. The samples stay where the host keeps them:
+/// this describes and decides, it does not store.
 /// </summary>
 public sealed unsafe class SeriesSet : IDisposable
 {
@@ -44,6 +45,8 @@ public sealed unsafe class SeriesSet : IDisposable
 
     internal SeriesSet(SeriesSetHandle handle)
     {
+        // The strings below are read after the calls that return them, with no lease: the handle was made for this set a
+        // moment ago and no other thread has it yet, so nothing can dispose it until this constructor has returned.
         _handle = handle;
         try
         {
@@ -128,9 +131,13 @@ public sealed unsafe class SeriesSet : IDisposable
 public readonly record struct StreamKey(int SourceId, string Label, int Channel)
 {
     /// <summary>
-    /// Whether the two keys name the same stream, decided by the core (the rule is written once). It always agrees
-    /// with <c>==</c>, which compares the three fields; a test holds the two together.
+    /// Whether the two keys name the same stream, decided by the core (the rule is written once). For every key the
+    /// library makes, whose label is a string, it agrees with <c>==</c>, which compares the three fields; a test holds
+    /// the two together. Not for others: the core reads a null label (that of <c>default(StreamKey)</c>) as an empty
+    /// one, where <c>==</c> tells null from "", and a label holding a NUL character cannot be handed to it at all.
     /// </summary>
+    /// <exception cref="TmdqException"><see cref="Status.BadArgument"/> for a label holding a NUL character or a lone
+    /// UTF-16 surrogate.</exception>
     public unsafe bool IsSameStream(StreamKey other)
     {
         Library.RequireLoaded();

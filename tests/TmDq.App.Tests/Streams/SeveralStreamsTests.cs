@@ -57,7 +57,7 @@ public sealed class SeveralStreamsTests
         Rect Band(double y, double from, double to) => new(plotArea.Left + from * plotArea.Width, y - 3, (to - from) * plotArea.Width, 6);
 
         using ILockedFramebuffer fb = Frames.Capture(window).Lock();
-        Color first = PlotColors.FrameSyncLock[0], second = PlotColors.FrameSyncLock[1];
+        Color first = PlotColors.StreamHues[0], second = PlotColors.StreamHues[1];
         Assert.True(Frames.Near(fb, Band(y75, 0.05, 0.45), first) > 80, "the first stream, in the first colour, over its first half: " + Seen(fb, Band(y75, 0.05, 0.45)));
         Assert.Equal(0, Frames.Near(fb, Band(y75, 0.55, 0.95), first));     // it ends at 10 s, half way
         Assert.Equal(0, Frames.Near(fb, Band(y75, 0.05, 0.45), second));

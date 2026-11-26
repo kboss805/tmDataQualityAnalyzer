@@ -93,6 +93,11 @@ public:
     /// Requests a cooperative abort of the read loop.
     void requestAbort();
 
+    /// Makes the read loop report its progress at the next packet header, whatever the throttle says and even if the
+    /// percentage has not changed; once. Safe from any thread. A test's way to make the reader report at a chosen moment
+    /// (its sink can then act inside the read) instead of waiting out the 100 ms throttle.
+    void requestProgress();
+
     /// Runs the single-pass read/dispatch loop. Returns when the file is exhausted, a read
     /// fails, or an abort is requested; every queue has then been given its end marker.
     void run();
@@ -107,8 +112,9 @@ private:
         Irig106::SuTmatsInfo* tmats_info,
         std::map<int, ChannelInfo>& channel_info);
 
-    /// Grows m_buffer to at least @p required bytes. Returns false on failure.
-    bool readPacket();
+    /// Reads the data of the packet whose header was just read into m_buffer (ch10setup::readPacketData), refusing a
+    /// data length below @p min_data_length or past the packet. Returns false, having reported why, on failure.
+    bool readPacket(std::uint32_t min_data_length);
     /// Posts an end-of-stream sentinel to every distinct queue.
     void postSentinels();
     /// Closes the recording if it is open, under the irig106 setup lock (the close writes the handle table).
@@ -131,6 +137,7 @@ private:
     std::vector<PacketQueue*> m_all_queues;
 
     std::atomic<bool> m_abort_requested;
+    std::atomic<bool> m_progress_requested{false};   ///< See requestProgress().
     EventReporter m_report; ///< Where progress, log lines and errors go; see setEvents().
 };
 

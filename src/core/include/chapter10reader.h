@@ -95,7 +95,7 @@ public:
     void pcmChannelChanged(int combobox_index);
 
 private:
-    /// Closes the currently open Chapter 10 file.
+    /// Closes the Chapter 10 file a load opened, if it is still open. The caller holds the setup lock (irig106lock.h).
     void closeFile();
     /// Builds combo box display strings for the channels whose ids are in @p channel_ids.
     std::vector<std::string> buildChannelComboBoxList(const std::vector<int>& channel_ids) const;
@@ -104,6 +104,7 @@ private:
 
     Irig106::EnI106Status m_status;                             ///< Last irig106 API return status.
     int m_file_handle;                                          ///< irig106 file handle.
+    bool m_file_open = false;                                   ///< m_file_handle is open and is this reader's to close.
     std::string m_last_error;                                   ///< Reason the last load failed; empty on success.
 
     Irig106::SuI106Ch10Header m_header;                         ///< Reusable packet header buffer.
