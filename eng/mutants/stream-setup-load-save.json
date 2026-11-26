@@ -89,7 +89,7 @@
       "id": "S5",
       "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
       "old": "FileMessage = \"Saved \" + Path.GetFileName(written) + \".\";",
-      "new": ": \"Saved \" + Path.GetFileName(path) + \".\";",
+      "new": "FileMessage = \"Saved \" + Path.GetFileName(path) + \".\";",
       "expect": "caught",
       "note": "the Saved message names the typed name, not the file written"
     },
@@ -105,7 +105,7 @@
       "id": "SS1",
       "file": "src/TmDq.App/ViewModels/Dialogs/StreamSetupViewModel.cs",
       "old": "        FileMessage = loaded == shown",
-      "new": "        FileMessage = loaded != loaded",
+      "new": "        FileMessage = loaded != shown",
       "expect": "caught",
       "note": "a file that set nothing still says it was loaded"
     }
