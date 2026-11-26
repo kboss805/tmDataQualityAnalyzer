@@ -253,11 +253,17 @@ What it establishes that nothing else can:
   negative control a pass proves nothing about the signatures.
 - **The refusal beside an Inno install:** v2.14.2 installed, the MSI stops with exit 1603 and the message that says to
   uninstall that one first, and installs nothing.
-- **Install, upgrade, uninstall:** every file arrives, one entry in Installed apps at the MSI's version, `.ch10`
-  opening the installed exe, a Start menu entry and no desktop shortcut; the newer MSI over it replaces the version and
-  keeps an edited settings file; the older MSI over the newer is refused; an uninstall removes the program and the
-  association and leaves `settings\`, the edit included.
-- **The switches:** `ASSOCIATE_CH10=0 FULLMANUAL=0 DESKTOPSHORTCUT=1` give no association, no full manual and a
+- **Install, upgrade, uninstall:** every file arrives, one entry in Installed apps at the MSI's version, the
+  application offered for `.ch10` (listed under `OpenWithProgids`, its ProgID opening the installed exe; **no default
+  taken**), a Start menu entry and no desktop shortcut; the newer MSI over it replaces the version and keeps an edited
+  settings file; the older MSI over the newer is refused; an uninstall removes the program and the offer and leaves
+  `settings\`, the edit included.
+- **The association is offered, never taken:** an upgrade with `ASSOCIATE_CH10=0` leaves no `.ch10` offer and no
+  ProgID, and an association another application took (it wrote `.ch10`'s default itself) survives our uninstall. The
+  MSI first wrote `.ch10`'s default through a ProgId, and Windows Installer's uninstall deleted whoever's value that
+  had become. On a machine with no association Windows asks once which application to use; an administrator who wants
+  it the default sets it with a default-associations file (`DISM /Import-DefaultAppAssociations`).
+- **The switches:** `ASSOCIATE_CH10=0 FULLMANUAL=0 DESKTOPSHORTCUT=1` give no `.ch10` offer, no full manual and a
   desktop shortcut.
 - **The DLL closure:** the installed app and the portable ZIP open their windows and process the PRN
   sample end to end; `tmdq_core.dll` loads with the VC++ runtime beside it; every PE file verifies.

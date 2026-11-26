@@ -967,7 +967,13 @@ that worktrees also need.
   Setup installer, which every release before it used. **Per-machine only**: sites that deploy by Group Policy, SCCM or
   Intune install elevated, and a user without admin rights takes the portable ZIP. The optional pieces are features
   (`FileAssoc`, `Manual`, `DesktopShortcut`, the last off by default), and an administrator's switches are public
-  properties: `ASSOCIATE_CH10=0`, `FULLMANUAL=0`, `DESKTOPSHORTCUT=1`, `INSTALLFOLDER=...`. `settings\` is generated into a
+  properties: `ASSOCIATE_CH10=0`, `FULLMANUAL=0`, `DESKTOPSHORTCUT=1`, `INSTALLFOLDER=...`. **`FileAssoc` offers the
+  application for `.ch10` and never takes the association:** it registers the ProgID and lists it under
+  `.ch10\OpenWithProgids`, and does not write `.ch10`'s default value (a ProgId with an Extension would, and Windows
+  Installer's uninstall deletes every value a package wrote, whoever's it has become: found by the Sandbox test, and held by
+  `RepoFilesTests` and a mutant). Windows therefore asks once which application to use on a machine with no association; an
+  administrator who wants this the default sets it with a default-associations file (`DISM /Import-DefaultAppAssociations`).
+  `settings\` is generated into a
   fragment, one component a file, never overwritten (`NeverOverwrite`) and never removed (`Permanent`). A major-upgrade rule
   replaces an older MSI and refuses a downgrade. **It does not upgrade an Inno Setup install**: a launch condition refuses
   to install beside one (its uninstall key `{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1`) and says to uninstall it first.

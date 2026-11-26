@@ -12,7 +12,7 @@
 # Do not run it on a developer machine: it installs to Program Files and uninstalls again.
 #
 # What it proves: on a machine that has never seen the application, with Smart App Control ON, the signed MSI installs
-# silently and every file arrives; the .ch10 association, the Start menu entry and the settings are as they should be; an
+# silently and every file arrives; the .ch10 offer (never a default taken), the Start menu entry and the settings are as they should be; an
 # upgrade replaces the files and keeps an edited settings file; the older MSI over the newer is refused; the installed
 # application opens its window and processes a recording, its native core loads, and Code Integrity blocked nothing of
 # ours; an uninstall removes it and leaves the settings; the administrator's switches work; the portable ZIP runs too; and
@@ -103,6 +103,12 @@ function Get-ArpEntry {
       ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'tmDataQualityAnalyzer*' })
 }
 function Get-MsiVersion([string]$name) { [version]($name -replace '^.*-v(\d+\.\d+\.\d+)_.*$', '$1') }
+function Test-Ch10Offered {
+    # The MSI offers the application for .ch10 by listing its ProgID under .ch10\OpenWithProgids, and never writes .ch10's
+    # default value (which another application may hold, and which an uninstall would delete whoever's it had become).
+    $key = Get-Item 'HKLM:\SOFTWARE\Classes\.ch10\OpenWithProgids' -ErrorAction SilentlyContinue
+    return (($null -ne $key) -and ($key.GetValueNames() -contains 'tmDataQualityAnalyzer.ch10'))
+}
 
 $app = 'C:\Program Files\tmDataQualityAnalyzer'
 $exe = Join-Path $app 'tmDataQualityAnalyzer.exe'
@@ -209,9 +215,10 @@ $entries = @(Get-ArpEntry)
 Check 'one entry in Installed apps' ($entries.Count -eq 1) (($entries | ForEach-Object { $_.DisplayName + ' ' + $_.DisplayVersion }) -join '; ')
 if ($entries.Count -eq 1) { Check 'its version is the MSI''s' ([version]$entries[0].DisplayVersion -eq $v1) ([string]$entries[0].DisplayVersion) }
 $ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
-Check '.ch10 names the ProgID' ($ext -eq 'tmDataQualityAnalyzer.ch10') ([string]$ext)
+Check '.ch10 offers the application (OpenWithProgids)' (Test-Ch10Offered) ''
+Check 'the install took no .ch10 default' ([string]::IsNullOrEmpty($ext)) $(if ($ext) { "it set '$ext'" } else { '' })
 $command = (Get-ItemProperty (Join-Path $progId 'shell\open\command') -ErrorAction SilentlyContinue).'(default)'
-Check '.ch10 opens the installed exe' ($command -eq ('"' + $exe + '" "%1"')) ([string]$command)
+Check 'the ProgID opens the installed exe' ($command -eq ('"' + $exe + '" "%1"')) ([string]$command)
 Check 'a Start menu shortcut' (Test-Path (Join-Path $startMenu 'tmDataQualityAnalyzer.lnk')) ''
 Check 'no desktop shortcut by default' (-not (Test-Path $desktopLink)) ''
 Say '  signatures:'
@@ -232,12 +239,11 @@ if ($entries.Count -eq 1) { Check 'its version is the newer MSI''s' ([version]$e
 Check 'the exe is still installed' (Test-Path $exe) ''
 Check 'the edited settings file survived the upgrade' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
 Check 'the Start menu shortcut is still there' (Test-Path (Join-Path $startMenu 'tmDataQualityAnalyzer.lnk')) ''
-$ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
-Check '.ch10 still names the ProgID' ($ext -eq 'tmDataQualityAnalyzer.ch10') ([string]$ext)
+Check '.ch10 still offers the application' (Test-Ch10Offered) ''
 
 # An upgrade that DECLINES the association (the case the Inno installer's [Code] section handled, #397: an upgrade that
 # declined it left .ch10 naming a ProgID that had just been deleted, and Explorer offered a dead entry). The MSI over an
-# older MSI removes the older product's registry entries, so .ch10 and the ProgID should both be gone.
+# older MSI removes the older product's registry entries, so the offer and the ProgID should both be gone.
 Say ''
 Say '[4b] Upgrade that declines the association (ASSOCIATE_CH10=0)'
 $code = Invoke-Msi @('/i', ('"' + $third.FullName + '"'), 'ASSOCIATE_CH10=0') 'upgrade-declined.log'
@@ -246,7 +252,8 @@ $entries = @(Get-ArpEntry)
 Check 'still one entry in Installed apps' ($entries.Count -eq 1) (($entries | ForEach-Object { $_.DisplayName + ' ' + $_.DisplayVersion }) -join '; ')
 if ($entries.Count -eq 1) { Check 'its version is the newest MSI''s' ([version]$entries[0].DisplayVersion -eq $v3) ([string]$entries[0].DisplayVersion) }
 $ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
-Check '.ch10 no longer names a ProgID that is gone' ([string]::IsNullOrEmpty($ext)) $(if ($ext) { "still '$ext'" } else { '' })
+Check '.ch10 no longer offers the application' (-not (Test-Ch10Offered)) ''
+Check '.ch10 names no ProgID that is gone' ([string]::IsNullOrEmpty($ext)) $(if ($ext) { "still '$ext'" } else { '' })
 Check 'the ProgID key is gone' (-not (Test-Path $progId)) ''
 Check 'the exe is installed' (Test-Path $exe) ''
 Check 'the edited settings file survived' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
@@ -312,7 +319,8 @@ Check 'the exe is removed' (-not (Test-Path $exe)) ''
 Check 'the native core is removed' (-not (Test-Path (Join-Path $app 'tmdq_core.dll'))) ''
 Check 'the settings are left for the user, edit included' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
 $left = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
-Check '.ch10 association cleared' ([string]::IsNullOrEmpty($left)) $(if ($left) { "still '$left'" } else { '' })
+Check '.ch10 no longer offers the application' (-not (Test-Ch10Offered)) ''
+Check '.ch10 names no ProgID that is gone' ([string]::IsNullOrEmpty($left)) $(if ($left) { "still '$left'" } else { '' })
 Check 'ProgID key removed' (-not (Test-Path $progId)) ''
 Check 'no entry left in Installed apps' (@(Get-ArpEntry).Count -eq 0) ''
 Check 'the Start menu folder is removed' (-not (Test-Path $startMenu)) ''
@@ -323,7 +331,7 @@ Say '[8] Silent install with ASSOCIATE_CH10=0 FULLMANUAL=0 DESKTOPSHORTCUT=1'
 $code = Invoke-Msi @('/i', ('"' + $third.FullName + '"'), 'ASSOCIATE_CH10=0', 'FULLMANUAL=0', 'DESKTOPSHORTCUT=1') 'switches.log'
 Check 'msiexec exit code 0' ($code -eq 0) ('exit=' + $code)
 Check 'the exe is installed' (Test-Path $exe) ''
-Check 'no .ch10 association' (-not (Test-Path $progId)) ''
+Check 'the application is not offered for .ch10, and no ProgID' ((-not (Test-Ch10Offered)) -and (-not (Test-Path $progId))) ''
 Check 'no full manual' (-not (Test-Path (Join-Path $app 'UserManual.html'))) ''
 Check 'a desktop shortcut' (Test-Path $desktopLink) ''
 Check 'the edited settings file is still there (never overwritten)' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
@@ -332,21 +340,24 @@ Check 'uninstall exit code 0' ($code -eq 0) ('exit=' + $code)
 Check 'the desktop shortcut is removed' (-not (Test-Path $desktopLink)) ''
 Check 'no entry left in Installed apps' (@(Get-ArpEntry).Count -eq 0) ''
 
-# --- 8b. Another application's association is left alone (what the Inno [Code] section did: it deleted .ch10's default
-# value only when that named OUR ProgID). The association is installed, another application then takes .ch10 for itself
-# (as an installer of its own would), and the MSI is uninstalled: its value must still be there. ---
+# --- 8b. Another application's association is left alone by an uninstall (what the Inno [Code] section did for an upgrade:
+# it deleted .ch10's default value only when that named OUR ProgID). The application is offered for .ch10, another
+# application then takes .ch10 for itself (as an installer of its own would), and the MSI is uninstalled: that value must
+# still be there, and ours must be gone. The first version of the MSI wrote .ch10's default itself, and the uninstall
+# deleted whoever's it had become. ---
 Say ''
 Say '[8b] An association another application took is left alone by an uninstall'
 $other = 'OtherApp.ch10'
 $code = Invoke-Msi @('/i', ('"' + $third.FullName + '"')) 'install-assoc.log'
 Check 'msiexec exit code 0' ($code -eq 0) ('exit=' + $code)
-$ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
-Check '.ch10 names our ProgID after the install' ($ext -eq 'tmDataQualityAnalyzer.ch10') ([string]$ext)
+Check '.ch10 offers the application after the install' (Test-Ch10Offered) ''
+if (-not (Test-Path 'HKLM:\SOFTWARE\Classes\.ch10')) { New-Item -Path 'HKLM:\SOFTWARE\Classes\.ch10' -Force | Out-Null }
 Set-ItemProperty -Path 'HKLM:\SOFTWARE\Classes\.ch10' -Name '(default)' -Value $other
 $code = Invoke-Msi @('/x', ('"' + $third.FullName + '"')) 'uninstall3.log'
 Check 'uninstall exit code 0' ($code -eq 0) ('exit=' + $code)
 $ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
 Check 'the other application''s .ch10 value is left alone' ($ext -eq $other) $(if ($ext) { "now '$ext'" } else { 'now empty: the uninstall deleted it' })
+Check 'our offer for .ch10 is gone' (-not (Test-Ch10Offered)) ''
 Check 'our ProgID key is gone' (-not (Test-Path $progId)) ''
 if (Test-Path 'HKLM:\SOFTWARE\Classes\.ch10') { Remove-Item 'HKLM:\SOFTWARE\Classes\.ch10' -Recurse -Force -ErrorAction SilentlyContinue }
 

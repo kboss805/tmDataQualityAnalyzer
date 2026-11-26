@@ -7,14 +7,15 @@
   rights uses the portable ZIP. There is no per-user mode and so no per-user/per-machine dialog.
 
   SILENT INSTALL (what an administrator types), all under msiexec /i <msi> /qn:
-    (nothing)                    the application, the settings, the .ch10 association and the full manual
+    (nothing)                    the application, the settings, the application offered for .ch10 and the full manual
     ADDLOCAL=ALL                 ... and the desktop shortcut
     DESKTOPSHORTCUT=1            the desktop shortcut too (a feature Level condition, below)
-    ASSOCIATE_CH10=0             no .ch10 association
+    ASSOCIATE_CH10=0             do not offer the application for .ch10 files
     FULLMANUAL=0                 no full illustrated manual
     INSTALLFOLDER="D:\Apps\tm"   another folder
-  The optional pieces are the features DesktopShortcut, FileAssoc (the .ch10 association) and Manual (the full manual);
-  they were the Inno Setup installer's tasks, which this package replaced.
+  The optional pieces are the features DesktopShortcut, FileAssoc (the application offered for .ch10 files: it is LISTED,
+  never made the default; see the component) and Manual (the full manual); they were the Inno Setup installer's tasks,
+  which this package replaced.
 
   The variables come from the command line (build_msi.ps1): AppVersion, RepoRoot, StagingApp, StagingManual, LicenseRtf.
   The Settings fragment (settings\*) is generated beside it, one never-overwritten component a file, because Files cannot
@@ -102,12 +103,18 @@
     </ComponentGroup>
 
     <ComponentGroup Id="FileAssociationItems" Directory="INSTALLFOLDER">
+      <!-- WHY THIS IS NOT A ProgId + Extension: that writes .ch10's DEFAULT value, and Windows Installer removes every value a
+           package wrote on uninstall (and on the upgrade that removes the older product) without looking at whose it is by then. So
+           an association another application took after this one was installed was deleted by the uninstall (found by the Sandbox
+           test, step 8b). Instead this registers the ProgID (a key of our own) and lists it in .ch10\OpenWithProgids, a value
+           named for our ProgID: removing it can only ever remove ours. Windows then offers the application for .ch10 (Open with,
+           and a one-time choice on a machine with no association); it takes nothing another application holds. An administrator
+           who wants it the default sets it with a default-associations file (DISM /Import-DefaultAppAssociations). -->
       <Component Id="FileAssociationComponent">
-        <ProgId Id="tmDataQualityAnalyzer.ch10" Description="Chapter 10 Telemetry File" Icon="AppExe" IconIndex="0">
-          <Extension Id="ch10">
-            <Verb Id="open" Command="Open" TargetFile="AppExe" Argument="&quot;%1&quot;" />
-          </Extension>
-        </ProgId>
+        <RegistryValue Root="HKLM" Key="Software\Classes\tmDataQualityAnalyzer.ch10" Type="string" Value="Chapter 10 Telemetry File" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\tmDataQualityAnalyzer.ch10\DefaultIcon" Type="string" Value="&quot;[#AppExe]&quot;,0" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\tmDataQualityAnalyzer.ch10\shell\open\command" Type="string" Value="&quot;[#AppExe]&quot; &quot;%1&quot;" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.ch10\OpenWithProgids" Name="tmDataQualityAnalyzer.ch10" Type="string" Value="" />
         <RegistryValue Root="HKLM" Key="Software\tmDataQualityAnalyzer" Name="FileAssociation" Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </ComponentGroup>
@@ -124,7 +131,7 @@
       <ComponentGroupRef Id="SettingsFiles" />
       <ComponentGroupRef Id="StartMenuItems" />
 
-      <Feature Id="FileAssoc" Title="Associate .ch10 files" Description="Open Chapter 10 recordings in this application when double-clicked."
+      <Feature Id="FileAssoc" Title="Offer this application for .ch10 files" Description="List this application for Chapter 10 recordings (Open with). Windows asks once which application to use; an association another application holds is not taken."
                Level="1" AllowAbsent="yes">
         <Level Value="0" Condition="ASSOCIATE_CH10 = &quot;0&quot;" />
         <ComponentGroupRef Id="FileAssociationItems" />

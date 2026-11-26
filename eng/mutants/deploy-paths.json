@@ -44,6 +44,14 @@
       "new": "-d \"StagingManuals=$ManualDir\"",
       "expect": "caught",
       "note": "a variable the MSI source uses that the script no longer defines (an error only when the package is built)"
+    },
+    {
+      "id": "D6",
+      "file": "deploy/tmDataQualityAnalyzer.wxs",
+      "old": "<RegistryValue Root=\"HKLM\" Key=\"Software\\Classes\\.ch10\\OpenWithProgids\" Name=\"tmDataQualityAnalyzer.ch10\" Type=\"string\" Value=\"\" />",
+      "new": "<RegistryValue Root=\"HKLM\" Key=\"Software\\Classes\\.ch10\" Type=\"string\" Value=\"tmDataQualityAnalyzer.ch10\" />",
+      "expect": "caught",
+      "note": "the MSI taking .ch10's default itself (an uninstall then deletes an association another application took)"
     }
   ]
 }

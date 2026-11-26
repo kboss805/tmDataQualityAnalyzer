@@ -111,6 +111,22 @@ public class RepoFilesTests
     }
 
     [Fact]
+    public void TheMsiOffersTheApplicationForCh10AndNeverWritesTheDefaultAnotherApplicationMayHold()
+    {
+        // Windows Installer removes every registry value a package wrote when it is uninstalled (and when the upgrade removes
+        // the older product), without looking at whose the value has become. A ProgId with an Extension writes .ch10's DEFAULT
+        // value, so an association another application took after ours was installed was deleted by our uninstall (the Sandbox
+        // test, step 8b). The MSI lists its ProgID under .ch10\OpenWithProgids instead: a value named for our ProgID, which an
+        // uninstall can only remove from us. A ProgId/Extension (or a write of .ch10's default) would bring that back.
+        string wxs = File.ReadAllText(Path.Combine(RepoPaths.Root, "deploy", "tmDataQualityAnalyzer.wxs"));
+        Assert.DoesNotContain("<Extension", wxs, StringComparison.Ordinal);
+        Assert.DoesNotContain("<ProgId", wxs, StringComparison.Ordinal);
+        Assert.False(Regex.IsMatch(wxs, @"Key=""Software\\Classes\\\.ch10""\s"), "the MSI writes a value of the .ch10 key itself (its default would be an association taken from another application)");
+        Assert.Contains(@"Key=""Software\Classes\.ch10\OpenWithProgids"" Name=""tmDataQualityAnalyzer.ch10""", wxs, StringComparison.Ordinal);
+        Assert.Contains(@"Key=""Software\Classes\tmDataQualityAnalyzer.ch10\shell\open\command""", wxs, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EveryDotnetProjectKeepsItsOutputWhereItAlwaysIs()
     {
         // vcvars leaves Platform=x64 in the shell; with AppendPlatformToOutputPath=false a dotnet build puts its output
