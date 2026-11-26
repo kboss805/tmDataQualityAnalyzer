@@ -225,7 +225,7 @@ before('<h3 id="import-antenna">',
 before('<p><strong>A log joins the plot instead of replacing it.</strong>',
        fig('walk-csv-02-antenna-plot.png',
            'An antenna log of 30 streams imported into an empty plot, here the whole of its 41 minutes: the 30 combined (C) '
-           'series, one hue per stream, streams 16 to 30 dotted, on the Receiver SNR scale. The legend is hidden so that the '
+           'series, one hue per stream (taken again from the first after 15), dotted as all Receiver SNR is, on the Receiver SNR scale. The legend is hidden so that the '
            'scale shows; with it, each row reads Stream n C.',
            'Plot of 30 phased array antenna SNR series with the Receiver SNR scale on the right')
      + fig('walk-csv-03-customize.png',

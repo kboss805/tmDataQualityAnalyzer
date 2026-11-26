@@ -480,9 +480,9 @@ public sealed class ChartViewTests
     [AvaloniaFact]
     public void ALegendSwatchIsInTheColourTheLineIsDrawnInAndFollowsAChangeOfTheme()
     {
-        Color yellow = PlotColors.StreamHues[9];   // the gold: pale on the light theme
+        Color yellow = PlotColors.StreamHues[9];   // the gold: pale on the light theme; a lock curve, so a solid line and a bar swatch
         var plot = new PlotViewModel();
-        plot.SetSeries(new[] { PlotFixtures.Snr(0, "yellow", 1, 0, 1, 0, new[] { 0.0, 2.0 }, new[] { 50.0, 50.0 }) });
+        plot.SetSeries(new[] { PlotFixtures.Lock(0, "yellow", 1, 0, new[] { 0.0, 2.0 }, new[] { 50.0, 50.0 }) });
         plot.RecolorSeries(0, yellow);
         Shown s = Show(plot);
         Color Swatch() => ((ImmutableSolidColorBrush)((Border)((Panel)s.View.Legend.Rows[0]).Children[0]).Background!).Color;
@@ -513,7 +513,7 @@ public sealed class ChartViewTests
         var plot = new PlotViewModel();
         plot.SetSeries(new[]
         {
-            PlotFixtures.Snr(0, "plain", 1, 0, 1, 0, new[] { 0.0, 2.0 }, new[] { 50.0, 50.0 }),
+            PlotFixtures.Lock(0, "plain", 1, 0, new[] { 0.0, 2.0 }, new[] { 50.0, 50.0 }),
             PlotFixtures.Snr(1, "dotted", 1, 0, 16, 0, new[] { 0.0, 2.0 }, new[] { 60.0, 60.0 }),
             PlotFixtures.Snr(2, "dotted and strong", 1, 0, 16, 2, new[] { 0.0, 2.0 }, new[] { 70.0, 70.0 }),
         });
@@ -521,12 +521,12 @@ public sealed class ChartViewTests
         Dispatcher.UIThread.RunJobs();
         Border Swatch(int row) => Assert.IsType<Border>(((StackPanel)s.View.Legend.Rows[row]).Children[0]);
 
-        // The plain series: a bar in its colour, as it always was.
+        // A Frame Sync Lock series is solid: a bar in its colour.
         Assert.IsType<ImmutableSolidColorBrush>(Swatch(0).Background);
         Assert.Null(Swatch(0).Child);
         Assert.Equal(PlotLegend.SwatchThickness, Swatch(0).Height);
 
-        // A dotted series: dots with the line's own dots, in its colour; and the strong one thicker, as its line is.
+        // Every Receiver SNR series is dotted: dots with the line's own dots, in its colour; and the strong one thicker, as its line is.
         var dots = Assert.IsType<Avalonia.Controls.Shapes.Line>(Swatch(1).Child);
         Assert.Equal(PlotChart.SeriesDots, dots.StrokeDashArray!);
         Assert.Equal(PlotLegend.SwatchThickness, dots.StrokeThickness);
