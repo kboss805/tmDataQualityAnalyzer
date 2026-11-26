@@ -1,12 +1,14 @@
 # =============================================================================
-# run_sandbox_test.ps1 - install the shipped setup.exe on a genuinely clean
+# run_sandbox_test.ps1 - install the shipped setup.msi on a genuinely clean
 # machine and report what it did.
 #
-#   powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 [-Setup <setup.exe>] [-Payload <list>]
+#   powershell -ExecutionPolicy Bypass -File deploy\sandbox\run_sandbox_test.ps1 [-Setup <setup.msi>] [-Payload <list>]
 #
-# With no arguments it tests the newest setup.exe in deploy\, with the payload the verifier needs: the portable
-# ZIP beside that setup, deploy\staging\unsigned, the committed PRN sample, and v2.x's setup.exe (the one the
-# upgrade starts from; deploy\ of this checkout, or of the main checkout when this is a worktree).
+# With no arguments it tests the newest setup.msi in deploy\, with the payload the verifier needs: the portable
+# ZIP beside that setup, deploy\staging\unsigned, the committed PRN sample, v2.x's setup.exe (the Inno install the MSI
+# must refuse to sit beside; deploy\ of this checkout, or of the main checkout when this is a worktree), and TWO NEWER
+# MSIs of the same product, which this script builds (unsigned, the next two patch versions, from the same staged files)
+# for the upgrade tests.
 #
 # WHY THIS EXISTS
 #
@@ -26,10 +28,13 @@
 # =============================================================================
 
 param(
-    # Defaults to the newest setup.exe in deploy\. Pass one explicitly to test an
+    # Defaults to the newest setup.msi in deploy\. Pass one explicitly to test an
     # older release, or an artifact downloaded from a GitHub release.
     [string]$Setup,
-    [int]$TimeoutSeconds = 600,
+    # Every install of the 50 MB MSI took about 2 minutes in the Sandbox (not on the development machine), and the test
+    # installs it five times: a whole run takes 15 to 25 minutes, so the default is generous. A test that has STOPPED is
+    # noticed sooner, by its progress file (below).
+    [int]$TimeoutSeconds = 2400,
     # Files or folders the verifier needs, copied beside the setup (a folder keeps its name). Separate them with
     # semicolons; a recording's name may contain a comma. Omitted, it is the default list described above.
     [string[]]$Payload = @()
@@ -37,7 +42,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# The script the Sandbox runs, from this folder: it tests the packages and the upgrade from v2.x.
+# The script the Sandbox runs, from this folder: it tests the packages.
 $Verifier  = 'verify_install.ps1'
 
 $here      = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -69,14 +74,28 @@ if ($live.Count -gt 0) {
 }
 
 if (-not $Setup) {
-    $Setup = (Get-ChildItem (Join-Path $deployDir 'tmDataQualityAnalyzer-v*_setup.exe') -ErrorAction SilentlyContinue |
+    $Setup = (Get-ChildItem (Join-Path $deployDir 'tmDataQualityAnalyzer-v*_setup.msi') -ErrorAction SilentlyContinue |
               Sort-Object LastWriteTime | Select-Object -Last 1).FullName
 }
 if (-not $Setup -or -not (Test-Path $Setup)) {
-    throw "No setup.exe found. Run deploy\build_package.ps1 first, or pass -Setup <path>."
+    throw "No setup.msi found. Run deploy\build_package.ps1 first, or pass -Setup <path>."
 }
 
 if (-not $Payload -or $Payload.Count -eq 0) {
+    # The upgrade tests need TWO NEWER MSIs of the same product (one upgrade keeps the .ch10 association, the next declines
+    # it). They are built here, unsigned (only their versions matter), from the staged files the release was made from.
+    if ((Split-Path -Leaf $Setup) -notmatch '^tmDataQualityAnalyzer-v(\d+)\.(\d+)\.(\d+)_setup\.msi$') { throw "Cannot read a version from the name of $Setup" }
+    $major = $Matches[1]; $minor = $Matches[2]; $patch = [int]$Matches[3]
+    $newerMsis = @()
+    foreach ($step in 1, 2) {
+        $nextVersion = '{0}.{1}.{2}' -f $major, $minor, ($patch + $step)
+        $newer = Join-Path $deployDir "staging\upgrade-test\tmDataQualityAnalyzer-v${nextVersion}_setup.msi"
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $newer) | Out-Null
+        Write-Host "Building a newer MSI for the upgrade tests ($nextVersion, unsigned)..."
+        & powershell -ExecutionPolicy Bypass -File (Join-Path $deployDir 'build_msi.ps1') -Version $nextVersion -Stage (Join-Path $deployDir 'staging') -OutFile $newer
+        if ($LASTEXITCODE -ne 0) { throw "build_msi.ps1 failed: no $nextVersion MSI for the upgrade tests" }
+        $newerMsis += $newer
+    }
     # v2.x's setup.exe is not committed (deploy\ ignores it), so a worktree has none: look in the main checkout too.
     $oldSetup = $null
     $folders = @($deployDir)
@@ -89,14 +108,14 @@ if (-not $Payload -or $Payload.Count -eq 0) {
     }
     if (-not $oldSetup) {
         throw ("No v2.x setup.exe (tmDataQualityAnalyzer-v2.*_setup.exe) in " + ($folders -join ' or ') +
-               ". The upgrade test starts from it: take v2.14.2's from its GitHub release, or pass -Payload.")
+               ". The test of the MSI's refusal starts from it: take v2.14.2's from its GitHub release, or pass -Payload.")
     }
     $Payload = @(
-        ($Setup -replace '_setup\.exe$', '_portable.zip'),
+        ($Setup -replace '_setup\.msi$', '_portable.zip'),
         (Join-Path $deployDir 'staging\unsigned'),
         (Join-Path $repoRoot 'tests\data\test files\prn_testfile, sample.ch10'),
         $oldSetup.FullName
-    )
+    ) + $newerMsis
 }
 
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
@@ -143,13 +162,28 @@ Write-Host ""
 Start-Process $wsb
 
 $results = Join-Path $outDir 'results.txt'
-$deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+$progress = Join-Path $outDir 'progress.txt'
+$stallSeconds = 600
+$began = Get-Date
+$deadline = $began.AddSeconds($TimeoutSeconds)
+$stalled = $false
 while (-not (Test-Path $results) -and (Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 5
+    # The verifier appends to progress.txt as it goes, with a heartbeat every 20 s while an install runs, so a file that has
+    # stopped changing means the verifier has stopped (a hang, or its process was killed: an uninstall once shut it down
+    # through Restart Manager, and this loop waited the whole timeout for results that were never written).
+    $last = if (Test-Path $progress) { (Get-Item $progress).LastWriteTime } else { $began }
+    if (((Get-Date) - $last).TotalSeconds -gt $stallSeconds) { $stalled = $true; break }
 }
 
 if (-not (Test-Path $results)) {
-    Write-Host "No results after $TimeoutSeconds s. The Sandbox window shows what it is doing; its console stays open."
+    if ($stalled) {
+        Write-Host "No progress for $stallSeconds s: the test has stopped. The last lines it wrote:"
+        if (Test-Path $progress) { Get-Content $progress -Tail 12 | ForEach-Object { Write-Host "  $_" } }
+        Write-Host "The Sandbox window shows what it is doing; its console stays open."
+    } else {
+        Write-Host "No results after $TimeoutSeconds s. The Sandbox window shows what it is doing; its console stays open."
+    }
     exit 2
 }
 

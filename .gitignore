@@ -83,3 +83,6 @@ __pycache__/
 # The native projects' build output (src/core/tmdq_core.vcxproj and tests/core/tmdq_core_tests.vcxproj): the DLL,
 # the test exe and the build logs in out/<config>/ and out/, the objects in out/obj/.
 /out/
+
+# WiX: the UI extension build_msi.ps1 fetches (pinned in the script and dotnet-tools.json)
+.wix/

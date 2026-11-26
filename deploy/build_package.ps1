@@ -5,8 +5,8 @@
 #
 # Produces, beside this script:
 #   tmDataQualityAnalyzer-vX.Y.Z_portable.zip
-#   tmDataQualityAnalyzer-vX.Y.Z_setup.exe   (replaces a v2.x install: tmDataQualityAnalyzer.iss)
-#   tmDataQualityAnalyzer-vX.Y.Z_symbols.zip  (the debug symbols of those two binaries. NOT shipped to users: kept with
+#   tmDataQualityAnalyzer-vX.Y.Z_setup.msi   (per-machine Windows Installer package: tmDataQualityAnalyzer.wxs, built by build_msi.ps1)
+#   tmDataQualityAnalyzer-vX.Y.Z_symbols.zip  (the debug symbols of the application's binaries. NOT shipped to users: kept with
 #                                              the release, so a crash dump or stack trace of that version can be read)
 #
 # THE LAYOUT IS A SINGLE-FILE PUBLISH, and that is what keeps signing honest. A
@@ -55,7 +55,7 @@ $Publish  = Join-Path $Stage 'publish'
 $AppDir   = Join-Path $Stage 'app'
 $Exe      = Join-Path $AppDir 'tmDataQualityAnalyzer.exe'
 $ZipPath  = Join-Path $Here "tmDataQualityAnalyzer-v${version}_portable.zip"
-$SetupExe = Join-Path $Here "tmDataQualityAnalyzer-v${version}_setup.exe"
+$MsiPath  = Join-Path $Here "tmDataQualityAnalyzer-v${version}_setup.msi"
 $SymbolsZip = Join-Path $Here "tmDataQualityAnalyzer-v${version}_symbols.zip"
 
 Write-Host '============================================'
@@ -311,24 +311,17 @@ Set-Content -Path (Join-Path $Symbols 'README.txt') -Encoding ASCII -Value @(
 if (Test-Path $SymbolsZip) { Remove-Item $SymbolsZip -Force }
 Compress-Archive -Path (Join-Path $Symbols '*') -DestinationPath $SymbolsZip -Force
 
-$iscc =@((Get-Command iscc -ErrorAction SilentlyContinue).Source,
-          "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
-          "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe") | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
-if (-not $iscc) {
-    $Failures.Add('Inno Setup 6 not found: no installer was produced')
-} else {
-    $isccArgs = @("/DMyAppVersion=$version")
-    if ($SignCertSha1) {
-        # Bare 'signtool': env.ps1 put the SDK on PATH, and a quoted full path gets mis-split on the way to iscc.
-        $isccArgs += '/DSIGN', "/Ssigntool=signtool sign /sha1 $SignCertSha1 /tr $SignTimestamp /td sha256 /fd sha256 `$f"
-    }
-    $isccArgs += (Join-Path $Here 'tmDataQualityAnalyzer.iss')
-    & $iscc @isccArgs
-    if ($LASTEXITCODE -ne 0) { $Failures.Add('Inno Setup compile or installer signing failed') }
-}
+# The Windows Installer package, from the same staged folders. The signing arguments are added only when there is a
+# certificate: Windows PowerShell 5.1 drops an empty string passed to a native command, which would let -SignCertSha1
+# swallow the next parameter's name.
+$msiArgs = @('-Version', $version, '-Stage', $Stage, '-OutFile', $MsiPath)
+if ($SignCertSha1) { $msiArgs += @('-SignCertSha1', $SignCertSha1, '-SignTimestamp', $SignTimestamp) }
+& powershell -ExecutionPolicy Bypass -File (Join-Path $Here 'build_msi.ps1') @msiArgs
+if ($LASTEXITCODE -ne 0) { $Failures.Add('the MSI build or its signing failed (build_msi.ps1)') }
 
 # --- Verify what this run actually produced. ---
-foreach ($a in @(@{ Path = $ZipPath; Label = 'portable ZIP'; Signed = $false }, @{ Path = $SetupExe; Label = 'installer'; Signed = [bool]$SignCertSha1 },
+foreach ($a in @(@{ Path = $ZipPath; Label = 'portable ZIP'; Signed = $false },
+                 @{ Path = $MsiPath; Label = 'MSI'; Signed = [bool]$SignCertSha1 },
                  @{ Path = $SymbolsZip; Label = 'symbols ZIP'; Signed = $false })) {
     if (-not (Test-Path $a.Path)) { $Failures.Add("$($a.Label) was not produced"); continue }
     if ((Get-Item $a.Path).LastWriteTime -lt $RunStart) { $Failures.Add("$($a.Label) is left over from an earlier run"); continue }
@@ -341,7 +334,7 @@ Write-Host $(if ($Failures.Count) { " INCOMPLETE - $($Failures.Count) problem(s)
 Write-Host '============================================'
 Write-Host " Version:   $version"
 Write-Host " Signing:   $(if (-not $SignCertSha1) { 'UNSIGNED (requested)' } elseif ($Failures.Count) { 'see problems' } else { 'every PE file verified' })"
-foreach ($a in $ZipPath, $SetupExe, $SymbolsZip) {
+foreach ($a in $ZipPath, $MsiPath, $SymbolsZip) {
     if (Test-Path $a) { Write-Host (' {0}  ({1:N1} MB)' -f $a, ((Get-Item $a).Length / 1MB)) }
 }
 if ($Failures.Count) {
