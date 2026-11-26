@@ -167,8 +167,8 @@ function Say([string]$line) {
 }
 
 # ---- the tools ----------------------------------------------------------------------------------------------
-if (-not (Get-Command msbuild -ErrorAction SilentlyContinue)) { . (Join-Path $root 'eng\env.ps1') *> $null }
-if (-not (Get-Command msbuild -ErrorAction SilentlyContinue)) { Fail 2 'msbuild not found (install the Visual Studio 2022 C++ build tools)' }
+# msbuild from Visual Studio 2022, the pinned toolset (eng\common.ps1): a Visual Studio 2026 prompt is refused, not built in.
+try { Initialize-MsvcEnvironment $PSScriptRoot } catch { Fail 2 $_.Exception.Message }
 
 $outDir = Join-Path $root 'out\Release'
 $coreDll = Join-Path $outDir 'tmdq_core.dll'

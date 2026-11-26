@@ -1022,7 +1022,9 @@ The `add-stream-setting` skill is the checklist. In short:
 ### Common Issues
 
 1. **A build tool is not found** (`msbuild`, `dumpbin`): the native scripts dot-source `eng\env.ps1` when `msbuild` is
-   missing, which imports the Visual Studio 2022 environment; run them from PowerShell, not a bare `cmd`. (The .NET
+   missing (or the shell names no Visual Studio), which imports the Visual Studio 2022 environment; run them from PowerShell,
+   not a bare `cmd`. They refuse a shell whose `VisualStudioVersion` is outside the pin (a Visual Studio 2026 developer
+   prompt: `Assert-PinnedVisualStudio` in `eng\common.ps1`; `TMDQ_VS_RANGE` moves the pin on purpose). (The .NET
    scripts need no such environment: the projects find `mt.exe` themselves.)
 2. **`Platform=x64` in the shell**: `vcvars` sets it. A .NET build is not troubled by it (every project sets
    `AppendPlatformToOutputPath=false`, which a test holds), and the native builds pass `/p:Platform=x64` themselves, so
@@ -1058,7 +1060,8 @@ The suites read the committed recordings under `tests/data/test files` and the f
 more checks run by hand:
 
 - **The side-by-side soak** (`eng\run_soak.ps1`, `SoakTests`): 34 runs over every recording on the development
-  machine, each CSV held byte for byte to what v2.14.2 exported (`Soak/soak.json`). Most recordings are not committed,
+  machine, each CSV held byte for byte to the manifest's `qt` blocks (`Soak/soak.json`): v2.14.2's exported values,
+  with their times moved onto each column's sample grid since the export rounds to it (PR #380). Most recordings are not committed,
   so CI never runs it. `docs/records/soak.md` is the record of how it was set up.
 - **Mutation checks** (`eng\mutate.ps1`, in a worktree): every behaviour change is checked against single-defect
   mutants, and a surviving mutant is a test to write or a line to remove. The lists kept in `eng/mutants` are
@@ -1073,7 +1076,8 @@ by about 12 % on four cores. Such a file must still include everything it uses, 
 include; and the project compiles with `/Z7`, since parallel compiles sharing one `.pdb` failed intermittently with
 `C1041` once the header was in (the header's own comment has the measurements).
 
-In each .NET test project the test classes (`*Tests.cs`) are at the root, and what they share is in `Support/`: the
+In the library tests the test classes (`*Tests.cs`) are at the project's root; in the application tests they are in
+folders by area (`Plot/`, `Streams/`, `Files/`, `Shell/`, `Build/`, `Soak/`; see the catalog below). In both, what they share is in `Support/`: the
 library tests' `Env`, `RepoPaths`, `TempFiles`, `Collector` and the digests the recordings' expected numbers are in
 (`CalibrationDigest`, `FormatsDigest`, `SeriesDigest`), the collections (`ProcessMemoryCollection`) and the observer fakes;
 the application tests' `Fixtures` (`FakeConfigurator`, `FakeRecordingPicker`, `Recordings`, `StreamsChoices`), `MainWindowFakes` (`FakeCsvKinds`, `FakeExportDialog`, `FakeProgressDialog`), `ShortRecordings` (a short PRN recording made once per class), `PlotFixtures`, `StreamFakes`, `Menus`, `Frames`, `Repo`, `PeResources`,
@@ -1084,10 +1088,14 @@ stays in folders of its own.
 ### Continuous Integration
 
 `.github/workflows/ci.yml` has two jobs, both on GitHub-hosted `windows-2022` (Visual Studio 2022, as releases are
-built, which the job checks), on every push to `main` and every PR: the release consistency check, the core built
-Debug and Release, then the native, managed and app suites, in the job `ci` (the required check); the job `native-debug` runs
-beside it on a runner of its own and runs the native suite in Debug (a Debug-only failure, such as an evaluation order the compiler
-chose differently, was found by hand once, in PR #369), so the run takes as long as before. It is not a required check yet. A failed
+built), on every push to `main` and every PR. The job `ci` (the required check) runs the release consistency check, the
+script analyzer (`eng\check_scripts.ps1`, PSScriptAnalyzer pinned to one version), the core built in Debug and Release (the
+Debug one to see that it compiles warning-free, and for `ReleaseCoreGuardTests`' Debug case), then the native, managed and app
+suites in Release. The job `native-debug` runs beside it on a runner of its own and runs the native suite in Debug (a Debug-only
+failure, such as an evaluation order the compiler chose differently, was found by hand once, in PR #369), so the run takes as
+long as before. It is not a required check yet. Only GitHub's own actions are used: MSVC is set up by the scripts themselves (`eng\env.ps1`), which
+refuse a Visual Studio outside the pin (`Initialize-MsvcEnvironment` in `eng\common.ps1`), as on a developer's machine. A push to
+a PR cancels that PR's older run; a push to `main` never cancels one, and the checkout keeps no token for the later steps. A failed
 job uploads the MSBuild logs in `out/` as an artifact (`build-logs`, `build-logs-debug`; seven days). It runs with a read-only token (`permissions: contents:
 read`) and stops after 45 minutes. The workflow's own constraints (ASCII-only, Windows PowerShell 5.1) are in its
 header comment, and `RepoFilesTests` holds the scripts, the installer script and the workflow to ASCII. The self-hosted runner CI used until plan
@@ -1177,7 +1185,8 @@ script's root still resolving from where they are); the recordings' channels (`F
 the committed recordings against numbers v2.14.2 produced, every setting reaching the job, failures, observers, cancel
 and lifetimes (`RunTests`); calibration against the core's extractor (`CalibrationTests`, an extraction disposed from its own callback included); the file formats byte for
 byte against the core (`FormatsTests`, `PhasedArrayLogTests` for an antenna's log); loading the DLL (`LibraryTests`, `IsolatedLoadTests` in a child process, the
-suite's one skip); `ChartGeometryTests`, `ReceiverParamsTests`, `SeriesTests`, `ArenaTests`, `HandleTests` (a handle released once, when it is disposed and the last call using it has
+suite's one skip); `eng\check_release_core.ps1`, the package script's refusal of a Debug core, run on real import lists and on the
+built cores (`ReleaseCoreGuardTests`); `ChartGeometryTests`, `ReceiverParamsTests`, `SeriesTests`, `ArenaTests`, `HandleTests` (a handle released once, when it is disposed and the last call using it has
 returned; a Dispose while another thread waits on a run, and a run disposed from its own callback, which still reports its end and is
 released afterwards), `ObserverBridgeTests` (which thread is inside a callback, nested and after a throw); and `TempFilesTests`, the
 helper every test cleans up and reads back through, which waits out a virus scanner's moment's hold.
@@ -1217,7 +1226,8 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   `AddRecordingTests` (File > Add Recording: the plot kept, the new recording beside it, names told apart, a failed or cancelled add changes nothing, Open still replaces).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `StatusBarTests` (the bar's place, colour and hairline, its marks, its trimming), `MenuStyleTests` (no icons, the accent row and white text, the dimmed shortcut, the row height and inset), `DialogAnatomyTests`
   (every window kind's footer band, padding, button widths and spacing, accent and cancel, in both themes; a status text following the theme), `PreferencesTests`
-  (the preferences file, and v2.x's INI file left unread), `MainWindowStartupTests`, `AccessibleNamesTests` (every control a person
+  (the preferences file, and v2.x's INI file left unread), `MainWindowStartupTests`, `TitleBarThemeTests` (the title bar following the theme where Avalonia does not make it: the request
+  Windows is given on a real window, which Windows versions need it, and windows left alone), `AccessibleNamesTests` (every control a person
   operates, in every window and in the windows filled with rows, has a name a screen reader can say, and no two in a window share one).
 - **The layers:** `LayerTests` reads every model, view model and service type as compiled, its methods' code
   included. It fails on a model that reaches a view model, a service, a view or `Platform`; on a view model or service

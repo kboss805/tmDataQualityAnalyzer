@@ -93,6 +93,19 @@ Root: HKA; Subkey: "Software\Classes\tmDataQualityAnalyzer.ch10\DefaultIcon"; Va
 Root: HKA; Subkey: "Software\Classes\tmDataQualityAnalyzer.ch10\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: fileassoc
 ; Declined on an upgrade: v2.x's association would still open bin\'s exe, which the upgrade has just deleted.
 Root: HKA; Subkey: "Software\Classes\tmDataQualityAnalyzer.ch10"; Flags: deletekey dontcreatekey; Tasks: not fileassoc
+; And .ch10 itself, which would otherwise still name the ProgID just deleted, so Explorer offers a dead entry rather than
+; asking. Only when it names OUR ProgID (Ch10NamesOurProgId): another application's association is left alone.
+Root: HKA; Subkey: "Software\Classes\.ch10"; ValueType: none; ValueName: ""; Flags: deletevalue dontcreatekey; Tasks: not fileassoc; Check: Ch10NamesOurProgId
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// Whether .ch10's default value names this application's ProgID (in the same root the [Registry] entries write, HKA:
+// HKLM for an administrative install, HKCU for a per-user one).
+function Ch10NamesOurProgId(): Boolean;
+var
+  ProgId: String;
+begin
+  Result := RegQueryStringValue(HKA, 'Software\Classes\.ch10', '', ProgId) and (CompareText(ProgId, 'tmDataQualityAnalyzer.ch10') = 0);
+end;
