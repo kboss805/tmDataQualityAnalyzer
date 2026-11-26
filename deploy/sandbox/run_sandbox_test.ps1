@@ -6,9 +6,9 @@
 #
 # With no arguments it tests the newest setup.msi in deploy\, with the payload the verifier needs: the portable
 # ZIP beside that setup, deploy\staging\unsigned, the committed PRN sample, v2.x's setup.exe (the Inno install the MSI
-# must refuse to sit beside; deploy\ of this checkout, or of the main checkout when this is a worktree), and a NEWER MSI
-# of the same product, which this script builds (unsigned, the next patch version, from the same staged files) for the
-# upgrade test.
+# must refuse to sit beside; deploy\ of this checkout, or of the main checkout when this is a worktree), and TWO NEWER
+# MSIs of the same product, which this script builds (unsigned, the next two patch versions, from the same staged files)
+# for the upgrade tests.
 #
 # WHY THIS EXISTS
 #
@@ -82,15 +82,20 @@ if (-not $Setup -or -not (Test-Path $Setup)) {
 }
 
 if (-not $Payload -or $Payload.Count -eq 0) {
-    # The upgrade test needs a NEWER MSI of the same product. It is built here, unsigned (only its version matters), from
-    # the staged files the release was made from.
+    # The upgrade tests need TWO NEWER MSIs of the same product (one upgrade keeps the .ch10 association, the next declines
+    # it). They are built here, unsigned (only their versions matter), from the staged files the release was made from.
     if ((Split-Path -Leaf $Setup) -notmatch '^tmDataQualityAnalyzer-v(\d+)\.(\d+)\.(\d+)_setup\.msi$') { throw "Cannot read a version from the name of $Setup" }
-    $nextVersion = '{0}.{1}.{2}' -f $Matches[1], $Matches[2], ([int]$Matches[3] + 1)
-    $newerMsi = Join-Path $deployDir "staging\upgrade-test\tmDataQualityAnalyzer-v${nextVersion}_setup.msi"
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $newerMsi) | Out-Null
-    Write-Host "Building the newer MSI for the upgrade test ($nextVersion, unsigned)..."
-    & powershell -ExecutionPolicy Bypass -File (Join-Path $deployDir 'build_msi.ps1') -Version $nextVersion -Stage (Join-Path $deployDir 'staging') -OutFile $newerMsi
-    if ($LASTEXITCODE -ne 0) { throw 'build_msi.ps1 failed: no newer MSI for the upgrade test' }
+    $major = $Matches[1]; $minor = $Matches[2]; $patch = [int]$Matches[3]
+    $newerMsis = @()
+    foreach ($step in 1, 2) {
+        $nextVersion = '{0}.{1}.{2}' -f $major, $minor, ($patch + $step)
+        $newer = Join-Path $deployDir "staging\upgrade-test\tmDataQualityAnalyzer-v${nextVersion}_setup.msi"
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $newer) | Out-Null
+        Write-Host "Building a newer MSI for the upgrade tests ($nextVersion, unsigned)..."
+        & powershell -ExecutionPolicy Bypass -File (Join-Path $deployDir 'build_msi.ps1') -Version $nextVersion -Stage (Join-Path $deployDir 'staging') -OutFile $newer
+        if ($LASTEXITCODE -ne 0) { throw "build_msi.ps1 failed: no $nextVersion MSI for the upgrade tests" }
+        $newerMsis += $newer
+    }
     # v2.x's setup.exe is not committed (deploy\ ignores it), so a worktree has none: look in the main checkout too.
     $oldSetup = $null
     $folders = @($deployDir)
@@ -109,9 +114,8 @@ if (-not $Payload -or $Payload.Count -eq 0) {
         ($Setup -replace '_setup\.msi$', '_portable.zip'),
         (Join-Path $deployDir 'staging\unsigned'),
         (Join-Path $repoRoot 'tests\data\test files\prn_testfile, sample.ch10'),
-        $oldSetup.FullName,
-        $newerMsi
-    )
+        $oldSetup.FullName
+    ) + $newerMsis
 }
 
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue

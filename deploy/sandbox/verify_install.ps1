@@ -5,8 +5,8 @@
 #
 # Runs INSIDE Windows Sandbox, launched by
 #   run_sandbox_test.ps1 [-Setup <the release's setup.msi>]
-# which copies in the payload this script reads from C:\tmdqa: the release's MSI, a NEWER MSI of the same product (built
-# unsigned by the runner from the same staged files, for the upgrade), the portable ZIP, deploy\staging\unsigned, the PRN
+# which copies in the payload this script reads from C:\tmdqa: the release's MSI, TWO NEWER MSIs of the same product (built
+# unsigned by the runner from the same staged files, for the upgrades), the portable ZIP, deploy\staging\unsigned, the PRN
 # sample and v2.14.2's setup.exe (the Inno install the MSI must refuse to sit beside). run_sandbox_test.ps1 -Payload
 # overrides the list; semicolon-separated, because the committed recordings' names contain commas.
 # Do not run it on a developer machine: it installs to Program Files and uninstalls again.
@@ -119,8 +119,8 @@ Say ('windows : ' + (Get-CimInstance Win32_OperatingSystem).Caption)
 
 $msis = @(Get-ChildItem (Join-Path $IN 'tmDataQualityAnalyzer-v*_setup.msi') | Sort-Object { Get-MsiVersion $_.Name })
 $old2x = (Get-ChildItem (Join-Path $IN 'tmDataQualityAnalyzer-v2.*_setup.exe') -ErrorAction SilentlyContinue | Select-Object -First 1)
-if ($msis.Count -lt 2) {
-    Check 'the payload holds two MSI versions' $false ('found ' + $msis.Count)
+if ($msis.Count -lt 3) {
+    Check 'the payload holds three MSI versions (the release, and two newer for the upgrades)' $false ('found ' + $msis.Count)
     $lines | Out-File -FilePath $LOG -Encoding ASCII
     Write-Host 'Press Enter to close.'; [void](Read-Host); exit 1
 }
@@ -135,11 +135,11 @@ function Copy-Local($file) {
     Say ('  copied {0} to the local disk in {1:N0} s' -f $file.Name, $clock.Elapsed.TotalSeconds)
     return (Get-Item $dest)
 }
-$first = Copy-Local $msis[0]; $second = Copy-Local $msis[$msis.Count - 1]
+$first = Copy-Local $msis[0]; $second = Copy-Local $msis[1]; $third = Copy-Local $msis[$msis.Count - 1]
 if ($old2x) { $old2x = Copy-Local $old2x }
-$v1 = Get-MsiVersion $first.Name; $v2 = Get-MsiVersion $second.Name
-Say ("release MSI: {0}  newer MSI (for the upgrade): {1}" -f $first.Name, $second.Name)
-Check 'the two MSIs are different versions' ($v1 -lt $v2) "$v1 and $v2"
+$v1 = Get-MsiVersion $first.Name; $v2 = Get-MsiVersion $second.Name; $v3 = Get-MsiVersion $third.Name
+Say ("release MSI: {0}  newer MSIs (for the upgrades): {1}, {2}" -f $first.Name, $second.Name, $third.Name)
+Check 'the three MSIs are different versions' (($v1 -lt $v2) -and ($v2 -lt $v3)) "$v1, $v2 and $v3"
 $relSig = Get-AuthenticodeSignature $first.FullName
 Check 'the release MSI is signed' ($relSig.Status -eq 'Valid') ([string]$relSig.Status)
 
@@ -234,10 +234,26 @@ Check 'the edited settings file survived the upgrade' ((Test-Path $userFile) -an
 Check 'the Start menu shortcut is still there' (Test-Path (Join-Path $startMenu 'tmDataQualityAnalyzer.lnk')) ''
 $ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
 Check '.ch10 still names the ProgID' ($ext -eq 'tmDataQualityAnalyzer.ch10') ([string]$ext)
+
+# An upgrade that DECLINES the association (the case the Inno installer's [Code] section handled, #397: an upgrade that
+# declined it left .ch10 naming a ProgID that had just been deleted, and Explorer offered a dead entry). The MSI over an
+# older MSI removes the older product's registry entries, so .ch10 and the ProgID should both be gone.
+Say ''
+Say '[4b] Upgrade that declines the association (ASSOCIATE_CH10=0)'
+$code = Invoke-Msi @('/i', ('"' + $third.FullName + '"'), 'ASSOCIATE_CH10=0') 'upgrade-declined.log'
+Check 'msiexec exit code 0' ($code -eq 0) ('exit=' + $code)
+$entries = @(Get-ArpEntry)
+Check 'still one entry in Installed apps' ($entries.Count -eq 1) (($entries | ForEach-Object { $_.DisplayName + ' ' + $_.DisplayVersion }) -join '; ')
+if ($entries.Count -eq 1) { Check 'its version is the newest MSI''s' ([version]$entries[0].DisplayVersion -eq $v3) ([string]$entries[0].DisplayVersion) }
+$ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
+Check '.ch10 no longer names a ProgID that is gone' ([string]::IsNullOrEmpty($ext)) $(if ($ext) { "still '$ext'" } else { '' })
+Check 'the ProgID key is gone' (-not (Test-Path $progId)) ''
+Check 'the exe is installed' (Test-Path $exe) ''
+Check 'the edited settings file survived' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
 $code = Invoke-Msi @('/i', ('"' + $first.FullName + '"')) 'downgrade.log'
 Check 'installing the older MSI over the newer one is refused' ($code -ne 0) ('exit=' + $code)
 $entries = @(Get-ArpEntry)
-if ($entries.Count -eq 1) { Check 'the newer version is still installed' ([version]$entries[0].DisplayVersion -eq $v2) ([string]$entries[0].DisplayVersion) }
+if ($entries.Count -eq 1) { Check 'the newest version is still installed' ([version]$entries[0].DisplayVersion -eq $v3) ([string]$entries[0].DisplayVersion) }
 
 # --- 5. The installed app runs under Smart App Control; its first run starts from the default preferences. ---
 Say ''
@@ -290,7 +306,7 @@ if ($h -ne [IntPtr]::Zero) {
 # --- 7. Uninstall. ---
 Say ''
 Say '[7] Silent uninstall'
-$code = Invoke-Msi @('/x', ('"' + $second.FullName + '"')) 'uninstall.log'
+$code = Invoke-Msi @('/x', ('"' + $third.FullName + '"')) 'uninstall.log'
 Check 'msiexec exit code 0' ($code -eq 0) ('exit=' + $code)
 Check 'the exe is removed' (-not (Test-Path $exe)) ''
 Check 'the native core is removed' (-not (Test-Path (Join-Path $app 'tmdq_core.dll'))) ''
@@ -304,17 +320,35 @@ Check 'the Start menu folder is removed' (-not (Test-Path $startMenu)) ''
 # --- 8. The switches an administrator uses. ---
 Say ''
 Say '[8] Silent install with ASSOCIATE_CH10=0 FULLMANUAL=0 DESKTOPSHORTCUT=1'
-$code = Invoke-Msi @('/i', ('"' + $second.FullName + '"'), 'ASSOCIATE_CH10=0', 'FULLMANUAL=0', 'DESKTOPSHORTCUT=1') 'switches.log'
+$code = Invoke-Msi @('/i', ('"' + $third.FullName + '"'), 'ASSOCIATE_CH10=0', 'FULLMANUAL=0', 'DESKTOPSHORTCUT=1') 'switches.log'
 Check 'msiexec exit code 0' ($code -eq 0) ('exit=' + $code)
 Check 'the exe is installed' (Test-Path $exe) ''
 Check 'no .ch10 association' (-not (Test-Path $progId)) ''
 Check 'no full manual' (-not (Test-Path (Join-Path $app 'UserManual.html'))) ''
 Check 'a desktop shortcut' (Test-Path $desktopLink) ''
 Check 'the edited settings file is still there (never overwritten)' ((Test-Path $userFile) -and ((Get-Content $userFile -Raw) -match [regex]::Escape($marker))) ''
-$code = Invoke-Msi @('/x', ('"' + $second.FullName + '"')) 'uninstall2.log'
+$code = Invoke-Msi @('/x', ('"' + $third.FullName + '"')) 'uninstall2.log'
 Check 'uninstall exit code 0' ($code -eq 0) ('exit=' + $code)
 Check 'the desktop shortcut is removed' (-not (Test-Path $desktopLink)) ''
 Check 'no entry left in Installed apps' (@(Get-ArpEntry).Count -eq 0) ''
+
+# --- 8b. Another application's association is left alone (what the Inno [Code] section did: it deleted .ch10's default
+# value only when that named OUR ProgID). The association is installed, another application then takes .ch10 for itself
+# (as an installer of its own would), and the MSI is uninstalled: its value must still be there. ---
+Say ''
+Say '[8b] An association another application took is left alone by an uninstall'
+$other = 'OtherApp.ch10'
+$code = Invoke-Msi @('/i', ('"' + $third.FullName + '"')) 'install-assoc.log'
+Check 'msiexec exit code 0' ($code -eq 0) ('exit=' + $code)
+$ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
+Check '.ch10 names our ProgID after the install' ($ext -eq 'tmDataQualityAnalyzer.ch10') ([string]$ext)
+Set-ItemProperty -Path 'HKLM:\SOFTWARE\Classes\.ch10' -Name '(default)' -Value $other
+$code = Invoke-Msi @('/x', ('"' + $third.FullName + '"')) 'uninstall3.log'
+Check 'uninstall exit code 0' ($code -eq 0) ('exit=' + $code)
+$ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
+Check 'the other application''s .ch10 value is left alone' ($ext -eq $other) $(if ($ext) { "now '$ext'" } else { 'now empty: the uninstall deleted it' })
+Check 'our ProgID key is gone' (-not (Test-Path $progId)) ''
+if (Test-Path 'HKLM:\SOFTWARE\Classes\.ch10') { Remove-Item 'HKLM:\SOFTWARE\Classes\.ch10' -Recurse -Force -ErrorAction SilentlyContinue }
 
 # --- 9. The portable ZIP, extracted somewhere new, also runs. ---
 Say ''
