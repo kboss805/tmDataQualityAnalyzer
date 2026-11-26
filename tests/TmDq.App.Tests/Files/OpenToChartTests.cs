@@ -187,16 +187,20 @@ public sealed class OpenToChartTests
     }
 
     [AvaloniaFact]
-    public async Task AFailedLoadClearsThePreviousRecordingsSeries()
+    public async Task AFailedLoadLeavesThePreviousRecordingsSeriesWhereTheyWere()
     {
-        // Nothing of the last recording may stay on screen under a status that says this one failed.
+        // Open stacks, so a recording that fails is one that was not added: what was on the plot is still there, and the status
+        // says which one failed.
         var vm = new MainWindowViewModel();
         await vm.LoadAsync(Prn);
-        Assert.NotNull(Startup.FirstLockSeries(vm.Plot));
+        var first = Startup.FirstLockSeries(vm.Plot);
+        Assert.NotNull(first);
+        string title = vm.Plot.Title;
         await vm.LoadAsync(Repo.Recording("step_cal, example.ch10"));
-        Assert.Null(Startup.FirstLockSeries(vm.Plot));
-        Assert.False(vm.Plot.HasData);
-        Assert.Equal(TmDq.App.ViewModels.Plot.PlotViewModel.DefaultTitle, vm.Plot.Title);
+        Assert.Same(first, Startup.FirstLockSeries(vm.Plot));
+        Assert.True(vm.Plot.HasData);
+        Assert.Equal(title, vm.Plot.Title);
+        Assert.Equal(LogLevel.Error, vm.StatusLevel);
     }
 
     [Fact]

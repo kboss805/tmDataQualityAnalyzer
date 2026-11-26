@@ -62,7 +62,7 @@ themselves). Use the **PowerShell** tool.
   `ManualFiguresTests` into `docs\manual_images`: after a change to what a figure shows, and after every version bump (four figures show the log's version line;
   `docs\manual_images\rendered-version.txt` names the version that rendered them and the consistency check refuses another), rebuild with
   `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1` (`-NoCapture` reuses the figures: prose changes only). CI runs the
-  app suite. Green baseline **912 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases (xunit's `Total: 946` counts them, so
+  app suite. Green baseline **915 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases (xunit's `Total: 949` counts them, so
   passed is the total less 34).
   **The side-by-side soak:** `powershell -ExecutionPolicy Bypass -File eng\run_soak.ps1 [-NoBuild]
   [-Only <run>,...]` runs every run in `tests\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a

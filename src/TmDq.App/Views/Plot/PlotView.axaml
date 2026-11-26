@@ -61,6 +61,8 @@
                     ItemsSource="{Binding PlotFiles}" ItemContainerTheme="{StaticResource RadioChoice}" />
           <!-- Drops every series of one recording, batch file or imported CSV, keeping the others. -->
           <MenuItem Header="Remove File..." Command="{Binding RemoveFileCommand}" />
+          <!-- Starts again: with Open and imports stacking, nothing replaces the plot, so this is how it is emptied. -->
+          <MenuItem Header="Clear Plot..." Command="{Binding ClearPlotCommand}" />
           <MenuItem Header="View Mode  (V)" IsEnabled="{Binding CanSwitchViewMode}">
             <MenuItem Header="Lock Percentage" ToggleType="Radio" IsChecked="{Binding IsLockPercentView, Mode=OneWay}"
                       Command="{Binding ShowLockPercentCommand}" />

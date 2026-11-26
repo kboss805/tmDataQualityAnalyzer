@@ -52,7 +52,7 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
 
         Assert.Equal(90, vm.Plot.Series.Count(s => s.IsPhasedArray));   // the log is all still there
         Assert.Contains(vm.Plot.Series, s => s.Metric == MetricType.FrameSyncLock);   // and so is the run
-        Assert.Equal(PrnName, vm.Plot.Title);                          // the title is the recording's, as it is for a run
+        Assert.Equal("av_snr_log", vm.Plot.Title);                     // the log named the plot first, and an Open adds beside it
         Assert.Equal(new[] { "av_snr_log", PrnName }, vm.Plot.SourceList().Select(x => x.Label));
         Assert.Single(vm.Sources);                                      // Save Template is offered the recording, not the log
         int runId = vm.Sources[0].SourceId;
@@ -60,19 +60,20 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
-    public async Task AnotherRecordingReplacesTheLastOneAndTheImportStillStays()
+    public async Task AnotherRecordingIsAddedBesideTheLastOneAndTheImportStays()
     {
         MainWindowViewModel vm = Window(CsvKind.PhasedArrayAntenna);
         await vm.ImportCsvAsync(AntennaLog);
         await vm.LoadAsync(Prn);
         int once = vm.Plot.Series.Count;
+        int run = once - 90;
 
         await vm.LoadAsync(Prn);
 
-        Assert.Equal(once, vm.Plot.Series.Count);                       // the recording again, not two of it
+        Assert.Equal(90 + 2 * run, vm.Plot.Series.Count);               // the recording again, beside the first: nothing replaced
         Assert.Equal(90, vm.Plot.Series.Count(s => s.IsPhasedArray));
-        Assert.Single(vm.Sources);
-        Assert.Equal(2, vm.Plot.SourceList().Count);
+        Assert.Equal(2, vm.Sources.Count);
+        Assert.Equal(3, vm.Plot.SourceList().Count);
     }
 
     [AvaloniaFact]
@@ -149,7 +150,7 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
-    public async Task ARecordingThatFailsToOpenRemovesTheLastRunButKeepsTheImport()
+    public async Task ARecordingThatFailsToOpenChangesNothing()
     {
         string junk = TempFiles.NewPath("junk", ".ch10");
         File.WriteAllText(junk, "not a recording");
@@ -159,12 +160,13 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
             await vm.ImportCsvAsync(AntennaLog);
             await vm.LoadAsync(Prn);
             Assert.Single(vm.Sources);
+            int series = vm.Plot.Series.Count;
 
             await vm.LoadAsync(junk);
 
-            Assert.Empty(vm.Sources);
-            Assert.Equal(90, vm.Plot.Series.Count);                     // only the log is left
-            Assert.All(vm.Plot.Series, s => Assert.True(s.IsPhasedArray));
+            Assert.Single(vm.Sources);                                  // the run and the log are both still there
+            Assert.Equal(series, vm.Plot.Series.Count);
+            Assert.Equal(90, vm.Plot.Series.Count(s => s.IsPhasedArray));
         }
         finally
         {
@@ -173,7 +175,7 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
-    public async Task WithNothingImportedANewRecordingStillStartsThePlotAgain()
+    public async Task TheSameRecordingOpenedAgainIsStackedAndTheTitleStays()
     {
         var vm = new MainWindowViewModel();
         await vm.LoadAsync(Prn);
@@ -181,10 +183,10 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
 
         await vm.LoadAsync(Prn);
 
-        Assert.Equal(PrnName, vm.Plot.Title);
-        Assert.Single(vm.Sources);
-        Assert.Single(vm.Plot.SourceList());
-        Assert.Equal(0, vm.Sources[0].SourceId);                        // numbered from 0 as before
+        Assert.Equal("my title", vm.Plot.Title);                        // the title the user gave is not replaced
+        Assert.Equal(2, vm.Sources.Count);
+        Assert.Equal(2, vm.Plot.SourceList().Count);
+        Assert.Equal(new[] { 0, 1 }, vm.Sources.Select(s => s.SourceId));   // numbered after what the plot holds
     }
 
     [AvaloniaFact]

@@ -540,7 +540,7 @@ public sealed class ProcessingTests
     }
 
     [AvaloniaFact]
-    public async Task CancelInTheProgressDialogStopsTheRunAndShowsNothing()
+    public async Task CancelInTheProgressDialogStopsTheRunAndAddsNothing()
     {
         var dialog = new FakeProcessingDialog();
         var vm = new MainWindowViewModel(new MainWindowServices { ProcessingDialog = dialog, Clock = new StoppedClock() });
@@ -554,11 +554,11 @@ public sealed class ProcessingTests
         Assert.True(cancelled.IsCancelling);
         Assert.False(cancelled.CancelCommand.CanExecute(null));
         Assert.Equal(2, dialog.Closed);
-        Assert.Empty(PlotFixtures.Locks(vm));
+        Assert.Single(PlotFixtures.Locks(vm));   // the recording already on the plot stays; the cancelled one added nothing
         Assert.False(vm.IsBusy);
         Assert.Equal(("Cancelled. prn_testfile, sample.ch10 was not processed.", LogLevel.Warning), (vm.Status, vm.StatusLevel));   // a run stopped is a warning; a dialog closed is not
         List<string> lines = Texts(vm);
-        int second = lines.LastIndexOf("Opening: prn_testfile, sample.ch10");
+        int second = lines.LastIndexOf("Adding: prn_testfile, sample.ch10");
         Assert.DoesNotContain(lines.Skip(second), t => t.StartsWith("Processing complete", StringComparison.Ordinal));
         Assert.DoesNotContain(vm.Log.Entries.Skip(second), e => e.Level == LogLevel.Error);
     }

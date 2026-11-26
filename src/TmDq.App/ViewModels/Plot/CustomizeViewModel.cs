@@ -37,7 +37,7 @@ public sealed class CustomizeViewModel : ObservableObject
         ToggleExpandCommand = new RelayCommand(ToggleExpand);
 
         // Grouped by PCM channel, the groups in ascending stream order, as v2.x's dialog grouped them; with several recordings on
-        // the plot (Add Recording, a batch, an antenna's log beside a recording), by recording first, in Plot File's order, each
+        // the plot (several recordings opened, a batch, an antenna's log beside a recording), by recording first, in Plot File's order, each
         // row and group named for its recording, so that one recording's CH 1 is never another's.
         IReadOnlyList<(int Id, string Label)> recordings = plot.SourceList();
         var place = new Dictionary<int, int>();

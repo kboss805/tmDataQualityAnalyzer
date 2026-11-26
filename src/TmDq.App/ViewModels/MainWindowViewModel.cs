@@ -52,7 +52,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     private readonly string _appRoot;
     private readonly List<ProcessedSource> _sources = new();
     // The recording the last run read, which a "does not overlap" warning names: set where every run goes (RunWithDialogAsync),
-    // Open, Add Recording and a batch alike, so no caller has to remember it.
+    // Open and a batch alike, so no caller has to remember it.
     private string _lastRunFile = string.Empty;
     private List<MenuChoice>? _recentMenu;
     private string _status = "Open a Chapter 10 recording.";
@@ -79,7 +79,6 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         _appRoot = services.AppRoot ?? AppContext.BaseDirectory;
         _batch = new BatchRunner(this, Plot, Log, _export, _appRoot);
         OpenCommand = new AsyncRelayCommand(OpenAsync, () => !IsBusy && _picker is not null);
-        AddRecordingCommand = new AsyncRelayCommand(AddRecordingAsync, () => !IsBusy && _picker is not null);
         ImportCsvCommand = new AsyncRelayCommand(PickAndImportAsync, () => !IsBusy && _files is not null);
         ExportCommand = new AsyncRelayCommand(ExportAsync, () => !IsBusy && Plot.HasData && _exportDialog is not null);
         SaveTemplateCommand = new AsyncRelayCommand(SaveTemplateAsync, () => !IsBusy && _sources.Count > 0 && _templateFiles is not null);
@@ -220,7 +219,6 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         {
             if (!SetProperty(ref _isBusy, value)) return;
             OpenCommand.NotifyCanExecuteChanged();
-            AddRecordingCommand.NotifyCanExecuteChanged();
             ImportCsvCommand.NotifyCanExecuteChanged();
             ExportCommand.NotifyCanExecuteChanged();
             SaveTemplateCommand.NotifyCanExecuteChanged();
@@ -229,7 +227,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         }
     }
 
-    /// <summary>The recordings processed this session and still on the plot, as a template is captured from them; Open and a batch replace them, Add Recording appends. No view
+    /// <summary>The recordings processed this session and still on the plot, as a template is captured from them; Open appends, a batch replaces them. No view
     /// reads it: it is kept public as the tests' only window onto what Save Template would capture (a source's id and path
     /// are not written into the template), as audit D8 decided.</summary>
     public IReadOnlyList<ProcessedSource> Sources => _sources;
@@ -258,11 +256,6 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
 
     public IAsyncRelayCommand OpenCommand { get; }
 
-    /// <summary>Add Recording: configures and processes another recording as Open does, but keeps everything already on the
-    /// plot (the recordings processed before and what was imported), each recording its own entry in Plot File and Remove File.
-    /// With an empty plot it is Open.</summary>
-    public IAsyncRelayCommand AddRecordingCommand { get; }
-
     /// <summary>Help &gt; User Manual: the full manual beside the application, else the base one.</summary>
     public IAsyncRelayCommand OpenManualCommand { get; }
 
@@ -286,12 +279,6 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     {
         string? path = await _picker!.PickRecordingAsync();
         if (path is not null) await LoadAsync(path);
-    }
-
-    private async Task AddRecordingAsync()
-    {
-        string? path = await _picker!.PickRecordingAsync();
-        if (path is not null) await LoadAsync(path, add: true);
     }
 
     private async Task PickAndImportAsync()
@@ -543,20 +530,22 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
 
     /// <summary>Opens <paramref name="path"/>, asks what to process, processes it and shows the result or the reason it
     /// failed, logging each step as v2.x did. The progress dialog is up for the run, and its Cancel
-    /// stops every stream. Cancelling Configure Streams leaves the last result on screen. Ignored while busy. With
-    /// <paramref name="add"/> (Add Recording) and something on the plot, nothing on the plot is removed and the recording is
-    /// added beside it, named in Plot File and Remove File, the plot's title unchanged.</summary>
-    public async Task LoadAsync(string path, bool add = false)
+    /// stops every stream. Cancelling Configure Streams leaves the last result on screen. Ignored while busy. Nothing on the
+    /// plot is removed: with something on it the recording is added beside it (the recordings processed before and what was
+    /// imported), named in Plot File and Remove File, the plot's title unchanged; an empty plot is where a recording starts, and
+    /// is titled with its name.</summary>
+    public async Task LoadAsync(string path)
     {
         if (IsBusy) return;
         string name = Path.GetFileName(path);
-        // Add Recording keeps everything on the plot; with nothing on it, there is nothing to keep and it is Open.
-        bool keep = add && Plot.HasData;
+        // Opening stacks, as an import does: with something on the plot there is something to keep.
+        bool keep = Plot.HasData;
         string verb = keep ? "Adding" : "Opening";
-        // What the run, and a failure or a cancel, clear: the recordings processed before, unless this one is added to them.
+        // What the run, and a failure or a cancel, clear: nothing when the recording is added to what is shown, and the
+        // plot's leftovers (a record of recordings, a title) when it starts one.
         void ClearUnlessAdding()
         {
-            if (!keep) ClearProcessedRun();
+            if (!keep) ClearRun();
         }
         LastFolder = Path.GetDirectoryName(Path.GetFullPath(path));
         IsBusy = true;
@@ -681,24 +670,6 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     private void ClearRun()
     {
         Plot.Clear();
-        SetSources(Array.Empty<ProcessedSource>());
-    }
-
-    /// <summary>
-    /// A new recording to process, or one that failed: the recordings processed before are removed from the plot and from
-    /// <see cref="Sources"/>, and what was imported from CSV files stays, so a recording can be processed beside data
-    /// imported earlier (an antenna's log, an export) and compared with it. With nothing imported this is
-    /// <see cref="ClearRun"/>: the plot starts again, its title and view with it.
-    /// </summary>
-    private void ClearProcessedRun()
-    {
-        var processed = new HashSet<int>(_sources.Select(s => s.SourceId));
-        if (Plot.SourceList().All(s => processed.Contains(s.Id)))
-        {
-            ClearRun();
-            return;
-        }
-        Plot.RemoveSources(processed);   // one redraw for all of them
         SetSources(Array.Empty<ProcessedSource>());
     }
 
