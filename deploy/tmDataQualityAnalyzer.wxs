@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  tmDataQualityAnalyzer.wxs - the Windows Installer (MSI) package, built by deploy\build_msi.ps1 (WiX 6.0.2, a repo-local
+  dotnet tool: dotnet-tools.json).
+
+  It is PER-MACHINE only: the sites that deploy it (Group Policy, SCCM, Intune) install elevated, and someone with no admin
+  rights uses the portable ZIP. There is no per-user mode and so no per-user/per-machine dialog.
+
+  SILENT INSTALL (what an administrator types), all under msiexec /i <msi> /qn:
+    (nothing)                    the application, the settings, the application offered for .ch10 and the full manual
+    ADDLOCAL=ALL                 ... and the desktop shortcut
+    DESKTOPSHORTCUT=1            the desktop shortcut too (a feature Level condition, below)
+    ASSOCIATE_CH10=0             do not offer the application for .ch10 files
+    FULLMANUAL=0                 no full illustrated manual
+    INSTALLFOLDER="D:\Apps\tm"   another folder
+  The optional pieces are the features DesktopShortcut, FileAssoc (the application offered for .ch10 files: it is LISTED,
+  never made the default; see the component) and Manual (the full manual); they were the Inno Setup installer's tasks,
+  which this package replaced.
+
+  The variables come from the command line (build_msi.ps1): AppVersion, RepoRoot, StagingApp, StagingManual, LicenseRtf.
+  The Settings fragment (settings\*) is generated beside it, one never-overwritten component a file, because Files cannot
+  set NeverOverwrite or Permanent.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="tmDataQualityAnalyzer"
+           Manufacturer="tmDataQualityAnalyzer"
+           Version="$(AppVersion)"
+           UpgradeCode="BF4625DD-B2DC-444C-8D14-0D0F79DC3407"
+           Scope="perMachine"
+           Language="1033"
+           Compressed="yes">
+
+    <!-- Same MSI product, any older version: replaced. A newer one already installed: refused. -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- The Inno Setup installer (every release before this one) wrote this uninstall key, with AppId as its name. Two installs of
+         one product, each with its own Start menu entry, is worse than a refusal, so the MSI stops and says what to do. -->
+    <Property Id="INNO_INSTALL_64">
+      <RegistrySearch Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1" Name="UninstallString" Type="raw" Bitness="always64" />
+    </Property>
+    <Property Id="INNO_INSTALL_32">
+      <RegistrySearch Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1" Name="UninstallString" Type="raw" Bitness="always32" />
+    </Property>
+    <Property Id="INNO_INSTALL_USER">
+      <RegistrySearch Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1" Name="UninstallString" Type="raw" />
+    </Property>
+    <Launch Condition="Installed OR NOT (INNO_INSTALL_64 OR INNO_INSTALL_32 OR INNO_INSTALL_USER)"
+            Message="An earlier tmDataQualityAnalyzer that was installed with its setup program is still installed. Uninstall it first (Settings, Apps), then run this installer again. Your settings and preferences are kept." />
+
+    <!-- Windows 10 version 1809 (build 17763) or later, as the Inno script's MinVersion said. 64-bit needs no condition: an x64 package
+         does not install on 32-bit Windows at all.
+         NOT VersionNT or WindowsBuild: Windows Installer reports a package that does not claim newer Windows as Windows 8.1 (VersionNT 603,
+         build 9600), and a condition on them refused this package on Windows 11 (found by the Sandbox test). The real build number is read
+         from the registry, and the condition refuses only when that is known and too low. -->
+    <Property Id="REALWINDOWSBUILD">
+      <RegistrySearch Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" Bitness="always64" />
+    </Property>
+    <Launch Condition="Installed OR NOT REALWINDOWSBUILD OR REALWINDOWSBUILD >= 17763"
+            Message="tmDataQualityAnalyzer needs Windows 10 version 1809 or later." />
+
+    <Icon Id="AppIcon.ico" SourceFile="$(RepoRoot)\assets\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="tmDataQualityAnalyzer" />
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="StartMenuDir" Name="tmDataQualityAnalyzer" />
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
+
+    <!-- Everything the package script staged, except the exe (named, because the shortcuts and the association point at it)
+         and settings\ (the generated fragment). -->
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Component Id="AppExeComponent">
+        <File Id="AppExe" Source="$(StagingApp)\tmDataQualityAnalyzer.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="ReleaseNotesComponent">
+        <File Id="ReleaseNotes" Source="$(RepoRoot)\deploy\RELEASENOTES.txt" KeyPath="yes" />
+      </Component>
+      <Files Include="$(StagingApp)\**">
+        <Exclude Files="$(StagingApp)\tmDataQualityAnalyzer.exe" />
+        <Exclude Files="$(StagingApp)\settings\**" />
+      </Files>
+    </ComponentGroup>
+
+    <ComponentGroup Id="StartMenuItems" Directory="StartMenuDir">
+      <Component Id="StartMenuShortcuts">
+        <Shortcut Id="AppStartMenuShortcut" Name="tmDataQualityAnalyzer" Target="[#AppExe]" WorkingDirectory="INSTALLFOLDER" />
+        <Shortcut Id="NoticesShortcut" Name="Third-party notices" Target="[INSTALLFOLDER]THIRD-PARTY-NOTICES.txt" />
+        <Shortcut Id="ReleaseNotesShortcut" Name="Release notes" Target="[INSTALLFOLDER]RELEASENOTES.txt" />
+        <RemoveFolder Id="RemoveStartMenuDir" On="uninstall" />
+        <RegistryValue Root="HKLM" Key="Software\tmDataQualityAnalyzer" Name="StartMenuShortcuts" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="DesktopShortcutItems" Directory="DesktopFolder">
+      <Component Id="DesktopShortcutComponent">
+        <Shortcut Id="AppDesktopShortcut" Name="tmDataQualityAnalyzer" Target="[#AppExe]" WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKLM" Key="Software\tmDataQualityAnalyzer" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="FileAssociationItems" Directory="INSTALLFOLDER">
+      <!-- WHY THIS IS NOT A ProgId + Extension: that writes .ch10's DEFAULT value, and Windows Installer removes every value a
+           package wrote on uninstall (and on the upgrade that removes the older product) without looking at whose it is by then. So
+           an association another application took after this one was installed was deleted by the uninstall (found by the Sandbox
+           test, step 8b). Instead this registers the ProgID (a key of our own) and lists it in .ch10\OpenWithProgids, a value
+           named for our ProgID: removing it can only ever remove ours. Windows then offers the application for .ch10 (Open with,
+           and a one-time choice on a machine with no association); it takes nothing another application holds. An administrator
+           who wants it the default sets it with a default-associations file (DISM /Import-DefaultAppAssociations). -->
+      <Component Id="FileAssociationComponent">
+        <RegistryValue Root="HKLM" Key="Software\Classes\tmDataQualityAnalyzer.ch10" Type="string" Value="Chapter 10 Telemetry File" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\tmDataQualityAnalyzer.ch10\DefaultIcon" Type="string" Value="&quot;[#AppExe]&quot;,0" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\tmDataQualityAnalyzer.ch10\shell\open\command" Type="string" Value="&quot;[#AppExe]&quot; &quot;%1&quot;" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\.ch10\OpenWithProgids" Name="tmDataQualityAnalyzer.ch10" Type="string" Value="" />
+        <RegistryValue Root="HKLM" Key="Software\tmDataQualityAnalyzer" Name="FileAssociation" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="ManualItems" Directory="INSTALLFOLDER">
+      <Component Id="ManualComponent">
+        <File Id="ManualHtml" Source="$(StagingManual)\UserManual.html" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="Main" Title="tmDataQualityAnalyzer" Description="The application, its settings files and the Start menu entries."
+             Level="1" AllowAbsent="no" ConfigurableDirectory="INSTALLFOLDER">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentGroupRef Id="SettingsFiles" />
+      <ComponentGroupRef Id="StartMenuItems" />
+
+      <Feature Id="FileAssoc" Title="Offer this application for .ch10 files" Description="List this application for Chapter 10 recordings (Open with). Windows asks once which application to use; an association another application holds is not taken."
+               Level="1" AllowAbsent="yes">
+        <Level Value="0" Condition="ASSOCIATE_CH10 = &quot;0&quot;" />
+        <ComponentGroupRef Id="FileAssociationItems" />
+      </Feature>
+      <Feature Id="Manual" Title="Full illustrated user manual" Description="The user manual with its figures and walkthroughs."
+               Level="1" AllowAbsent="yes">
+        <Level Value="0" Condition="FULLMANUAL = &quot;0&quot;" />
+        <ComponentGroupRef Id="ManualItems" />
+      </Feature>
+      <!-- Off by default (Level 2 is above the default install level of 1), as the Inno task was unchecked. -->
+      <Feature Id="DesktopShortcut" Title="Desktop shortcut" Description="A shortcut on the all-users desktop."
+               Level="2" AllowAbsent="yes">
+        <Level Value="1" Condition="DESKTOPSHORTCUT = &quot;1&quot;" />
+        <ComponentGroupRef Id="DesktopShortcutItems" />
+      </Feature>
+    </Feature>
+
+    <!-- Interactive install: welcome, licence, feature tree (with the folder), ready, progress, finish with "launch". -->
+    <WixVariable Id="WixUILicenseRtf" Value="$(LicenseRtf)" />
+    <ui:WixUI Id="WixUI_FeatureTree" />
+
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch tmDataQualityAnalyzer" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <CustomAction Id="LaunchApplication" FileRef="AppExe" ExeCommand="" Return="asyncNoWait" />
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+    </UI>
+  </Package>
+</Wix>
