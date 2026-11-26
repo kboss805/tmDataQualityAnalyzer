@@ -1208,7 +1208,7 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
 projects' source and header lists against the files on disk (`NativeProjectTests`); the repository's own files
 (`RepoFilesTests`: the scripts, the installer script and the workflow ASCII-only, every .NET project's output out of a
 platform folder, both .NET test hosts merging the shared UTF-8 manifest, the workflow's time limit and read-only token,
-every kept mutant in `eng/mutants` still naming text that is in its file exactly once, every native case named
+every kept mutant in `eng/mutants` still naming text that is in its file exactly once (skipped while `eng\mutate.ps1` has a mutant applied, `TMDQ_MUTATING`), every native case named
 "Suite: what it holds, in words", every `-tc=` filter of a native mutant list still matching a case, and the installer script's files and the package
 script's root still resolving from where they are); the recordings' channels (`FileTests`); runs of
 the committed recordings against numbers v2.14.2 produced, every setting reaching the job, failures, observers, cancel

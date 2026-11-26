@@ -280,6 +280,9 @@ public class RepoFilesTests
         // a rename or a re-indent eng\mutate.ps1 answers NO-MATCH and checks nothing, and nobody is told. 28 of 155 had
         // gone that way (the follow-up audit of 2026-11-16), most of them in one re-indent. A change that moves the text
         // a mutant names now fails here, and the list is re-anchored in the same change.
+        // eng\mutate.ps1 sets TMDQ_MUTATING while a mutant is applied: the mutant has taken its own text out, so this would
+        // fail for every managed mutant and "catch" it whatever the real tests said.
+        Assert.SkipWhen(Environment.GetEnvironmentVariable("TMDQ_MUTATING") == "1", @"a mutant is applied (eng\mutate.ps1)");
         string[] lists = Directory.GetFiles(Path.Combine(RepoPaths.Root, "eng", "mutants"), "*.json");
         Assert.True(lists.Length >= 16, "the mutant lists were not found");
         var problems = new List<string>();
