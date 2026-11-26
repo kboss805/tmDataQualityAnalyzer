@@ -149,6 +149,23 @@ public class RepoFilesTests
     }
 
     [Fact]
+    public void TheWizardsLaunchStartsTheExeFromTheInstallFolderPropertyNotItsFileRow()
+    {
+        // The Finish page's "Launch" runs in the wizard, which resolves a file's path when it starts (the per-machine folder);
+        // "only for me" then changes the APPLICATIONFOLDER property but not that resolved path. A launch by the exe's File row
+        // (FileRef, or [#AppExe] in the wizard) after a per-user install looked for the exe in Program Files and failed with nothing
+        // shown (return value 1631, found by the user in a v3.5.0 candidate). The path is built from the property at Finish instead.
+        // (The shortcuts' [#AppExe] is resolved by the install itself, after the choice, and is right.)
+        string wxs = File.ReadAllText(Path.Combine(RepoPaths.Root, "deploy", "tmDataQualityAnalyzer.wxs"));
+        Assert.DoesNotMatch(@"<CustomAction Id=""LaunchApplication""[^>]*FileRef=", wxs);
+        Assert.Contains(@"<CustomAction Id=""SetLaunchApplicationExe"" Property=""LAUNCHAPPLICATIONEXE"" Value=""[APPLICATIONFOLDER]\tmDataQualityAnalyzer.exe"" />", wxs, StringComparison.Ordinal);
+        Assert.Contains(@"<CustomAction Id=""LaunchApplication"" Property=""LAUNCHAPPLICATIONEXE""", wxs, StringComparison.Ordinal);
+        // The path is set before the launch reads it: both on the Finish button, in that order.
+        Assert.Matches(@"Value=""SetLaunchApplicationExe""[^>]*Order=""1""", wxs);
+        Assert.Matches(@"Value=""LaunchApplication""[^>]*Order=""2""", wxs);
+    }
+
+    [Fact]
     public void EveryDotnetProjectKeepsItsOutputWhereItAlwaysIs()
     {
         // vcvars leaves Platform=x64 in the shell; with AppendPlatformToOutputPath=false a dotnet build puts its output

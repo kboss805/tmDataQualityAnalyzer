@@ -76,6 +76,22 @@
       "new": "Value=\"[ProgramFilesFolder][ApplicationFolderName]\"",
       "expect": "caught",
       "note": "the per-machine folder the dialog set builds, in the 32-bit Program Files"
+    },
+    {
+      "id": "D10",
+      "file": "deploy/tmDataQualityAnalyzer.wxs",
+      "old": "Value=\"[APPLICATIONFOLDER]\\tmDataQualityAnalyzer.exe\"",
+      "new": "Value=\"[#AppExe]\"",
+      "expect": "caught",
+      "note": "the Finish page's launch reads the exe's File row, which the wizard resolved before the scope choice (a per-user install's launch looks in Program Files)"
+    },
+    {
+      "id": "D11",
+      "file": "deploy/tmDataQualityAnalyzer.wxs",
+      "old": "Condition=\"WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed\" Order=\"2\"",
+      "new": "Condition=\"WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed\" Order=\"0\"",
+      "expect": "caught",
+      "note": "the launch runs before the path is set"
     }
   ]
 }
