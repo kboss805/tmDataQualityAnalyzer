@@ -1,3 +1,73 @@
+tmDataQualityAnalyzer v3.5.0 - What's New
+=================================
+
+  Upgrading from v3.0.0 or any later version keeps everything: your
+  settings files and your window preferences. Upgrading from v2.x: please
+  read the v3.1.0 notes below about your window preferences.
+
+  New:
+
+  - File > Add Recording... processes another recording beside the ones
+    already on the plot, instead of replacing them. Each recording keeps its
+    own name in the legend, in Plot File and in Customize View.
+
+  - Remove File..., on the plot's right-click menu, takes one recording,
+    one file of a batch or one imported CSV file out of the plot and keeps
+    the rest. What is removed is
+    no longer exported. If the earliest recording is removed, the time axis
+    starts again from the earliest one left.
+
+  - Extract Calibration lets you choose the PCM channel and the time channel
+    of the calibration recording. A calibration recorded on a different
+    channel from the stream you are setting up can now be used. The lists
+    start on the stream's own channels when the recording has them.
+
+  Changed:
+
+  - Frame Sync Lock and Receiver SNR are told apart by their lines: Frame
+    Sync Lock (and missed frames) is always drawn solid, and Receiver SNR,
+    from a recording or an antenna's log, always dotted. Both use the same
+    15 colours; past the 15th stream the colours start again from the first.
+    Within a receiver the combined channel is the full colour and the other
+    two lighter shades of it, as before.
+
+  Improved:
+
+  - Processing a recording keeps the data you imported from CSV files on the
+    plot, beside the new recording.
+
+  - Colours you set in Customize View, or that a template set, are kept when
+    another recording, an antenna's log or a batch's next file is added. They
+    used to go back to the defaults.
+
+  - With more than one recording on the plot, Customize View lists each
+    recording's streams separately, named for their recording.
+
+  - A recording whose TMATS gives a stream no bit rate is refused with a
+    message asking for that stream's Data Rate; entering it lets the stream
+    run. It used to fail with a message blaming the time channel.
+
+  Fixed:
+
+  - A corrupt recording whose packet claims more data than it holds is now
+    stopped with a message saying so, instead of risking a crash.
+
+  - An unexpected error inside processing stops that run with a message,
+    and the application stays open. It could close the application.
+
+  - Typing a clip time in Extract Calibration no longer starts an extraction
+    on every key press; it extracts once you stop typing.
+
+  - Process Multiple Files gives files whose names start the same way (such
+    as 2024.11.05_run1 and 2024.11.05_run2) separate exports, instead of
+    writing both to the same file.
+
+  - Declining the .ch10 association when upgrading no longer leaves .ch10
+    files pointing at nothing.
+
+  - A CSV file given on the command line is imported, as it is when dropped
+    on the window, instead of being opened as a recording.
+
 tmDataQualityAnalyzer v3.4.0 - What's New
 =================================
 
