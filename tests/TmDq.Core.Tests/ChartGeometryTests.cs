@@ -168,6 +168,51 @@ public sealed class ChartGeometryTests
         Assert.Equal(26, ChartGeometry.Ticks(0, 1, 26).Length);   // more than any first guess at a buffer
     }
 
+    /// <summary>A tick function that has <paramref name="counts"/>[k] ticks on its k'th call (the last from then on), written
+    /// as the native ones write: 1, 2, 3 ... as far as the buffer holds, and the whole count returned.</summary>
+    private static unsafe ChartGeometry.TickWriter Ticking(List<int> capacities, params int[] counts) => (buffer, capacity) =>
+    {
+        int count = counts[Math.Min(capacities.Count, counts.Length - 1)];
+        capacities.Add(capacity);
+        if (count < 0)
+        {
+            return count;
+        }
+        for (int i = 0; i < Math.Min(count, capacity); i++)
+        {
+            buffer[i] = i + 1;
+        }
+        return count;
+    };
+
+    [Fact]
+    public void TicksThatChangedBetweenTheCallsAreAskedForAgainOrCutToWhatWasWritten()
+    {
+        var capacities = new List<int>();
+        Assert.Equal(new[] { 1.0, 2, 3, 4, 5 }, ChartGeometry.ReadTicks(Ticking(capacities, 3, 5)));   // more: a buffer of 5
+        Assert.Equal(new[] { 0, 3, 5 }, capacities);
+
+        capacities.Clear();
+        Assert.Equal(new[] { 1.0, 2 }, ChartGeometry.ReadTicks(Ticking(capacities, 4, 2)));            // fewer: only those
+        Assert.Equal(new[] { 0, 4 }, capacities);
+
+        capacities.Clear();
+        Assert.Equal(new[] { 1.0, 2, 3 }, ChartGeometry.ReadTicks(Ticking(capacities, 3)));             // as measured
+        Assert.Equal(new[] { 0, 3 }, capacities);
+    }
+
+    [Fact]
+    public void AFailingSecondTickCallIsAnErrorNotAnAxisOfZeros()
+    {
+        TmdqException failed = Assert.Throws<TmdqException>(() => ChartGeometry.ReadTicks(Ticking(new List<int>(), 4, -1)));
+        Assert.Equal(Status.BadArgument, failed.Status);
+
+        var capacities = new List<int>();
+        TmdqException growing = Assert.Throws<TmdqException>(() => ChartGeometry.ReadTicks(Ticking(capacities, 1, 2, 3, 4, 5, 6)));
+        Assert.Equal(Status.Internal, growing.Status);
+        Assert.Equal(new[] { 0, 1, 2, 3, 4 }, capacities);    // measured once, then four buffers
+    }
+
     [Fact]
     public void RoundTicksAreMultiplesOfARoundStepInsideTheRange()
     {

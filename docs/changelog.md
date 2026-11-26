@@ -85,6 +85,54 @@ Items 1, 2, 3, 6 and 8 of the efficiency and practice review of 2026-11-25 (no b
 
 **Moved with it:** 17 kept mutants of five lists anchored on the text that moved. Re-anchored and run again, 15 were caught as they stood; `pre-release-tidy.json` P3 was rewritten (taking out the event's only call no longer compiles) and is caught; `keep-imports.json` K9 is retired: emptying `Sources` in `ClearProcessedRun` is now done by the source-removed notice of #392 for every recording on the plot, and the line is kept only for a run whose streams added no samples, which no test reaches. **How it was checked.** A new case in `RemoveFileTests` (several at once: one redraw, each told, a repeat and an absent id passed over); the batch's warning case in `TemplateBatchTests` and the added recording's in `AddRecordingTests` hold the file named. App suite 912 in all, 34 not run, 0 failed: **878 passed** (877 before).
 
+#### The binding no longer wraps a large array's size, reads a disposed result's memory, or hands the core a changed path
+
+A read-only review of the C# binding (`src/TmDq.Core`) found these, fixed together:
+
+- **A large array's size wrapped (a native heap overflow).** `Arena.Alloc<T>` and `AllocPointers<T>` worked out `count * sizeof(T)` in 32-bit
+  `int`: 536,870,912 doubles came to 0 bytes, a block of one was allocated, and `Copy` then wrote 4 GB past it (`CsvFile.Write` with a column
+  that long). `Arena.Bytes` now works the size out in pointer-sized arithmetic, checked: a size the address space cannot hold throws
+  `OverflowException`, and one the heap cannot give throws `OutOfMemoryException`. `Copy` of a `double[]` (the plot's samples, which the CSV
+  export hands over) is now one block copy instead of an indexer call a value.
+- **A pointer into a native object could be read after it was freed.** The marshaller holds a `SafeHandle` only for the length of the
+  P/Invoke, and several calls return pointers into the object that were read only afterwards: `StreamResult.ChannelName`, `Key` and
+  `ToProcessed`, and `CalibrationRun.GetResult`. A Dispose on another thread in between freed them under the copy (latent: the app makes these
+  calls on one thread). `NativeHandle.Lease()` (`HandleLease`, `DangerousAddRef`/`DangerousRelease` in a `using`) now holds the handle across
+  each call and its copy, so a Dispose meanwhile is carried out after it. The spans `StreamResult` and `SeriesSet` hand out are views, which no
+  lease can cover: their documentation now says a span is valid only until the Dispose, where it promised more than the code kept. The
+  `SeriesSet` and `StreamResult` constructors read their strings with no lease, on purpose: no other thread has the object yet.
+- **A path UTF-8 cannot carry was changed, not refused.** `Arena.Utf8` turned a lone UTF-16 surrogate (which a Windows file name may hold)
+  into U+FFFD, and a NUL ended the text early, so the core was handed another path than the one asked for. Both are refused now with a
+  `TmdqException` (`BadArgument`) saying why, the type every caller already reports a recording or file the core cannot open with (the app's
+  `StreamsRun.Open` wraps it as "<file> could not be opened: ...").
+- **The two-call buffer helpers ignored their second answer.** `Text.Snprintf` cut text short that grew between the measuring call and the
+  writing one, and `ChartGeometry`'s tick reader ignored a failing second call (an axis of zeros). Both check the second answer now, ask again
+  with a buffer of the new size while it does not fit, and give up after four buffers (`Text.BufferAttempts`) with a `TmdqException`
+  (`Internal`); fewer ticks than measured are cut to those written.
+- **Documentation:** `IRunObserver` said a method must not dispose its own run, which is supported and tested (cancelled at once, released
+  once the method has returned; `Wait` from a method returns at once); `Library.Load` said a failed load leaves nothing behind, but a DLL with
+  no `tmdq_abi_version` stays mapped; `StreamKey.IsSameStream` said it always agrees with `==`, which is false for `default(StreamKey)` (a
+  null label, which the core reads as "") and a label with a NUL (now refused): the documentation says so instead of normalising the key;
+  `MinimumRevision`'s comment names `tmdq_chart_round_ticks` beside the phased array log in revision 4; the `Handles.cs` header and the guide's
+  binding paragraph describe the lease.
+
+**Left as they are.** The `TMDQ_CORE_DLL` override is honoured in release builds (documented, and set only by the user's own environment);
+the test-only public members (`StreamResult.ChannelName`/`ChannelWord`/`ChannelValues`, `ChartGeometry.Ticks`/`PixelToY`, `Library.AbiVersion`/
+`AbiRevision`/`LoadedPath`) stay, since tests use them; `TimeBase.Advance` is unchanged; `ChartGeometry.Build`'s arrays are not pooled
+(`ArrayPool`), a larger change.
+
+**How it was checked.** New cases in `ArenaTests` (the size in pointer-sized arithmetic and an impossible one; a 100,000-value array and a
+list copied whole; a lone surrogate either way and a NUL refused, by `Arena.Utf8` and by `Ch10File.Open` and `CsvFile.Write` before the core
+is asked; text that grew between the calls, by one byte and twice, and text that never stops growing; the case that held the old truncation
+is replaced), `ChartGeometryTests` (ticks that grew or shrank between the calls, a failing second call, a count that never settles),
+`HandleTests` (a lease holds the handle through a Dispose until the last lease ends; a lease on a handle nobody disposed leaves it open) and
+`SeriesTests` (the two keys `IsSameStream` and `==` part on). Mutation check: `eng/mutants/arena-repeats.json`, extended by R14-R25 and now
+run without `RepoFilesTests` (which, in a list with no filter, failed on every mutant because the mutated text no longer matched its list):
+all 25 run, 24 caught; R4 was re-anchored on the moved text (caught by the heap's own check, the process ending 0xC0000374), R20 and R25
+rewritten since they did not compile, and R9 (the first tick call's error ignored) now survives as equivalent: the second call asks the same
+question and is checked (R22). `eng/mutants/safe-handles.json` extended by H18-H23: the lease that takes no hold and the lease that never gives it back are caught (both rewritten once: the first was caught only by a 420 s hang, the second did not compile); taking the lease out of `ToProcessed`, `ChannelName`, `Key` or `GetResult` survives, kept as `survived`: only a Dispose on another thread between a call and its copy shows it, a race no test opens without a seam in the product. Managed suite **434 passed** / 0 failed /
+1 skipped (421 before, 13 cases added; `CLAUDE.md` had said 420); app suite unchanged, 884 passed.
+
 #### The tests share their fakes, and the tests of a recording that processes run on a short one
 
 Items 4 and 5 of the efficiency and practice review of 2026-11-25 (tests only, no change to the application):
