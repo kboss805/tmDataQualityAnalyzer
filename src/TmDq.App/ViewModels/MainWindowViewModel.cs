@@ -9,7 +9,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using TmDq.App.Models.Export;
 using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
 using TmDq.App.Models.Settings;
@@ -41,7 +40,6 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     private readonly IStreamConfigurator _configurator;
     private readonly IProcessingDialog? _processingDialog;
     private readonly IDataFilePicker? _files;
-    private readonly ICsvKindDialog? _csvKinds;
     private readonly IExportDialog? _exportDialog;
     private readonly ITemplateFilePicker? _templateFiles;
     private readonly ITemplateDialogs? _templateDialogs;
@@ -69,7 +67,6 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         _configurator = services.Configurator ?? new FirstChannelRun();
         _processingDialog = services.ProcessingDialog;
         _files = services.Files;
-        _csvKinds = services.CsvKinds;
         _exportDialog = services.ExportDialog;
         _templateFiles = services.TemplateFiles;
         _templateDialogs = services.TemplateDialogs;
@@ -269,11 +266,9 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     /// US6.2). Available once there is data.</summary>
     public IAsyncRelayCommand ExportCommand { get; }
 
-    private static readonly CompositeFormat NotAnExportedCsv = CompositeFormat.Parse(
-        "ERROR: '{0}' is not a recognized exported CSV (expected a 'Time (DOY:HH:MM:SS.mmm)' column with data rows). Nothing was imported.");
-
-    private static readonly CompositeFormat NotAPhasedArrayLog = CompositeFormat.Parse(
-        "ERROR: '{0}' is not a recognized AV Phased Array Antenna log (expected the header 'Time, Name, Polarity, Stream 1, ...' with data rows). Nothing was imported.");
+    private static readonly CompositeFormat NotARecognizedCsv = CompositeFormat.Parse(
+        "ERROR: '{0}' is not a recognized CSV: neither an export of this application (a 'Time (DOY:HH:MM:SS.mmm)' column) nor an " +
+        "AV Phased Array Antenna log (the header 'Time, Name, Polarity, Stream 1, ...'), with data rows. Nothing was imported.");
 
     private async Task OpenAsync()
     {
@@ -288,23 +283,16 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     }
 
     /// <summary>
-    /// Shows an exported CSV (US6.3): the file read off the UI thread with "Loading..." over the chart. A file that is not an
-    /// exported CSV is an error, and nothing is shown. Into an empty plot it is shown with the plot titled with its name; into a
-    /// plot that shows anything it is added (an antenna's log, US10.0, and an exported CSV alike), as a recording of its own named
-    /// for the file, the title and everything shown left as they were, so that imports stack. Ignored while busy.
+    /// Shows a CSV, an export of this application (US6.3) or an AV phased array antenna's log (US10.0), told apart by the file and
+    /// not asked: the file read off the UI thread with "Loading..." over the chart. A file that is neither is an error, and nothing is
+    /// shown. Into an empty plot it is shown with the plot titled with its name; into a plot that shows anything it is added, as a
+    /// recording of its own named for the file, the title and everything shown left as they were, so that imports stack. Ignored
+    /// while busy.
     /// </summary>
-    public async Task ImportCsvAsync(string path, CsvKind? kind = null)
+    public async Task ImportCsvAsync(string path)
     {
         if (IsBusy) return;
         string name = Path.GetFileName(path);
-        // Every way in asks what the file is (US10.0), each time: the menu, a drop, Recent Files. Cancel imports nothing. A host with no
-        // dialog reads it as the application's own export, which is all a CSV was before.
-        if (kind is null && _csvKinds is not null)
-        {
-            kind = await _csvKinds.ChooseAsync(name);
-            if (kind is null || IsBusy) return;
-        }
-        CsvKind chosen = kind ?? CsvKind.TelemetryReceivers;
         LastFolder = Path.GetDirectoryName(Path.GetFullPath(path));
         IsBusy = true;
         try
@@ -315,7 +303,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
             bool joins = Plot.HasData;
             if (!joins) ClearRun();
             NativeCore.EnsureLoaded();
-            if (await Plot.LoadCsvAsync(path, chosen, joins ? UniqueSourceLabel(BaseName(name)) : BaseName(name), add: joins) == CsvLoad.Loaded)
+            if (await Plot.LoadCsvAsync(path, joins ? UniqueSourceLabel(BaseName(name)) : BaseName(name), add: joins) == CsvLoad.Loaded)
             {
                 _shell.AddRecentFile(path);
                 if (!joins) Plot.Title = BaseName(name);
@@ -324,8 +312,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
             }
             else
             {
-                string error = string.Format(CultureInfo.InvariantCulture,
-                    chosen == CsvKind.PhasedArrayAntenna ? NotAPhasedArrayLog : NotAnExportedCsv, name);
+                string error = string.Format(CultureInfo.InvariantCulture, NotARecognizedCsv, name);
                 Report(error, LogLevel.Error);
                 Log.Error(error);
             }

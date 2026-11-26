@@ -2,7 +2,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
-using TmDq.App.Models.Export;
 using TmDq.App.Models.Processing;
 using TmDq.App.ViewModels;
 using TmDq.App.ViewModels.Plot;
@@ -127,7 +126,7 @@ public sealed class OpenStacksTests : IClassFixture<ShortRecordings>
     [AvaloniaFact]
     public async Task OpeningKeepsWhatWasImportedAsWellAsWhatWasProcessed()
     {
-        var vm = new MainWindowViewModel(new MainWindowServices { CsvKinds = new FakeCsvKinds { Always = CsvKind.PhasedArrayAntenna } });
+        var vm = new MainWindowViewModel();
         await vm.ImportCsvAsync(AntennaLog);
         await vm.LoadAsync(Prn);
         await vm.LoadAsync(Second);

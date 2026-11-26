@@ -44,12 +44,24 @@ internal static class PlotCsv
         }
     }
 
-    /// <summary>The file parsed as <paramref name="kind"/> says it is, or null for one that is not that kind (or cannot be read).</summary>
-    public static CsvData? Parse(string path, CsvKind kind = CsvKind.TelemetryReceivers)
+    /// <summary>
+    /// The file parsed, with what it turned out to be (US6.3, US10.0): read as this application's own export first, then as an
+    /// antenna's log; null for a file that is neither (or cannot be read). No one is asked: each format's reader refuses the other's
+    /// at its first line (an export's starts <c>Time (DOY:HH:MM:SS.mmm)</c>, a log's <c>Time, Name, Polarity</c>), so a log costs
+    /// the export reader one line.
+    /// </summary>
+    public static (CsvData Data, CsvKind Kind)? Parse(string path)
+    {
+        if (TryParse(() => CsvFile.Parse(path)) is { } export) return (export, CsvKind.TelemetryReceivers);
+        if (TryParse(() => CsvFile.ParsePhasedArrayLog(path)) is { } log) return (log, CsvKind.PhasedArrayAntenna);
+        return null;
+    }
+
+    private static CsvData? TryParse(System.Func<CsvData> parse)
     {
         try
         {
-            return kind == CsvKind.PhasedArrayAntenna ? CsvFile.ParsePhasedArrayLog(path) : CsvFile.Parse(path);
+            return parse();
         }
         catch (TmdqException)
         {

@@ -212,16 +212,8 @@ after('      sessions, and hidden legends are also left out of exported images.<
           'The same plot with the legends hidden - right-click the chart and use <strong>Show Legend</strong>, or press <kbd>L</kbd>. Hidden legends are also left out of exported images.',
           'The same plot with the legend overlay hidden'))
 
-# The antenna log's figures (US10.0): the question every import asks sits before the section on the log, the log
-# itself and Customize View's tree for it before the paragraph on joining a plot. Anchored on the heading and the
-# paragraph they precede, as every figure here is.
-before('<h3 id="import-antenna">',
-       fig('walk-csv-01-kind.png',
-           'The question every CSV import asks first, whether it comes from the menu, a dropped file or Recent Files: '
-           'what kind of file this is, Standalone Telemetry Receivers or AV Phased Array Antenna, the latter chosen here. '
-           'The choice decides how the file is read; Cancel imports nothing.',
-           'Import CSV dialog asking what kind of file av_snr_log.csv is, with AV Phased Array Antenna chosen'))
-
+# The antenna log's figures (US10.0): the log itself and Customize View's tree for it, before the paragraph on joining
+# a plot. Anchored on the paragraph they precede, as every figure here is.
 before('<p><strong>A log joins the plot instead of replacing it.</strong>',
        fig('walk-csv-02-antenna-plot.png',
            'An antenna log of 30 streams imported into an empty plot, here the whole of its 41 minutes: the 30 combined (C) '

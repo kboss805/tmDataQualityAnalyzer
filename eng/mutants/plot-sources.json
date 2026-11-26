@@ -135,10 +135,10 @@
     {
       "id": "P6",
       "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
-      "old": "int selected = sources.Count == 1 ? 0 : sources.ToList().FindIndex(s => s.Id == _plot.VisibleSource);",
-      "new": "int selected = sources.Count == 1 ? -1 : sources.ToList().FindIndex(s => s.Id == _plot.VisibleSource);",
+      "old": "int selected = Math.Max(shown, 0);",
+      "new": "int selected = shown;",
       "expect": "caught",
-      "note": "the only recording starts unchosen"
+      "note": "with several overlaid, the list opens blank"
     },
     {
       "id": "P7",
@@ -146,7 +146,7 @@
       "old": "sources.ToList().FindIndex(s => s.Id == _plot.VisibleSource);",
       "new": "sources.ToList().FindIndex(s => true);",
       "expect": "caught",
-      "note": "with several overlaid, the first starts chosen and Enter removes it"
+      "note": "the one shown alone is not the one that starts chosen"
     },
     {
       "id": "P8",

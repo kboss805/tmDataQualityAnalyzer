@@ -821,7 +821,8 @@ public sealed class ExportImportTests
             int before = vm.Log.Entries.Count;
             await vm.ImportCsvAsync(path);
             string name = Path.GetFileName(path);
-            string error = "ERROR: '" + name + "' is not a recognized exported CSV (expected a 'Time (DOY:HH:MM:SS.mmm)' column with data rows). Nothing was imported.";
+            string error = "ERROR: '" + name + "' is not a recognized CSV: neither an export of this application (a 'Time (DOY:HH:MM:SS.mmm)' column) nor an " +
+                           "AV Phased Array Antenna log (the header 'Time, Name, Polarity, Stream 1, ...'), with data rows. Nothing was imported.";
             Assert.Equal(new[] { "Info Importing CSV: " + name, "Error " + error }, LinesOf(vm, before));
             Assert.Equal(error, vm.Status);
             Assert.True(vm.Plot.HasData);   // an import adds to the plot, so a file that is refused takes nothing away

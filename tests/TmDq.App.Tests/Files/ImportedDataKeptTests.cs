@@ -2,7 +2,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Headless.XUnit;
-using TmDq.App.Models.Export;
 using TmDq.App.Models.Processing;
 using TmDq.App.ViewModels;
 using TmDq.Core;
@@ -34,17 +33,10 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
 
     private string PrnName => MainWindowViewModel.BaseName(Path.GetFileName(Prn));
 
-    private static MainWindowViewModel Window(params CsvKind[] answers)
-    {
-        var kinds = new FakeCsvKinds();
-        foreach (CsvKind answer in answers) kinds.Answers.Enqueue(answer);
-        return new MainWindowViewModel(new MainWindowServices { CsvKinds = kinds });
-    }
-
     [AvaloniaFact]
     public async Task AnAntennasLogImportedBeforeARecordingIsProcessedStaysOnThePlot()
     {
-        MainWindowViewModel vm = Window(CsvKind.PhasedArrayAntenna);
+        MainWindowViewModel vm = new MainWindowViewModel();
         await vm.ImportCsvAsync(AntennaLog);
         Assert.Equal(90, vm.Plot.Series.Count);
 
@@ -62,7 +54,7 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
     [AvaloniaFact]
     public async Task AnotherRecordingIsAddedBesideTheLastOneAndTheImportStays()
     {
-        MainWindowViewModel vm = Window(CsvKind.PhasedArrayAntenna);
+        MainWindowViewModel vm = new MainWindowViewModel();
         await vm.ImportCsvAsync(AntennaLog);
         await vm.LoadAsync(Prn);
         int once = vm.Plot.Series.Count;
@@ -88,7 +80,7 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
             Assert.True(maker.Plot.ExportCsv(csv));
             int exported = maker.Plot.Series.Count;
 
-            MainWindowViewModel vm = Window(CsvKind.TelemetryReceivers);
+            MainWindowViewModel vm = new MainWindowViewModel();
             await vm.ImportCsvAsync(csv);
             int[] importedIds = vm.Plot.Series.Select(s => s.SourceId).Distinct().ToArray();
             Assert.Equal(exported, vm.Plot.Series.Count);
@@ -117,7 +109,7 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
             await maker.LoadAsync(Prn);
             Assert.True(maker.Plot.ExportCsv(csv));
 
-            MainWindowViewModel vm = Window(CsvKind.TelemetryReceivers);
+            MainWindowViewModel vm = new MainWindowViewModel();
             await vm.ImportCsvAsync(csv);
 
             Assert.Equal(MainWindowViewModel.BaseName(Path.GetFileName(csv)), Assert.Single(vm.Plot.SourceList()).Label);
@@ -156,7 +148,7 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
         File.WriteAllText(junk, "not a recording");
         try
         {
-            MainWindowViewModel vm = Window(CsvKind.PhasedArrayAntenna);
+            MainWindowViewModel vm = new MainWindowViewModel();
             await vm.ImportCsvAsync(AntennaLog);
             await vm.LoadAsync(Prn);
             Assert.Single(vm.Sources);
@@ -195,7 +187,7 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
         string csv = TempFiles.NewPath("joins", ".csv");
         try
         {
-            var vm = Window(CsvKind.TelemetryReceivers);
+            var vm = new MainWindowViewModel();
             await vm.LoadAsync(Prn);
             int run = vm.Plot.Series.Count;
             Assert.True(vm.Plot.ExportCsv(csv));
