@@ -138,6 +138,10 @@ const std::vector<ReadCase>& readCases()
         { "bits-at-the-minimum-still-beat-words", frame("BitsPerFrame = 64\nWordsInMinorFrame = 100\n"), true,
           { .bits = 64 } },
         { "bits-too-small-and-words-too-small", frame("BitsPerFrame = 32\nWordsInMinorFrame = 3\n"), true, {} },
+        // A word count whose bits pass INT_MAX says nothing. Sixteen times it wrapped, and 268435460 wrapped to 64 bits.
+        { "words-whose-bits-fit-an-int", frame("WordsInMinorFrame = 134217727\n"), true, { .bits = 2147483632, .legacy = true } },
+        { "words-whose-bits-pass-int-max-say-nothing", frame("WordsInMinorFrame = 134217728\n"), true, {} },
+        { "words-that-wrapped-to-a-plausible-frame-say-nothing", frame("WordsInMinorFrame = 268435460\n"), true, {} },
 
         // --- the two stream-format flags
         { "inverted-true", frame("Inverted = true\n"), true, { .inverted = true } },

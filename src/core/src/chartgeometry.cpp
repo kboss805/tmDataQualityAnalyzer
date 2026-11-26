@@ -443,17 +443,22 @@ std::vector<double> roundTickValues(double lower, double upper, int count)
     const double firstIndex = std::ceil(lower / step - 1e-9);
     const double lastIndex = std::floor(upper / step + 1e-9);
     // A step that is not a number or does not divide the range into a sane count (a span beyond what a double can
-    // resolve at this step) is no round step: the even division is the honest answer there.
+    // resolve at this step) is no round step: the even division is the honest answer there. So is an index past 2^52,
+    // where adding one to it no longer counts (a range a few units of the last place wide: 1 to 1 + 2e-16 asked for 25
+    // ticks gave indices near 1e17, and the loop that counted them in a double never ended).
+    constexpr double kExactIndex = 4503599627370496.0;   // 2^52
     if (!(step > 0.0) || !std::isfinite(step) || !std::isfinite(firstIndex) || !std::isfinite(lastIndex) ||
-        lastIndex - firstIndex > 4.0 * n + 8.0)
+        lastIndex - firstIndex > 4.0 * n + 8.0 || std::abs(firstIndex) >= kExactIndex ||
+        std::abs(lastIndex) >= kExactIndex)
     {
         return tickValues(lower, upper, count);
     }
     std::vector<double> ticks;
-    for (double k = firstIndex; k <= lastIndex; k += 1.0)
+    const auto last = static_cast<long long>(lastIndex);
+    for (auto k = static_cast<long long>(firstIndex); k <= last; ++k)
     {
         // A multiple by index, not a running sum, so a tick is the nearest double to its value; and no negative zero.
-        ticks.push_back(k == 0.0 ? 0.0 : k * step);
+        ticks.push_back(k == 0 ? 0.0 : static_cast<double>(k) * step);
     }
     return ticks;
 }
@@ -507,10 +512,21 @@ std::vector<double> timeTickValues(double lower, double upper, int count, double
     // sample, while its label is a time of day; snapping the X value puts ticks a round interval apart but starting
     // from whenever the recording happened to begin (a file starting at 10:30:17.046 produced ticks reading :17, :47).
     const double first = std::ceil((lower + origin) / step) * step;
-    // NOLINTNEXTLINE(bugprone-float-loop-counter): ticks a step apart on the clock; the bound has a tolerance for the sum
-    for (double clock = first; clock <= upper + origin + step * 1e-9; clock += step)
+    // A clock a step does not change - an origin far past what a double resolves to the second, which an imported CSV
+    // can set - has no round times to snap to: a loop that added the step to it never ended. Divided evenly instead.
+    if (!std::isfinite(first) || (first + step) - first != step)
+    {
+        return tickValues(lower, upper, count);
+    }
+    // A step apart on the clock (exact here: whole seconds on a clock the check above holds resolved to them), with a
+    // hard bound on the count besides: a step is at least the span over n - 1, so no more than n + 1 ticks can fit.
+    const double bound = upper + origin + step * 1e-9;   // the tolerance keeps a last tick that rounding put just past
+    const long long limit = static_cast<long long>(n) + 2;
+    double clock = first;
+    for (long long i = 0; i < limit && clock <= bound; ++i)
     {
         ticks.push_back(clock - origin);
+        clock += step;
     }
     return ticks;
 }

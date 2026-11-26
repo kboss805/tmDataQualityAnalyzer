@@ -6,12 +6,12 @@
 #include "streamjobbuilder.h"
 
 #include <memory>
-#include <system_error>
+#include <string>
 
+#include "constants.h"
 #include "framesetup.h"
 #include "receiverparamsfile.h"
 #include "framesync.h"
-#include "textfile.h"
 
 bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, const StreamJobContext& context,
                     StreamJob& out_job, StreamJobReport& report)

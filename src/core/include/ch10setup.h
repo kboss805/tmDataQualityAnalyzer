@@ -39,6 +39,7 @@ enum class Failure
     NotTmats,     ///< The first packet is not TMATS.
     Memory,       ///< The TMATS packet is larger than the buffer may grow to, or the buffer could not grow.
     ReadTmats,    ///< The TMATS packet's data could not be read.
+    TmatsLength,  ///< The TMATS packet's header claims more data than the packet carries, or too little to be TMATS.
     DecodeTmats,  ///< The TMATS text did not decode.
 };
 
@@ -51,7 +52,12 @@ enum class PacketRead
     Ok,
     Memory,     ///< The packet is larger than the buffer may grow to (100 MB), or the buffer could not grow.
     ReadError,  ///< irig106 could not read it.
+    BadLength,  ///< The header's lengths contradict each other: a corrupt (or crafted) packet, not read.
 };
+
+/// The bytes of a packet that follow its header (data, filler and any data checksum): what irig106 reads into the
+/// buffer. Zero for a packet length shorter than its own header.
+[[nodiscard]] std::uint32_t bodyLength(const Irig106::SuI106Ch10Header& header);
 
 /**
  * @brief Reads the data of the packet whose header @p header was just read, growing @p buffer to hold it.
@@ -59,13 +65,22 @@ enum class PacketRead
  * The buffer grows to the packet's whole length (its data is a little less) and never past
  * `PCMConstants::kMaxPacketBufferSize`: a header that claims more is refused rather than allocated.
  *
- * @param[in]     handle  An open irig106 handle, positioned just past @p header.
- * @param[in]     header  The packet's header.
- * @param[in,out] buffer  Grown if it is too small; the data is at its start.
- * @param[out]    status  What irig106 returned from the read (left alone when the buffer could not be made big enough).
+ * The header's data length (`ulDataLen`) is what the decoders, and the reader's own copy of a PCM packet, trust to say
+ * how many bytes to read from the buffer; irig106 reads the packet length's worth and checks neither against the
+ * other. So a data length longer than the bytes that follow the header (`bodyLength()`), or shorter than
+ * @p min_data_length (a type's channel-specific word, which every decoder reads first), is refused as `BadLength`
+ * before anything is read: it would have sent a decoder or a copy past the data, or the TMATS decoder's
+ * `ulDataLen - 4` round to four billion.
+ *
+ * @param[in]     handle           An open irig106 handle, positioned just past @p header.
+ * @param[in]     header           The packet's header.
+ * @param[in]     min_data_length  The fewest data bytes a packet of this type can have (0: no floor).
+ * @param[in,out] buffer           Grown if it is too small; the data is at its start.
+ * @param[out]    status           What irig106 returned from the read (left alone when nothing was read).
  */
 [[nodiscard]] PacketRead readPacketData(int handle, const Irig106::SuI106Ch10Header& header,
-                                        std::vector<std::uint8_t>& buffer, Irig106::EnI106Status& status);
+                                        std::uint32_t min_data_length, std::vector<std::uint8_t>& buffer,
+                                        Irig106::EnI106Status& status);
 
 /**
  * @brief Opens @p path for reading and establishes time.
@@ -91,7 +106,7 @@ enum class PacketRead
  * @param[in,out] buffer  Holds the TMATS packet's data afterwards.
  * @param[in,out] tmats   Receives the decoded TMATS.
  * @param[out]    status  What irig106 last returned.
- * @return `None`, `FirstHeader`, `NotTmats`, `Memory`, `ReadTmats` or `DecodeTmats`.
+ * @return `None`, `FirstHeader`, `NotTmats`, `Memory`, `ReadTmats`, `TmatsLength` or `DecodeTmats`.
  */
 [[nodiscard]] Failure readTmats(const Irig106SetupLock& setup_lock, int handle, Irig106::SuI106Ch10Header& header,
                                 std::vector<std::uint8_t>& buffer, Irig106::SuTmatsInfo& tmats,

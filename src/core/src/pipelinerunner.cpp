@@ -5,9 +5,11 @@
 
 #include "pipelinerunner.h"
 
+#include <format>
 #include <utility>
 
 #include "ch10packetreader.h"
+#include "exceptionboundary.h"
 #include "frameprocessor.h"
 #include "packetqueue.h"
 
@@ -58,6 +60,29 @@ bool PipelineRunner::start(std::vector<StreamJob> jobs, std::shared_ptr<Pipeline
         error = "A processing run is already in progress.";
         return false;
     }
+    // Everything after the claim runs inside a boundary: a start that throws (a path the code page cannot spell, memory,
+    // a thread that will not start) gives back what it built and the claim with it, or this runner would refuse every
+    // start after it. It is a failed start like any other: false, with the reason, and nothing reported to the sink.
+    bool started = false;
+    if (!containExceptions([&]() { started = startRun(std::move(jobs), std::move(events), error); },
+                           [&](const char* what) { error = std::format("The run could not start: {}.", what); }))
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_workers.clear();
+            m_reader.reset();
+            m_queues.clear();
+            m_jobs.clear();
+        }
+        m_running = false;
+        return false;
+    }
+    return started;
+}
+
+bool PipelineRunner::startRun(std::vector<StreamJob> jobs, std::shared_ptr<PipelineEvents> events,
+                              std::string& error)
+{
     // A previous run's reader thread may still be returning from its last report.
     joinDriver();
 
@@ -71,6 +96,8 @@ bool PipelineRunner::start(std::vector<StreamJob> jobs, std::shared_ptr<Pipeline
     m_events = std::move(events);
     m_cancelled = false;
     m_any_success = false;
+    m_failed = false;
+    m_read_failed = false;
 
     // Set up under the lock, so a cancel() that races the start sees whole objects or none.
     std::shared_ptr<Ch10PacketReader> reader;
@@ -150,6 +177,12 @@ void PipelineRunner::cancel()
     }
 }
 
+void PipelineRunner::failRun(const std::string& message)
+{
+    m_failed = true;
+    m_events->errorOccurred(message);
+}
+
 void PipelineRunner::drive()
 {
     std::shared_ptr<Ch10PacketReader> reader;
@@ -158,15 +191,30 @@ void PipelineRunner::drive()
         reader = m_reader;
     }
 
-    // The streams first, so each is waiting on its (still empty) queue before the reader produces.
+    // The streams first, so each is waiting on its (still empty) queue before the reader produces. Nothing thrown here
+    // may leave the thread (it would end the host process): a thread that cannot start, or a read that throws, fails
+    // the run instead. The read stopped part-way, or never began, so no stream may report a result built from part of
+    // the recording (m_read_failed, set before the queues close), and every stream waiting on a queue is let go.
     std::vector<std::thread> streams;
-    streams.reserve(m_jobs.size());
-    for (std::size_t i = 0; i < m_jobs.size(); ++i)
-    {
-        streams.emplace_back([this, i]() { runStream(i); });
-    }
-
-    reader->run();          // this thread is the reader's
+    containExceptions(
+        [&]() {
+            streams.reserve(m_jobs.size());
+            for (std::size_t i = 0; i < m_jobs.size(); ++i)
+            {
+                streams.emplace_back([this, i]() { runStream(i); });
+            }
+            reader->run();          // this thread is the reader's
+        },
+        [&](const char* what) {
+            m_read_failed = true;
+            failRun(std::format("Reading the recording stopped on an internal error ({}); the run was abandoned.",
+                                what));
+            std::lock_guard<std::mutex> lock(m_mutex);
+            for (const std::unique_ptr<PacketQueue>& queue : m_queues)
+            {
+                queue->close();
+            }
+        });
 
     for (std::thread& stream : streams)
     {
@@ -179,26 +227,36 @@ void PipelineRunner::drive()
 void PipelineRunner::runStream(std::size_t index)
 {
     StreamJob& job = m_jobs[index];
-    FrameProcessor& processor = *m_workers[index];
 
-    // process() reports its own log lines and errors through the relay; its return value is the
-    // outcome it would have reported as "finished".
-    const bool ok = processor.process(job.params, job.frameSetup.get());
+    // Whatever the stream throws (a std::bad_alloc on a long run, a sink's own failure) ends this stream, not the host
+    // process: it is reported, and the run ends unsuccessfully. The other streams carry on.
+    containExceptions(
+        [&]() {
+            FrameProcessor& processor = *m_workers[index];
+
+            // process() reports its own log lines and errors through the relay; its return value is the
+            // outcome it would have reported as "finished".
+            const bool ok = processor.process(job.params, job.frameSetup.get());
+
+            if (ok && !m_cancelled && !m_read_failed)
+            {
+                ProcessedStreamData data = processor.takeResult();
+                data.jobIndex = static_cast<int>(index);
+                data.sourceId = job.params.sourceId;
+                m_any_success = true;
+                m_events->streamProcessed(std::move(data));
+            }
+        },
+        [&](const char* what) {
+            failRun(std::format("Stream {} ({}) stopped on an internal error ({}); its result was dropped.",
+                                index + 1, job.params.streamLabel, what));
+        });
 
     // However it ended, nothing more will be read from this stream's queue. The reader hands every
     // packet to every stream and blocks while a queue is full, so a stream that stopped early (its
-    // processor aborted, not the run cancelled) must close its queue or the reader waits on it forever
-    // and every other stream starves. Closing a drained queue after a normal end changes nothing.
+    // processor aborted or threw, not the run cancelled) must close its queue or the reader waits on it
+    // forever and every other stream starves. Closing a drained queue after a normal end changes nothing.
     job.params.packetQueue->close();
-
-    if (ok && !m_cancelled)
-    {
-        ProcessedStreamData data = processor.takeResult();
-        data.jobIndex = static_cast<int>(index);
-        data.sourceId = job.params.sourceId;
-        m_any_success = true;
-        m_events->streamProcessed(std::move(data));
-    }
 }
 
 void PipelineRunner::finish()
@@ -211,9 +269,10 @@ void PipelineRunner::finish()
         m_queues.clear();   // after the streams that read them have ended
         m_jobs.clear();     // each job's shared_ptr frees its frame setup
     }
-    const bool success = m_any_success && !m_cancelled;
+    const bool success = m_any_success && !m_cancelled && !m_failed;
     const std::shared_ptr<PipelineEvents> events = m_events;
     // Before the report, so a handler that starts the next run is not turned away.
     m_running = false;
-    events->processingFinished(success);
+    // On the reader thread, the last thing it does: a sink that throws must not take the host down with it.
+    containExceptions([&]() { events->processingFinished(success); }, [](const char*) {});
 }

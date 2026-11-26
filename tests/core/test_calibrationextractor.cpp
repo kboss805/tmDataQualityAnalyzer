@@ -12,26 +12,47 @@
 #include <cstdio>
 #include <memory>
 #include <mutex>
+#include <new>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "calibrationextractor.h"
 #include "calibrationprofile.h"
 #include "calibrationreport.h"
+#include "ch10packetreader.h"
 #include "chapter10reader.h"
 #include "containerutil.h"
 #include "doctest.h"
 #include "framesetup.h"
 #include "receivernames.h"
 #include "framesync.h"
+#include "packetqueue.h"
 #include "stepdetector.h"
 #include "stepconfigfile.h"
 #include "streamjobbuilder.h"
 #include "test_support.h"
 
 using namespace tmdq_test;
+
+/// The extractor names this struct its friend, so a test can make its reader report at a chosen moment and see that the
+/// reader has handed the worker packets.
+struct CalibrationExtractorTestAccess
+{
+    static void requestProgress(CalibrationExtractor& extractor)
+    {
+        std::lock_guard<std::mutex> lock(extractor.m_mutex);
+        extractor.m_reader->requestProgress();
+    }
+    static std::size_t queued(CalibrationExtractor& extractor)
+    {
+        std::lock_guard<std::mutex> lock(extractor.m_mutex);
+        return extractor.m_queue->size();
+    }
+};
 
 namespace {
 
@@ -129,6 +150,7 @@ public:
         m_cv.notify_all();
         maybePark(message);
         noteReport();
+        maybeThrow(message);
     }
     void errorOccurred(const std::string& message) override
     {
@@ -143,6 +165,10 @@ public:
             events.push_back("progress");
         }
         noteReport();
+        if (percent < 100 && throwOnProgress.exchange(false))
+        {
+            throw std::bad_alloc();
+        }
     }
     void processingFinished(bool ok) override
     {
@@ -157,6 +183,10 @@ public:
             events.push_back("finished");
         }
         m_cv.notify_all();
+        if (throwAtEnd)
+        {
+            throw std::runtime_error("the host's handler failed");
+        }
     }
 
     /// Parks the first thread that logs a line containing @p needle, inside logMessage(), until release(). That freezes the
@@ -180,6 +210,14 @@ public:
         }
         m_cv.notify_all();
     }
+    /// Throws std::bad_alloc from inside logMessage() on the thread that logs the first line containing @p needle: a
+    /// failure inside the extraction's reader or driver thread, at a chosen point, as running out of memory there would be.
+    void throwOn(std::string needle)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_throw_needle = std::move(needle);
+    }
+
     /// Waits until some log line contains @p needle.
     bool waitForLog(const std::string& needle, int timeout_ms)
     {
@@ -209,6 +247,8 @@ public:
         return wait() && success;
     }
 
+    std::atomic<bool>        throwOnProgress{false};      ///< Throw std::bad_alloc from the next progress below 100.
+    bool                     throwAtEnd = false;          ///< Throw from processingFinished(), after recording it.
     bool                     cancelOnFirstReport = false; ///< Cancel at the first report that is not start()'s own.
     bool                     cancelAtOnce = false;        ///< Cancel at the very first report, start()'s own included.
     bool                     runningAtEnd = true;         ///< What running() said while the end was being reported.
@@ -232,6 +272,19 @@ private:
         }
     }
 
+    void maybeThrow(const std::string& message)
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            if (m_throw_needle.empty() || message.find(m_throw_needle) == std::string::npos)
+            {
+                return;
+            }
+            m_throw_needle.clear();
+        }
+        throw std::bad_alloc();
+    }
+
     void maybePark(const std::string& message)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
@@ -250,6 +303,7 @@ private:
     std::mutex               m_mutex;
     std::condition_variable  m_cv;
     std::string              m_gate_needle;
+    std::string              m_throw_needle;
     bool                     m_parked = false;
     bool                     m_released = false;
 };
@@ -1546,6 +1600,101 @@ TEST_CASE("CalibrationExtractor: a worker failure is reported with its own reaso
     CHECK_MESSAGE(std::count(recorder->log.begin(), recorder->log.end(), recorder->summary) > 0, joinLines(recorder->log));
 }
 
+TEST_CASE("CalibrationExtractor: a throw on either of its threads fails the extraction with the reason, not the process")
+{
+    // An exception out of a thread's function ends the host application. The sink is the seam: it is called on the
+    // reader's thread ("Reading Chapter 10 file..."), on the driver thread while the worker runs ("processing..."), and
+    // on the driver thread again while the steps are detected (a line per channel: the third, so two results are already
+    // made and must be dropped). Without the boundary each row ends
+    // the test executable.
+    const CalibrationExtractor::Request req = stepCalRequest();
+    struct Row { const char* name; const char* needle; const char* summary; };
+    const Row rows[] = {
+        {"the reader", "Reading Chapter 10 file...",
+         "Reading the calibration recording stopped on an internal error (bad allocation)."},
+        {"the worker", "processing...", "Calibration extraction stopped on an internal error (bad allocation)."},
+        {"step detection", "C_RCVR1 (word", "Calibration extraction stopped on an internal error (bad allocation)."},
+    };
+    for (const Row& row : rows)
+    {
+        INFO(row.name);
+        CalibrationExtractor extractor;
+        auto recorder = std::make_shared<Recorder>(extractor);
+        recorder->throwOn(row.needle);
+        CHECK_FALSE(recorder->run(req));
+        extractor.wait();
+        CHECK(recorder->summary == row.summary);
+        CHECK(extractor.error() == row.summary);
+        CHECK(recorder->errors == std::vector<std::string>{row.summary});   // the reason, once, as an error
+        CHECK(recorder->events.back() == "finished");
+        CHECK(std::count(recorder->events.begin(), recorder->events.end(), "finished") == 1);
+        CHECK(extractor.results().empty());
+        CHECK_FALSE(extractor.running());
+
+        // And the extractor is whole: the next extraction runs and succeeds.
+        auto next = std::make_shared<Recorder>(extractor);
+        CHECK_MESSAGE(next->run(req), next->summary);
+    }
+}
+TEST_CASE("CalibrationExtractor: a read that throws part-way fails the extraction rather than calibrating from the part read")
+{
+    // The worker is parked before its first packet, so packets wait in the queue; once they do, the reader is asked to
+    // report its progress at its next packet (not after its 100 ms throttle), and that report throws. The worker then ends
+    // early with real packets in hand: profiles detected from them would be taken for the whole sweep. Every wait is on
+    // something a thread does, none on time.
+    const CalibrationExtractor::Request req = stepCalRequest();
+    CalibrationExtractor extractor;
+    auto recorder = std::make_shared<Recorder>(extractor);
+    ReleaseOnExit guard{recorder};
+    recorder->parkOn("processing...");
+    recorder->start(req);
+    REQUIRE(recorder->waitParked(60000));
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    while (CalibrationExtractorTestAccess::queued(extractor) < 8 && std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::yield();
+    }
+    REQUIRE(CalibrationExtractorTestAccess::queued(extractor) >= 8);
+    recorder->throwOnProgress = true;   // armed only now, so no earlier report can throw before the packets are queued
+    CalibrationExtractorTestAccess::requestProgress(extractor);
+    recorder->release();
+    REQUIRE(recorder->wait());
+    extractor.wait();
+
+    CHECK_FALSE(recorder->success);
+    CHECK(recorder->summary == "Reading the calibration recording stopped on an internal error (bad allocation).");
+    CHECK(extractor.results().empty());
+}
+
+TEST_CASE("CalibrationExtractor: a start that throws is reported, and leaves the extractor able to start")
+{
+    // A path the process code page cannot spell (an unpaired surrogate) throws from inside the setup, after start() has
+    // claimed the extractor. The claim used to stay, and every start after it was ignored.
+    CalibrationExtractor::Request bad = stepCalRequest();
+    TempDir dir;
+    bad.calFilename = dir.path() / std::wstring(L"unspellable-\xD800.ch10");
+
+    CalibrationExtractor extractor;
+    auto recorder = std::make_shared<Recorder>(extractor);
+    CHECK_FALSE(recorder->run(bad));
+    CHECK_MESSAGE(recorder->summary.starts_with("Calibration extraction could not start: "), recorder->summary);
+    CHECK(recorder->errors == std::vector<std::string>{recorder->summary});
+    CHECK(recorder->events.back() == "finished");
+    CHECK_FALSE(extractor.running());
+
+    auto next = std::make_shared<Recorder>(extractor);
+    CHECK_MESSAGE(next->run(stepCalRequest()), next->summary);
+}
+TEST_CASE("CalibrationExtractor: a sink that throws at the end does not take the process with it")
+{
+    const CalibrationExtractor::Request req = stepCalRequest();
+    CalibrationExtractor extractor;
+    auto recorder = std::make_shared<Recorder>(extractor);
+    recorder->throwAtEnd = true;
+    CHECK(recorder->run(req));   // recorded before the handler threw
+    extractor.wait();
+    CHECK_FALSE(extractor.running());
+}
 TEST_CASE("CalibrationExtractor: a cancel can come from another thread")
 {
     const CalibrationExtractor::Request req = stepCalRequest();

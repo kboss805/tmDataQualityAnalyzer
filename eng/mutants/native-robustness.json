@@ -1,0 +1,392 @@
+{
+  "suite": "native",
+  "args": ["-tc=Ch10Setup: *,Ch10PacketReader: *,Chapter10Reader: *,PipelineRunner: *,CalibrationExtractor: a *,CalibrationRequest: *,ChartGeometry: *,csvseries: *,FrameSetup: *,framesyncfile: *,ExceptionBoundary: *"],
+  "mutants": [
+    {
+      "id": "L1",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "    if (header.ulPacketLen < headerLength(header) || header.ulDataLen > bodyLength(header) ||\n        header.ulDataLen < min_data_length)",
+      "new": "    if (header.ulPacketLen < headerLength(header) ||\n        header.ulDataLen < min_data_length)",
+      "args": ["-tc=Ch10Setup: *,Ch10PacketReader: a *"],
+      "expect": "caught",
+      "note": "a data length past the packet trusted: the copy and the TMATS decoder read past the buffer"
+    },
+    {
+      "id": "L2",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "header.ulDataLen > bodyLength(header) ||",
+      "new": "header.ulDataLen >= bodyLength(header) ||",
+      "args": ["-tc=Ch10Setup: *"],
+      "expect": "caught",
+      "note": "the boundary: a data length that is the whole body refused"
+    },
+    {
+      "id": "L3",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": " ||\n        header.ulDataLen < min_data_length)",
+      "new": " ||\n        header.ulDataLen + min_data_length < min_data_length)",
+      "args": ["-tc=Ch10Setup: *,Ch10PacketReader: a *"],
+      "expect": "caught",
+      "note": "no floor: a TMATS data length under 4 underflows in the decoder, a PCM one is skipped silently"
+    },
+    {
+      "id": "L4",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "    if (header.ulPacketLen < headerLength(header) || header.ulDataLen",
+      "new": "    if (header.ulDataLen",
+      "args": ["-tc=Ch10Setup: *"],
+      "expect": "caught",
+      "note": "a packet shorter than its own header passed on to the read"
+    },
+    {
+      "id": "L5",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "? HEADER_SIZE + SEC_HEADER_SIZE : HEADER_SIZE;",
+      "new": "? HEADER_SIZE : HEADER_SIZE;",
+      "args": ["-tc=Ch10Setup: *"],
+      "expect": "caught",
+      "note": "the secondary header not counted: its last 12 bytes taken for data"
+    },
+    {
+      "id": "L6",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "    return header.ulPacketLen >= own ? header.ulPacketLen - own : 0;",
+      "new": "    return header.ulPacketLen - own;",
+      "args": ["-tc=Ch10Setup: *"],
+      "expect": "caught",
+      "note": "a packet shorter than its headers wraps to four billion bytes of body"
+    },
+    {
+      "id": "L7",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "readPacketData(handle, header, static_cast<std::uint32_t>(sizeof(SuTmats_ChanSpec)), buffer, status)",
+      "new": "readPacketData(handle, header, 0, buffer, status)",
+      "args": ["-tc=Ch10Setup: *,Ch10PacketReader: a TMATS*,Chapter10Reader: a load*"],
+      "expect": "caught",
+      "note": "the TMATS packet given no floor: a data length of 2 reaches the decoder's ulDataLen - 4"
+    },
+    {
+      "id": "L8",
+      "file": "src/core/src/ch10setup.cpp",
+      "old": "    case PacketRead::BadLength:\n        return Failure::TmatsLength;",
+      "new": "    case PacketRead::BadLength:\n        return Failure::ReadTmats;",
+      "args": ["-tc=Ch10Setup: *,Ch10PacketReader: a TMATS*"],
+      "expect": "caught",
+      "note": "a corrupt TMATS length reported as a read failure, without saying the recording is corrupt"
+    },
+    {
+      "id": "L9",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "if (!readPacket(static_cast<std::uint32_t>(sizeof(SuPcmF1_ChanSpec))))",
+      "new": "if (!readPacket(0))",
+      "args": ["-tc=Ch10PacketReader: *"],
+      "expect": "caught",
+      "note": "a PCM data length under the channel-specific word skipped silently instead of stopping the read"
+    },
+    {
+      "id": "B1",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "        if (!std::isfinite(delta_100ns) || delta_100ns <= 0.0)",
+      "new": "        if (delta_100ns != delta_100ns)",
+      "args": ["-tc=Ch10PacketReader: *"],
+      "expect": "caught",
+      "note": "no bit rate check: 1e7 / 0 reaches the workers, which fail later blaming the time channel"
+    },
+    {
+      "id": "B2",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "        if (!std::isfinite(delta_100ns) || delta_100ns <= 0.0)",
+      "new": "        if (!std::isfinite(delta_100ns))",
+      "args": ["-tc=Ch10PacketReader: *"],
+      "expect": "caught",
+      "note": "a data source with no P record leaves the bit period 0, which passes"
+    },
+    {
+      "id": "B3",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "        ra.wordLen       = PCMConstants::kCommonWordLen;",
+      "new": "        ra.wordLen       = pcm_attrs->ulCommonWordLen;",
+      "args": ["-tc=Ch10PacketReader: *"],
+      "expect": "caught",
+      "note": "the word length read back from the library: 0 for a source with no P record, every receiver word masked to 0"
+    },
+    {
+      "id": "T1",
+      "file": "src/core/src/pipelinerunner.cpp",
+      "old": "    containExceptions(\n        [&]() {\n            FrameProcessor& processor = *m_workers[index];",
+      "new": "    [&](auto&& body, auto&&) { body(); }(\n        [&]() {\n            FrameProcessor& processor = *m_workers[index];",
+      "args": ["-tc=PipelineRunner: a stream that throws*,PipelineRunner: a result*"],
+      "expect": "caught",
+      "note": "no boundary on a stream's thread: a throw there ends the process"
+    },
+    {
+      "id": "T2",
+      "file": "src/core/src/pipelinerunner.cpp",
+      "old": "    containExceptions(\n        [&]() {\n            streams.reserve(m_jobs.size());",
+      "new": "    [&](auto&& body, auto&&) { body(); }(\n        [&]() {\n            streams.reserve(m_jobs.size());",
+      "args": ["-tc=PipelineRunner: a read*"],
+      "expect": "caught",
+      "note": "no boundary on the reader thread: a throw there ends the process"
+    },
+    {
+      "id": "T3",
+      "file": "src/core/src/pipelinerunner.cpp",
+      "old": "    containExceptions([&]() { events->processingFinished(success); }, [](const char*) {});",
+      "new": "    events->processingFinished(success);",
+      "args": ["-tc=PipelineRunner: a sink*"],
+      "expect": "caught",
+      "note": "a sink that throws at the end ends the process"
+    },
+    {
+      "id": "T4",
+      "file": "src/core/src/pipelinerunner.cpp",
+      "old": "    const bool success = m_any_success && !m_cancelled && !m_failed;",
+      "new": "    const bool success = m_any_success && !m_cancelled;",
+      "args": ["-tc=PipelineRunner: *"],
+      "expect": "caught",
+      "note": "a run whose stream threw reported successful because another stream delivered"
+    },
+    {
+      "id": "T5",
+      "file": "src/core/src/pipelinerunner.cpp",
+      "old": "            if (ok && !m_cancelled && !m_read_failed)",
+      "new": "            if (ok && !m_cancelled)",
+      "args": ["-tc=PipelineRunner: a read*"],
+      "expect": "caught",
+      "note": "a stream that saw part of the recording delivers its result after the reader threw"
+    },
+    {
+      "id": "T6",
+      "file": "src/core/src/pipelinerunner.cpp",
+      "old": "            failRun(std::format(\"Stream {} ({}) stopped on an internal error ({}); its result was dropped.\",\n                                index + 1, job.params.streamLabel, what));",
+      "new": "            (void)what;",
+      "args": ["-tc=PipelineRunner: a stream that throws*,PipelineRunner: a result*"],
+      "expect": "caught",
+      "note": "a stream's throw swallowed: not reported, and the run not failed"
+    },
+    {
+      "id": "T7",
+      "file": "src/core/src/pipelinerunner.cpp",
+      "old": "            m_read_failed = true;\n            failRun(",
+      "new": "            failRun(",
+      "args": ["-tc=PipelineRunner: a read*"],
+      "expect": "caught",
+      "note": "the reader's throw not marked as a read failure: the part-read stream delivers"
+    },
+    {
+      "id": "T8",
+      "file": "src/core/src/pipelinerunner.cpp",
+      "old": "            for (const std::unique_ptr<PacketQueue>& queue : m_queues)\n            {\n                queue->close();\n            }\n        });",
+      "new": "        });",
+      "args": ["-tc=PipelineRunner: a read*"],
+      "expect": "caught",
+      "note": "the reader's throw leaves the streams waiting on their queues: the run never ends"
+    },
+    {
+      "id": "X1",
+      "file": "src/core/src/calibrationextractor.cpp",
+      "old": "    const bool completed = containExceptions(\n        [&]() { driveRun(reader, worker, queue, reader_thread); },",
+      "new": "    const bool completed = [&](auto&& body, auto&&) { body(); return true; }(\n        [&]() { driveRun(reader, worker, queue, reader_thread); },",
+      "args": ["-tc=CalibrationExtractor: a throw*"],
+      "expect": "caught",
+      "note": "no boundary on the driver thread: the worker's or step detection's throw ends the process"
+    },
+    {
+      "id": "X2",
+      "file": "src/core/src/calibrationextractor.cpp",
+      "old": "        containExceptions([&]() { reader->run(); },",
+      "new": "        [&](auto&& body, auto&&) { body(); }([&]() { reader->run(); },",
+      "args": ["-tc=CalibrationExtractor: a throw*"],
+      "expect": "caught",
+      "note": "no boundary on the reader thread: its throw ends the process"
+    },
+    {
+      "id": "X3",
+      "file": "src/core/src/calibrationextractor.cpp",
+      "old": "    if (m_worker_ok && !m_cancelled && !m_thrown)",
+      "new": "    if (m_worker_ok && !m_cancelled)",
+      "args": ["-tc=CalibrationExtractor: a read*"],
+      "expect": "caught",
+      "note": "profiles detected from the part read before the reader threw, reported as a success"
+    },
+    {
+      "id": "X4",
+      "file": "src/core/src/calibrationextractor.cpp",
+      "old": "    const std::string reason = m_thrown ? adoptThrownReason() : error();",
+      "new": "    const std::string reason = error();",
+      "args": ["-tc=CalibrationExtractor: a throw*"],
+      "expect": "caught",
+      "note": "the worker's consequent \"no frame sync\" reported instead of the reader's throw"
+    },
+    {
+      "id": "X5",
+      "file": "src/core/src/calibrationextractor.cpp",
+      "old": "    m_results.clear();\n    finish(false, adoptThrownReason(), true);",
+      "new": "    finish(false, adoptThrownReason(), true);",
+      "args": ["-tc=CalibrationExtractor: a throw*"],
+      "expect": "caught",
+      "note": "the channels step detection reached before its throw are left as results"
+    },
+    {
+      "id": "X6",
+      "file": "src/core/src/calibrationextractor.cpp",
+      "old": "    containExceptions(\n        [&]() {\n            if (is_error)\n            {\n                m_report.error(summary);\n            }\n            m_report.finished(success);\n        },\n        [](const char*) {});",
+      "new": "    if (is_error)\n    {\n        m_report.error(summary);\n    }\n    m_report.finished(success);",
+      "args": ["-tc=CalibrationExtractor: a sink*"],
+      "expect": "caught",
+      "note": "a sink that throws at the end ends the process"
+    },
+    {
+      "id": "X7",
+      "file": "src/core/include/exceptionboundary.h",
+      "old": "            on_throw(e.what());",
+      "new": "            on_throw((static_cast<void>(e), \"an unknown exception\"));",
+      "args": ["-tc=ExceptionBoundary: *,PipelineRunner: a stream that throws*"],
+      "expect": "caught",
+      "note": "a std::exception's own words lost"
+    },
+    {
+      "id": "G1",
+      "file": "src/core/src/chartgeometry.cpp",
+      "old": "    if (!std::isfinite(first) || (first + step) - first != step)",
+      "new": "    if (!std::isfinite(first))",
+      "args": ["-tc=ChartGeometry: *"],
+      "expect": "caught",
+      "note": "a clock the step does not change walked anyway: the bound stops it, at n + 2 copies of one tick"
+    },
+    {
+      "id": "G2",
+      "file": "src/core/src/chartgeometry.cpp",
+      "old": "    for (long long i = 0; i < limit && clock <= bound; ++i)",
+      "new": "    for (long long i = 0; i < limit + 1000000000LL && clock <= bound; ++i)",
+      "args": ["-tc=ChartGeometry: *"],
+      "expect": "survived",
+      "note": "equivalent behind the check above: on a clock that resolves the step, a step is at least the span over n - 1, so the bound is never what ends the loop. It is defence in depth against a future edit of that check"
+    },
+    {
+      "id": "G3",
+      "file": "src/core/src/chartgeometry.cpp",
+      "old": "lastIndex - firstIndex > 4.0 * n + 8.0 || std::abs(firstIndex) >= kExactIndex ||\n        std::abs(lastIndex) >= kExactIndex)",
+      "new": "lastIndex - firstIndex > 4.0 * n + 8.0 || std::abs(firstIndex) >= kExactIndex * 1e10 ||\n        std::abs(lastIndex) >= kExactIndex * 1e10)",
+      "args": ["-tc=ChartGeometry: *"],
+      "expect": "caught",
+      "note": "indices past 2^52 counted: the ticks are not the multiples they claim (and with the old double counter, a hang)"
+    },
+    {
+      "id": "V1",
+      "file": "src/core/src/csvseriesparser.cpp",
+      "old": "((static_cast<double>(day) - first_day) * TimeConstants::kSecondsPerDay)",
+      "new": "((day - first_day) * TimeConstants::kSecondsPerDay)",
+      "args": ["-tc=csvseries: *"],
+      "expect": "caught",
+      "note": "days far apart counted in int: the time wraps"
+    },
+    {
+      "id": "V2",
+      "file": "src/core/src/csvseriesparser.cpp",
+      "old": "(static_cast<double>(hours) * TimeConstants::kSecondsPerHour)",
+      "new": "(hours * TimeConstants::kSecondsPerHour)",
+      "args": ["-tc=csvseries: *"],
+      "expect": "caught",
+      "note": "hours counted in int: the time wraps"
+    },
+    {
+      "id": "V3",
+      "file": "src/core/src/csvseriesparser.cpp",
+      "old": "        source.remaining() / (static_cast<std::size_t>(param_count) * 8 + kBytesPerRowEstimate);",
+      "new": "        100 + source.remaining() / (static_cast<std::size_t>(param_count) * 8 + kBytesPerRowEstimate);",
+      "args": ["-tc=csvseries: *"],
+      "expect": "caught",
+      "note": "a floor of rows per column again: a wide file reserves room for millions of samples"
+    },
+    {
+      "id": "W1",
+      "file": "src/core/src/framesetup.cpp",
+      "old": "    return static_cast<int>((std::int64_t{bits_in_minor_frame} + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen);",
+      "new": "    return (bits_in_minor_frame + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;",
+      "args": ["-tc=FrameSetup: *"],
+      "expect": "caught",
+      "note": "rounded up in int: a bit count near INT_MAX overflows to a negative word count"
+    },
+    {
+      "id": "W2",
+      "file": "src/core/src/framesyncfile.cpp",
+      "old": "        if (words >= 2 && wide_bits <= std::numeric_limits<int>::max())",
+      "new": "        if (words >= 2)",
+      "args": ["-tc=framesyncfile: *"],
+      "expect": "caught",
+      "note": "a legacy word count whose bits pass INT_MAX narrowed: 268435460 words read as a 64-bit frame"
+    },
+    {
+      "id": "Q1",
+      "file": "src/core/src/calibrationrequest.cpp",
+      "old": "    if (setup.bitsInMinorFrame < PCMConstants::kMinFrameLengthBits)",
+      "new": "    if (setup.bitsInMinorFrame < 0)",
+      "args": ["-tc=CalibrationRequest: *"],
+      "expect": "caught",
+      "note": "a frame shorter than the main run accepts let through to the extraction"
+    },
+    {
+      "id": "Q2",
+      "file": "src/core/src/calibrationrequest.cpp",
+      "old": "    if (setup.bitsInMinorFrame < PCMConstants::kMinFrameLengthBits)",
+      "new": "    if (setup.bitsInMinorFrame <= PCMConstants::kMinFrameLengthBits)",
+      "args": ["-tc=CalibrationRequest: *"],
+      "expect": "caught",
+      "note": "the boundary: a 64-bit frame, which the main run accepts, refused"
+    },
+    {
+      "id": "U1",
+      "file": "src/core/src/pipelinerunner.cpp",
+      "old": "    if (!containExceptions([&]() { started = startRun(",
+      "new": "    if (![&](auto&& body, auto&&) { body(); return true; }([&]() { started = startRun(",
+      "args": ["-tc=PipelineRunner: a start*"],
+      "expect": "caught",
+      "note": "no boundary on start(): a setup that throws leaves the runner claimed, refusing every later start"
+    },
+    {
+      "id": "U2",
+      "file": "src/core/src/pipelinerunner.cpp",
+      "old": "        m_running = false;\n        return false;\n    }\n    return started;",
+      "new": "        return false;\n    }\n    return started;",
+      "args": ["-tc=PipelineRunner: a start*"],
+      "expect": "caught",
+      "note": "a start that threw reports false but keeps the claim: the next start is refused as already in progress"
+    },
+    {
+      "id": "U3",
+      "file": "src/core/src/calibrationextractor.cpp",
+      "old": "    containExceptions([&]() { startRun(request, std::move(events)); },",
+      "new": "    [&](auto&& body, auto&&) { body(); }([&]() { startRun(request, std::move(events)); },",
+      "args": ["-tc=CalibrationExtractor: a start*"],
+      "expect": "caught",
+      "note": "no boundary on start(): a setup that throws leaves the extractor claimed, ignoring every later start"
+    },    {
+      "id": "H1",
+      "file": "src/core/src/chapter10reader.cpp",
+      "old": "    enI106Ch10Close(m_file_handle);\n    m_file_open = false;",
+      "new": "    enI106Ch10Close(m_file_handle);",
+      "args": ["-tc=Chapter10Reader: *"],
+      "expect": "caught",
+      "note": "a closed file closed again by the destructor: the slot is someone else's by then"
+    },
+    {
+      "id": "H2",
+      "file": "src/core/src/chapter10reader.cpp",
+      "old": "    m_file_open = (failure != ch10setup::Failure::Open);   // anything but a failed open leaves a handle to close",
+      "new": "    m_file_open = false;",
+      "args": ["-tc=Chapter10Reader: *"],
+      "expect": "caught",
+      "note": "an opened file not recorded as open: no close ever runs, and every load keeps a handle"
+    },
+    {
+      "id": "H3",
+      "file": "src/core/src/chapter10reader.cpp",
+      "old": "    if (m_file_open)\n    {\n        const auto setup_lock = lockIrig106Setup();\n        closeFile();\n    }\n",
+      "new": "",
+      "args": ["-tc=Chapter10Reader: *"],
+      "expect": "survived",
+      "note": "every way loadChannels() returns closes the file first; only a throw part-way (std::bad_alloc while listing the channels) leaves one for the destructor, and nothing in the load can be made to throw from a test"
+    }
+  ]
+}

@@ -1504,3 +1504,44 @@ TEST_CASE("csvseries: the integer clock stamp reads as the floating-point one")
         CHECK(clocktime::formatMilliseconds(5, ms) == clocktime::format(5, 0.0, static_cast<double>(ms) / 1000.0, true));
     }
 }
+
+TEST_CASE("csvseries: days and hours far apart are counted wide, not wrapped")
+{
+    // The stamp's day, hour and minute are file-sourced ints, and their seconds were counted in int: 24 856 days apart,
+    // or 596 524 hours, passed INT_MAX and wrapped. Which rows load is unchanged; only the time no longer wraps.
+    TempDir dir;
+    const CsvParseResult days = parseBytes(dir, kTimeHeader + ",A Lock (%)\n1:00:00:00.000,1\n100000:00:00:00.000,2\n");
+    REQUIRE(days.success);
+    REQUIRE(days.series.size() == 1);
+    CHECK(days.series[0].xValues == std::vector<double>{0.0, 99999.0 * 86400.0});
+    CHECK(days.xMax == 99999.0 * 86400.0);
+
+    const CsvParseResult hours = parseBytes(dir, kTimeHeader + ",A Lock (%)\n0:00:00:00.000,1\n0:1000000:30:00.000,2\n");
+    REQUIRE(hours.success);
+    REQUIRE(hours.series.size() == 1);
+    CHECK(hours.series[0].xValues == std::vector<double>{0.0, 1000000.0 * 3600.0 + 1800.0});
+}
+
+TEST_CASE("csvseries: a wide file with little data reserves no more than its data needs")
+{
+    // Every column reserves the estimated row count up front. With a floor of 100 rows, 20 000 columns and one row
+    // reserved two million samples' room; the estimate from the file's size is all each column gets now.
+    constexpr int kColumns = 20000;
+    std::string bytes = kTimeHeader;
+    for (int i = 0; i < kColumns; ++i)
+    {
+        bytes += std::format(",C{} Lock (%)", i);
+    }
+    bytes += "\n1:00:00:00.000,5" + std::string(kColumns - 1, ',') + "\n";
+    TempDir dir;
+    const CsvParseResult r = parseBytes(dir, bytes);
+    REQUIRE(r.success);
+    REQUIRE(r.series.size() == static_cast<std::size_t>(kColumns));
+    CHECK(r.series[0].xValues == std::vector<double>{0.0});
+    std::size_t reserved = 0;
+    for (const CsvSeries& s : r.series)
+    {
+        reserved += s.xValues.capacity() + s.yValues.capacity();
+    }
+    CHECK_MESSAGE(reserved < static_cast<std::size_t>(kColumns), reserved << " samples reserved");
+}

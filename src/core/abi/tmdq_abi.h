@@ -65,7 +65,8 @@ extern "C" {
 ///   1  the receiver-parameters file (read and save) and the words in a minor frame (plan step 4.1a).
 ///   2  the chart's geometry: transforms, a series' line and band, ticks (plan step 4.3a).
 ///   3  a series' index, and a series' geometry built with it (tmdq_series_index_*, tmdq_chart_geometry_indexed).
-///   4  a phased array antenna's SNR log, read into the same series a CSV is (tmdq_phased_array_parse).
+///   4  a phased array antenna's SNR log, read into the same series a CSV is (tmdq_phased_array_parse), and round
+///      ticks for a value axis (tmdq_chart_round_ticks).
 #define TMDQ_ABI_REVISION 4
 
 typedef enum tmdq_status

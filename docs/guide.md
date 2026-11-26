@@ -661,12 +661,17 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
    time and PCM channels (`ChannelData` values in a map by id, names and data rates), with a failed load's reason in
    `lastError()`. Wraps the irig106utils C library.
    Both readers start a recording through **`ch10setup`** (open - a file irig106 only warns about opens -, time sync,
-   first packet required to be TMATS, read within a 100 MB cap, decoded; and the read of one packet's data) and walk
+   first packet required to be TMATS, read within a 100 MB cap, decoded; and the read of one packet's data, which refuses
+   a header whose data length is past the bytes that follow it or under its type's channel-specific word, since the
+   decoders and the PCM copy trust that length) and walk
    a decoded TMATS tree through **`tmatswalk.h`** (the R records' data sources, and the one rule for the channel a data
    source names), so the two cannot differ about a file again.
 2. **Ch10PacketReader** (`ch10packetreader`) - the single-pass reader: `prepare()` opens the file, parses TMATS,
    resolves each stream's PCM attributes and routes channel ids to `PacketQueue`s; `run()`, on its own thread, reads
    the file once, tracks IRIG time, dispatches each PCM packet's payload to its queues, and ends each with a sentinel.
+   `prepare()` refuses a stream whose bit period it cannot form (no P-x\D2 bit rate in the TMATS, or no P record at all,
+   and no Data Rate from the operator), naming the channel; the word length is the 16 bits it hands irig106, never read
+   back (a source with no P record leaves the library's at 0).
    It owns the per-channel `ChannelInfo` table (by track number; the decoder's PCM attributes are owned, and given back with their buffers).
 3. **PacketQueue** (`packetqueue.h`) - the bounded, thread-safe hand-off from the reader to one worker.
 4. **FrameProcessor** (`frameprocessor`) - the per-stream worker: drains its queue, runs the bit-serial frame-sync
@@ -679,7 +684,12 @@ queued to the thread pool and done once the callback has returned (`ObserverBrid
    frame's bits between boundaries in one step (`countSyncMatches` still counts every sync match in them).
 5. **PipelineRunner** (`pipelinerunner`) - owns a run's lifecycle: the queues, the reader and one worker thread per
    stream, joined before it reports the end. Its input is a `StreamJob` per stream: the validated `ProcessingParams` and
-   the shared `FrameSetup`.
+   the shared `FrameSetup`. No exception leaves one of its threads (it would end the host): each body runs inside
+   `containExceptions` (`exceptionboundary.h`), so a stream that throws is reported and its queue closed (the others
+   deliver), a reader that throws closes every queue and drops every result not yet delivered, and either way the run
+   ends with `processingFinished(false)`. `CalibrationExtractor` holds its reader and driver threads the same way. A
+   `start()` of either that throws on the caller's thread gives back what it built and its claim, and fails as any
+   early failure does, so the object starts again.
 6. **ProcessingEvents / EventReporter** (`processingevents.h`) - how the reader, the workers and the extractor report
    log lines, errors, progress and completion; the ABI relays them to the host. **IntervalGate** (`intervalgate.h`) is
    the clock-injected gate that throttles the reader's progress reports.
@@ -753,7 +763,7 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
 
 ### File Organization
 
-- **The core** (`src/core/`, its project `tmdq_core.vcxproj`): headers in `include/`, all in the one folder (`constants.h`; the helpers `containerutil.h` for signed indexing,
+- **The core** (`src/core/`, its project `tmdq_core.vcxproj`): headers in `include/`, all in the one folder (`constants.h`; the helpers `containerutil.h` for signed indexing, `exceptionboundary.h` for the top of a thread,
   `textformat.h` for fixed-point text that rounds a tie away from zero and `textparse.h` for the forgiving number rules the
   settings files are read with; and a header to each class, struct or enum of the core, none of them in a subfolder, so a
   header is included by its bare name),
@@ -1113,11 +1123,14 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
   not reach (the enabled flag, the type codes, the name priority, a non-ASCII name, a second time channel).
 - **ch10setup and tmatswalk** (`test_ch10setup`, `test_tmatswalk`) - each setup step given a file that fails it (a file
   that will not open, one cut inside its first header, one without its TMATS first, a packet past the cap, a packet
-  read twice), and the walk and the track-number rule on trees built by hand.
+  read twice, a data length past its packet or under its floor, a TMATS packet whose data length was rewritten with its
+  header checksum), and the walk and the track-number rule on trees built by hand.
 - **Ch10PacketReader** (`test_ch10packetreader`) - the single pass over `step_cal`: every packet once with one end
   marker, progress, abort, files cut or damaged at each kind of place, data sources whose TMATS lacks a CHE-n or CDT-n,
   routing and shared payloads, the attributes `prepare()` resolves, serialised setup across threads, a close that waits
-  for the lock, and readers (destroyed, or set up again) whose decoded TMATS does not grow the process.
+  for the lock, readers (destroyed, or set up again) whose decoded TMATS does not grow the process, a PCM or TMATS
+  packet whose data length does not fit it, and a TMATS with no bit rate or no P record (refused unless the Data Rate
+  is given).
 - **PacketQueue** (`test_packetqueue`) - order, the bound, blocking on either side, `close()`, draining, and 20,000
   items through a small queue under a watchdog.
 - **FrameProcessor** (`test_frameprocessor`) - real recordings in both modes, and synthetic streams at one second per
@@ -1125,12 +1138,15 @@ step 6.4 was removed from the machine; [`docs/records/ci_runner.md`](records/ci_
   extrapolation, the word map and calibration, the descrambler against an independent randomizer, inversion, and the
   exact text of everything it reports.
 - **PipelineRunner** (`test_pipelinerunner`) - a run's results and end on `step_cal`, a failing stream beside good ones,
-  refusals, cancel at chosen moments (a thread parked on a log line), runs one after another, and destruction while
-  running. It also holds **the throughput guard**, opt-in (`TMDQA_RUN_HEAVY_BENCH`) and run at release by
+  refusals, cancel at chosen moments (a thread parked on a log line), runs one after another, destruction while
+  running, a sink that throws on a stream's thread, on the reader's (at its start, and part-way: the reader asked to
+  report at a chosen packet, `requestProgress`), from a result or at the end, and a start that throws. It also holds **the throughput guard**, opt-in (`TMDQA_RUN_HEAVY_BENCH`) and run at release by
   `eng\run_throughput_bench.ps1` on the full PRN recording: four streams in parallel must cost about what the
   slowest costs alone, asserted as ratios, never milliseconds.
 - **EventReporter** (`test_eventreporter`) and **IntervalGate** (`test_intervalgate`) - the null-safe forwarder every
   source reports through, and the progress throttle, with injected time.
+- **ExceptionBoundary** (`test_exceptionboundary`) - `containExceptions`: a body that returns, what one throws reported
+  in its own words (or as an unknown exception), and a report that throws in turn dropped.
 - **FrameSetup** (`test_framesetup`) - the word map, the linear calibration for every range and polarity, the default
   map, and which step-calibration profiles attach.
 - **ReceiverParamsFile** (`test_receiverparamsfile`) - the receiver-parameters file: both key spellings, round trips,

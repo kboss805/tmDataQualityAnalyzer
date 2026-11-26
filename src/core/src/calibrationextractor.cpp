@@ -9,12 +9,12 @@
 #include <cstdint>
 #include <format>
 #include <string>
-#include <system_error>
 #include <utility>
 
 #include "ch10packetreader.h"
 #include "constants.h"
 #include "containerutil.h"
+#include "exceptionboundary.h"
 #include "frameprocessor.h"
 #include "framesetup.h"
 #include "receiverparamsfile.h"
@@ -97,15 +97,33 @@ void CalibrationExtractor::start(const Request& request, std::shared_ptr<Process
     {
         return;
     }
+    // Everything after the claim runs inside a boundary: a start that throws (a path the code page cannot spell, memory,
+    // a thread that will not start) fails like any other early failure - the reason, then the end, with what was built
+    // released and the claim with it - or this extractor would ignore every start after it.
+    containExceptions([&]() { startRun(request, std::move(events)); },
+                      [&](const char* what) {
+                          const std::string reason = std::format("Calibration extraction could not start: {}.", what);
+                          {
+                              std::lock_guard<std::mutex> lock(m_mutex);
+                              m_error = reason;
+                          }
+                          finish(false, reason, true);
+                      });
+}
+
+void CalibrationExtractor::startRun(const Request& request, std::shared_ptr<ProcessingEvents> events)
+{
     // A previous run's driver may still be returning from its last report.
     joinDriver();
 
     m_report.setSink(std::move(events));
     m_cancelled = false;
     m_worker_ok = false;
+    m_thrown = false;
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_error.clear();
+        m_thrown_reason.clear();
     }
     m_summary.clear();
     m_results.clear();
@@ -241,12 +259,67 @@ void CalibrationExtractor::drive()
         worker = m_worker;
         queue  = m_queue.get();
     }
+    // Nothing thrown on either thread may leave it: an exception out of a thread's function ends the host process. A
+    // throw stops the extraction instead, which then fails with the reason, as any other failure does.
+    std::thread reader_thread;
+    const bool completed = containExceptions(
+        [&]() { driveRun(reader, worker, queue, reader_thread); },
+        [&](const char* what) {
+            noteThrown(std::format("Calibration extraction stopped on an internal error ({}).", what));
+        });
+    if (completed)
+    {
+        return;
+    }
+    // A throw on this thread (the worker, step detection, or a reader thread that would not start): let the reader go,
+    // wait for it, and end the run once, with no results (step detection may have stopped part-way through them).
+    reader->requestAbort();
+    queue->close();
+    if (reader_thread.joinable())
+    {
+        reader_thread.join();
+    }
+    m_results.clear();
+    finish(false, adoptThrownReason(), true);
+}
+
+void CalibrationExtractor::noteThrown(const std::string& reason)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (!m_thrown)   // the first is the cause; a throw after it is a consequence
+    {
+        m_thrown_reason = reason;
+        m_thrown = true;
+    }
+}
+
+std::string CalibrationExtractor::adoptThrownReason()
+{
+    // The worker reports its own failure when the queue it was reading closes early ("no frame sync found"); the throw
+    // that closed it is the reason the run failed.
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_error = m_thrown_reason;
+    return m_error;
+}
+
+void CalibrationExtractor::driveRun(const std::shared_ptr<Ch10PacketReader>& reader,
+                                    const std::shared_ptr<FrameProcessor>& worker, PacketQueue* queue,
+                                    std::thread& reader_thread)
+{
     const ProcessingParams params = m_params;
     FrameSetup* setup = m_frame_setup.get();
 
     // The reader gets a thread of its own; the worker runs here, on the driver thread, which
-    // would otherwise only wait for it.
-    std::thread reader_thread([reader]() { reader->run(); });
+    // would otherwise only wait for it. A reader that throws lets the worker go (it waits on the queue) and fails the
+    // run (m_thrown, set first): the worker would otherwise take the part read so far for the whole recording.
+    reader_thread = std::thread([this, reader, queue]() {
+        containExceptions([&]() { reader->run(); },
+                          [&](const char* what) {
+                              noteThrown(std::format("Reading the calibration recording stopped on an internal "
+                                                     "error ({}).", what));
+                              queue->close();
+                          });
+    });
 
     worker->process(params, setup);
     if (!m_worker_ok || m_cancelled)
@@ -257,7 +330,7 @@ void CalibrationExtractor::drive()
     }
     reader_thread.join();
 
-    if (m_worker_ok && !m_cancelled)
+    if (m_worker_ok && !m_cancelled && !m_thrown)
     {
         const ProcessedStreamData data = worker->takeResult();
         const int calibrated = buildResults(data);
@@ -280,7 +353,7 @@ void CalibrationExtractor::drive()
         finish(false, "Calibration extraction cancelled.", false);
         return;
     }
-    const std::string reason = error();
+    const std::string reason = m_thrown ? adoptThrownReason() : error();
     finish(false, reason.empty() ? std::string("Calibration extraction failed.") : reason, true);
 }
 
@@ -377,11 +450,16 @@ void CalibrationExtractor::finish(bool success, const std::string& summary, bool
     }
     // Before the report, so a handler that starts the next run is not turned away.
     m_running = false;
-    if (is_error)
-    {
-        m_report.error(summary);
-    }
-    m_report.finished(success);
+    // Often on the driver thread, as the last thing it does: a sink that throws must not take the host down with it.
+    containExceptions(
+        [&]() {
+            if (is_error)
+            {
+                m_report.error(summary);
+            }
+            m_report.finished(success);
+        },
+        [](const char*) {});
 }
 
 bool CalibrationExtractor::buildFrameSetup(const Request& request,

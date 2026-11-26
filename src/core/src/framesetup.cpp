@@ -6,6 +6,7 @@
 #include "framesetup.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -152,7 +153,8 @@ int FrameSetup::attachCalibrationProfiles(const std::unordered_map<int, Calibrat
 
 int FrameSetup::wordsInMinorFrame(int bits_in_minor_frame)
 {
-    return (bits_in_minor_frame + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen;
+    // Wide, so a bit count near INT_MAX (a file's or a host's) rounds up instead of overflowing into a negative count.
+    return static_cast<int>((std::int64_t{bits_in_minor_frame} + PCMConstants::kCommonWordLen - 1) / PCMConstants::kCommonWordLen);
 }
 
 bool FrameSetup::buildDefaultReceiverMap(int num_receivers, int receiver_channels,
@@ -160,7 +162,9 @@ bool FrameSetup::buildDefaultReceiverMap(int num_receivers, int receiver_channel
 {
     // Each count on its own as well as the product: two negative counts make a positive product, and the loops below
     // would then build nothing and report success.
-    const int total_params = num_receivers * receiver_channels;
+    // Wide: two counts from a file can multiply past INT_MAX and wrap to a small positive product, which would pass the
+    // check below and then build billions of parameters.
+    const std::int64_t total_params = std::int64_t{num_receivers} * receiver_channels;
     if (num_receivers <= 0 || receiver_channels <= 0 || total_params <= 0
         || total_params >= num_words_in_minor_frame)
     {
