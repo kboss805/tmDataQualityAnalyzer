@@ -696,11 +696,6 @@ public sealed class ManualFiguresTests : IDisposable
         window.Close();
     }
 
-    private sealed class FixedKind : ICsvKindDialog
-    {
-        public Task<CsvKind?> ChooseAsync(string fileName) => Task.FromResult<CsvKind?>(CsvKind.PhasedArrayAntenna);
-    }
-
     [AvaloniaFact]
     public async Task AnAntennasLogImportedAfterTheQuestionEveryImportAsks()
     {
@@ -718,7 +713,7 @@ public sealed class ManualFiguresTests : IDisposable
         var vm = new MainWindowViewModel(new MainWindowServices
         {
             Picker = s, Files = s, ExportDialog = s, TemplateFiles = s, TemplateDialogs = s, AppRoot = Repo.Root, Clock = new FigureClock(),
-            CsvKinds = new FixedKind(),
+            CsvKinds = new FakeCsvKinds { Always = CsvKind.PhasedArrayAntenna },
         });
         await vm.ImportCsvAsync(sample);
         Assert.Equal(90, vm.Plot.Series.Count);

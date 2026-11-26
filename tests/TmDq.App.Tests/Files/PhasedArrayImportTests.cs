@@ -9,9 +9,7 @@ using Avalonia.Headless.XUnit;
 using TmDq.App.Models.Export;
 using TmDq.App.Models.Logging;
 using TmDq.App.Models.Processing;
-using TmDq.App.Services;
 using TmDq.App.ViewModels;
-using TmDq.App.ViewModels.Dialogs;
 using TmDq.App.ViewModels.Plot;
 using TmDq.Core;
 using TmDq.Core.Tests;
@@ -31,19 +29,7 @@ public sealed class PhasedArrayImportTests
 
     private static string Sample => Repo.Recording("av_snr_log.csv");
 
-    private sealed class FakeKinds : ICsvKindDialog
-    {
-        public readonly Queue<CsvKind?> Answers = new();
-        public readonly List<string> Asked = new();
-
-        public Task<CsvKind?> ChooseAsync(string fileName)
-        {
-            Asked.Add(fileName);
-            return Task.FromResult(Answers.Count > 0 ? Answers.Dequeue() : null);
-        }
-    }
-
-    private static MainWindowViewModel Window(FakeKinds kinds) => new(new MainWindowServices { CsvKinds = kinds });
+    private static MainWindowViewModel Window(FakeCsvKinds kinds) => new(new MainWindowServices { CsvKinds = kinds });
 
     [Fact]
     public void TheDialogOffersTheTwoKindsUnderTheTitlesTheStoryGivesThem()
@@ -56,7 +42,7 @@ public sealed class PhasedArrayImportTests
     [Fact]
     public async Task TheSampleImportsAsNinetySeriesTitledByItsNameAndIsRemembered()
     {
-        var kinds = new FakeKinds();
+        var kinds = new FakeCsvKinds();
         kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
         MainWindowViewModel vm = Window(kinds);
         int before = vm.Log.Entries.Count;
@@ -82,7 +68,7 @@ public sealed class PhasedArrayImportTests
     [Fact]
     public async Task EveryWayOfImportingAsksWhatTheFileIsAndCancelImportsNothing()
     {
-        var kinds = new FakeKinds();
+        var kinds = new FakeCsvKinds();
         kinds.Answers.Enqueue(null);                            // the menu, cancelled
         kinds.Answers.Enqueue(null);                            // a drop or Recent Files, cancelled
         kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);      // Recent Files again, answered
@@ -103,7 +89,7 @@ public sealed class PhasedArrayImportTests
     [Fact]
     public async Task AFileOfTheOtherKindIsAnErrorThatNamesTheKindChosen()
     {
-        var kinds = new FakeKinds();
+        var kinds = new FakeCsvKinds();
         MainWindowViewModel vm = Window(kinds);
 
         kinds.Answers.Enqueue(CsvKind.TelemetryReceivers);
@@ -139,7 +125,7 @@ public sealed class PhasedArrayImportTests
     [Fact]
     public async Task CustomizeViewReadsTheAntennasStreamsWithHVAndCAndNotAsReceivers()
     {
-        var kinds = new FakeKinds();
+        var kinds = new FakeCsvKinds();
         kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
         MainWindowViewModel vm = Window(kinds);
         await vm.ImportCsvAsync(Sample);
@@ -165,7 +151,7 @@ public sealed class PhasedArrayImportTests
     [Fact]
     public async Task NothingOfAnAntennaIsEverExportedNotEvenBesideASeriesThatIs()
     {
-        var kinds = new FakeKinds();
+        var kinds = new FakeCsvKinds();
         kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
         MainWindowViewModel vm = Window(kinds);
         await vm.ImportCsvAsync(Sample);
@@ -192,21 +178,10 @@ public sealed class PhasedArrayImportTests
         }
     }
 
-    private sealed class FakeExportDialog : IExportDialog
-    {
-        public ExportViewModel? Shown;
-
-        public Task ShowAsync(ExportViewModel vm)
-        {
-            Shown = vm;
-            return Task.CompletedTask;
-        }
-    }
-
     [Fact]
     public async Task ExportDataCannotBeTickedWhileTheAntennasLogIsAllThePlotHolds()
     {
-        var kinds = new FakeKinds();
+        var kinds = new FakeCsvKinds();
         kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
         var dialog = new FakeExportDialog();
         var vm = new MainWindowViewModel(new MainWindowServices { CsvKinds = kinds, ExportDialog = dialog });
@@ -255,7 +230,7 @@ public sealed class PhasedArrayImportTests
     /// <summary>A window that answers every kind question with <paramref name="kind"/>, and what its plot warned of.</summary>
     private static (MainWindowViewModel Vm, List<string> Warnings) WindowAnswering(CsvKind kind)
     {
-        var kinds = new FakeKinds();
+        var kinds = new FakeCsvKinds();
         for (int i = 0; i < 4; i++) kinds.Answers.Enqueue(kind);
         MainWindowViewModel vm = Window(kinds);
         var warnings = new List<string>();
@@ -349,7 +324,7 @@ public sealed class PhasedArrayImportTests
     [AvaloniaFact]
     public async Task ALogJoinsAProcessedRecordingAndEveryPointKeepsItsOwnClockTime()
     {
-        var kinds = new FakeKinds();
+        var kinds = new FakeCsvKinds();
         kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
         MainWindowViewModel vm = Window(kinds);
         await vm.LoadAsync(Repo.Recording("prn_testfile, sample.ch10"));
@@ -423,7 +398,7 @@ public sealed class PhasedArrayImportTests
         string ours = WriteOwnExport();
         try
         {
-            var kinds = new FakeKinds();
+            var kinds = new FakeCsvKinds();
             kinds.Answers.Enqueue(CsvKind.PhasedArrayAntenna);
             kinds.Answers.Enqueue(CsvKind.TelemetryReceivers);
             MainWindowViewModel vm = Window(kinds);

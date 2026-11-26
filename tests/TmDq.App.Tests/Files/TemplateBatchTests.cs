@@ -348,13 +348,7 @@ public sealed class TemplateBatchTests : IDisposable
         // Safran's channel 13 is PRN-15 recorded in the other byte order (Legacy Chapter 10 on), as 4.5's oracle runs it.
         string safran = Repo.Recording("safran_testfile, sample.ch10");
         Ch10File file = StreamsRun.Open(safran);
-        var stream = new StreamConfig
-        {
-            PcmChannelId = 13, Label = "PCM03", Mode = StreamMode.FrameSyncLock, SyncPattern = "334AABBF", SyncMask = "FFFFFFFF",
-            BitsInMinorFrame = 32767, SamplePeriod = FrameSyncDefaults.Period,
-        };
-        var request = new RunRequest(safran, file.DefaultTimeChannel, new[] { stream }) { SwapBytes = false };
-        var vm = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Settled(new StreamsChoice(request, Array.Empty<StreamSetup>(), 3)), AppRoot = Repo.Root });
+        var vm = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.Settled(StreamsChoices.Safran(safran, file, timeChannelIndex: 3)), AppRoot = Repo.Root });
         await vm.LoadAsync(safran);
         ProcessedSource source = Assert.Single(vm.Sources);
         Assert.Equal((3, false), (source.TimeChannelIndex, source.SwapBytes));
