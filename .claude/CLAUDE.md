@@ -100,7 +100,8 @@ themselves). Use the **PowerShell** tool.
   (run it from a `git worktree add C:\tmp\<name>`) and needs a green baseline first. A mutant's `expect` makes a kept
   list a regression check, and the managed suite (`RepoFilesTests`) fails when a kept mutant's `old` text is no longer
   in its file exactly once: **re-anchor the list in the change that moved the text.** The list format and the traps it guards are in the script's header;
-  `eng\mutants\example.json` is the sample.
+  `eng\mutants\example.json` is the sample. **Keep one list per area of code** (`processing-flow.json`, `plot-sources.json`, ...):
+  a change extends the list that already guards what it touches, so a later move re-anchors one list, not five.
 
 **IntelliSense:** clangd reads a generated, gitignored `compile_flags.txt` — run `py eng/gen_compile_flags.py`
 after a fresh clone. **Run it inside each worktree too**: the paths are absolute, and a worktree otherwise silently
