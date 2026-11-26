@@ -94,7 +94,7 @@ themselves). Use the **PowerShell** tool.
   `check_release_consistency.ps1 -ReleaseMode` first. **Unlock SimplySign first.** Clean-machine test under Smart App
   Control: `deploy\sandbox\run_sandbox_test.ps1 [-Setup <setup.msi>]`, which tests the newest MSI in `deploy\` (15 to 20
   minutes: each install of it waits about 2 minutes in the Sandbox) with the payload it needs by default (the portable ZIP
-  beside it, `staging\unsigned`, the PRN sample, v2.14.2's setup from `deploy\` of this checkout or the main one: it is its
+  beside it, `staging\unsigned`, the PRN sample, v2.14.2's setup from `deploy\` of this checkout, else `G:\My Drive\Software Releases` (`-OldSetupDir`): it is its
   GitHub release's asset, and the MSI's refusal needs a real Inno install; and a newer MSI the runner builds for the upgrade;
   `-Payload` overrides the list, separated by semicolons because recording names contain commas) (an unsigned build must
   be BLOCKED, or the pass means nothing). After closing the Sandbox window wait for `WindowsSandboxServer` to exit before

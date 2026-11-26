@@ -6,7 +6,7 @@
 #
 # With no arguments it tests the newest setup.msi in deploy\, with the payload the verifier needs: the portable
 # ZIP beside that setup, deploy\staging\unsigned, the committed PRN sample, v2.x's setup.exe (the Inno install the MSI
-# must refuse to sit beside; deploy\ of this checkout, or of the main checkout when this is a worktree), and TWO NEWER
+# must refuse to sit beside; deploy\ of this checkout, else -OldSetupDir, the release folder in Drive), and TWO NEWER
 # MSIs of the same product, which this script builds (unsigned, the next two patch versions, from the same staged files)
 # for the upgrade tests.
 #
@@ -37,7 +37,9 @@ param(
     [int]$TimeoutSeconds = 2400,
     # Files or folders the verifier needs, copied beside the setup (a folder keeps its name). Separate them with
     # semicolons; a recording's name may contain a comma. Omitted, it is the default list described above.
-    [string[]]$Payload = @()
+    [string[]]$Payload = @(),
+    # Where v2.x's setup.exe is looked for after deploy\ of this checkout (it is the GitHub release's asset, kept in Drive).
+    [string]$OldSetupDir = 'G:\My Drive\Software Releases'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -96,11 +98,10 @@ if (-not $Payload -or $Payload.Count -eq 0) {
         if ($LASTEXITCODE -ne 0) { throw "build_msi.ps1 failed: no $nextVersion MSI for the upgrade tests" }
         $newerMsis += $newer
     }
-    # v2.x's setup.exe is not committed (deploy\ ignores it), so a worktree has none: look in the main checkout too.
+    # v2.x's setup.exe is not committed (deploy\ ignores it), so a worktree has none: look in deploy\ of this checkout,
+    # then in -OldSetupDir (the release folder in Drive, where it lives).
     $oldSetup = $null
-    $folders = @($deployDir)
-    $common = & git -C $repoRoot rev-parse --path-format=absolute --git-common-dir 2>$null
-    if ($LASTEXITCODE -eq 0 -and $common) { $folders += (Join-Path (Split-Path -Parent ($common | Select-Object -First 1)) 'deploy') }
+    $folders = @($deployDir, $OldSetupDir)
     foreach ($folder in $folders) {
         $oldSetup = Get-ChildItem (Join-Path $folder 'tmDataQualityAnalyzer-v2.*_setup.exe') -ErrorAction SilentlyContinue |
                     Sort-Object LastWriteTime | Select-Object -Last 1

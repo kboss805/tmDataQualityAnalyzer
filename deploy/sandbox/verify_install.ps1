@@ -215,7 +215,7 @@ Check 'Smart App Control blocks unsigned code here' $blocked $how
 Say ''
 Say '[2] The MSI refuses to install beside an Inno Setup install'
 if (-not $old2x) {
-    Check 'the v2.x setup is in the payload' $false 'pass deploy\tmDataQualityAnalyzer-v2.14.2_setup.exe'
+    Check 'the v2.x setup is in the payload' $false 'pass tmDataQualityAnalyzer-v2.14.2_setup.exe (deploy\ or the Drive release folder)'
 } else {
     $ip = Start-Process $old2x.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS' -PassThru
     $null = $ip.Handle; $ip.WaitForExit(300000) | Out-Null; $ip.WaitForExit()
