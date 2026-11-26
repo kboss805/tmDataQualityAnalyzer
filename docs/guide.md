@@ -384,16 +384,17 @@ The stories below follow the workflow a first-time user takes through the applic
 
 **Acceptance Criteria:**
 
-- [x] The installer produces a code-signed application executable.
-- [x] The installer can install to "Program Files" for admin users.
-- [x] The installer can install to a user-selected directory for users without admin privileges.
+- [x] The installer produces a code-signed application executable, and the installer itself (an MSI) is signed.
+- [x] The installer is a Windows Installer package (MSI) that an administrator can deploy silently (Group Policy, SCCM, Intune); a silent install run elevated installs for all users.
+- [ ] The installer asks whether to install **for all users**, into Program Files (needs administrator rights), or **only for me**, into a folder of the user's choosing (by default `%LocalAppData%\Programs\tmDataQualityAnalyzer`), which needs no administrator rights.
 - [x] The installer shows progress while installing.
-- [x] The installer never overwrites an existing user TOML settings file, on upgrade or reinstall. A settings file is written only when it is absent (`onlyifdoesntexist`), and is left behind by uninstall (`uninsneveruninstall`).
+- [x] The installer refuses to install beside an install made by the old setup program (Inno Setup, v3.4.0 and earlier), and says to uninstall that first.
+- [x] The installer never overwrites an existing user TOML settings file, on upgrade or reinstall. A settings file is written only when it is absent (`NeverOverwrite`), and is left behind by uninstall (`Permanent`).
 - [x] A settings file written by any earlier version stays usable: every reader supplies its own default for a key the file does not carry, so an older file degrades to "missing keys fall back to defaults" rather than to a wrong result.
 - [x] New fields added to a shipped default therefore reach a **fresh install**, not an existing one. An upgraded install keeps the operator's file exactly as it stands.
   - **There is no merge of a shipped default into an existing settings file.** The installer's source (`deploy/tmDataQualityAnalyzer.wxs`) is declarative, with no custom action, and there is no `new_x`, migration, schema-version or merge logic in the core, `deploy/` or `eng/`. Confirmed on a clean machine by `deploy/sandbox/` - a first run wrote nothing under `settings\` and no registry key.
   - **The guarantee above is weaker but true, and the defensive readers are what make it safe** - `FrameSetup::readReceiverParams()` accepts both the current `[Receivers]` keys and the older `[Parameters]` spelling, an absent `Randomized` leaves the operator's choice alone rather than clearing it, and the template reader (`TemplateFile`) keeps each key's default for anything omitted (a new row's value, read from a default `StreamSetup`, which `StreamFilesTests` holds to the core's `ReceiverParamsFile.Defaults()`). A change that removed that tolerance would look harmless and would not be: it is load-bearing for this criterion, not incidental.
-  - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. Building the merge in the installer's `[Code]` section was scoped and deliberately not taken: it would move the installer from no custom code to scripted code, which is what keeps it cheap to maintain, and no one has asked for it (the v2.14.2 entry "US8.0 now describes the installer that exists" in `docs/changelog.md`). Rebuild the sketch from this criterion if that day comes.
+  - **When a merge would become necessary:** a shipped default gaining a field whose absence an old file cannot express - where "missing" and a deliberate choice are indistinguishable. `Randomized` is exactly that shape and was only safe because the reader was written to notice. Building the merge as a custom action in the MSI was scoped and deliberately not taken: it would move the installer from no custom code to scripted code, which is what keeps it cheap to maintain, and no one has asked for it (the v2.14.2 entry "US8.0 now describes the installer that exists" in `docs/changelog.md`). Rebuild the sketch from this criterion if that day comes.
 
 ### US9.0: Switch between light and dark theme — Complete
 
@@ -988,12 +989,11 @@ that worktrees also need.
   replaces an older MSI and refuses a downgrade. **It does not upgrade an Inno Setup install**: a launch condition refuses
   to install beside one (its uninstall key `{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1`) and says to uninstall it first.
   Windows Installer reports a package that does not claim newer Windows as Windows 8.1, so the Windows-version condition
-  reads the real build from the registry. **US8.0 and the MSI:** its criteria that the installer can install to "Program Files"
-  for admin users and to a user-selected directory for users without admin privileges are what the two modes are (the
-  Sandbox test installs, upgrades and uninstalls per-user with `MSIINSTALLPERUSER=1` under a restricted token, so with no
-  elevation; it does not use a real standard-user account, so that such a user gets per-user with no switch is Windows
-  Installer's own rule, and the wizard's scope and folder pages are unverified too: the test is silent); the criterion that names `onlyifdoesntexist` and `uninsneveruninstall` describes the
-  Inno script, whose guarantees `NeverOverwrite` and `Permanent` now give. The story is the user's to reword; it was not touched.
+  reads the real build from the registry. **US8.0 and the MSI:** the story describes the MSI (reworded by the user for v3.5.0). Its
+  "for all users or only for me" criterion stays open until a real standard-user account has installed per-user with no switch
+  and the wizard's scope and folder pages have been clicked through: the Sandbox test installs, upgrades and uninstalls per-user
+  with `MSIINSTALLPERUSER=1` under a restricted token, so with no elevation, but its account is an administrator and it drives
+  `msiexec` silently, so that a standard user gets per-user with no switch is Windows Installer's own rule, not something tested.
 - **Portable ZIP**: the same files flat, with a `portable` marker (preferences in a `tmDataQualityAnalyzer` folder beside
   the exe), `UserManual.html`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt` and `README.txt`.
 - **Release notes**: `deploy/RELEASENOTES.txt` — installed beside the application (with a Start menu entry) and the GitHub

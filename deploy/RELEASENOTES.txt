@@ -1,21 +1,33 @@
 tmDataQualityAnalyzer v3.5.0 - What's New
 =================================
 
-  Upgrading from v3.0.0 or any later version keeps everything: your
-  settings files and your window preferences. Upgrading from v2.x: please
-  read the v3.1.0 notes below about your window preferences.
+  Installing: this version comes as a Windows Installer package (.msi) in
+  place of the old setup.exe. If you installed an earlier version with its
+  setup.exe, uninstall it first (Settings > Apps > tmDataQualityAnalyzer >
+  Uninstall): the new installer will not install beside it. Your settings
+  files are not removed by the uninstall. The installer asks whether to
+  install for all users (administrator rights needed) or only for you (no
+  administrator rights needed). The portable ZIP is unchanged.
 
   New:
 
-  - File > Add Recording... processes another recording beside the ones
-    already on the plot, instead of replacing them. Each recording keeps its
-    own name in the legend, in Plot File and in Customize View.
+  - Nothing replaces the plot any more. Opening a recording adds it beside
+    whatever the plot shows, and so does importing a CSV file, dropping a
+    file on the window or choosing one under Recent Files. Each keeps its
+    own name in the legend, in Plot File and in Remove File.
 
-  - Remove File..., on the plot's right-click menu, takes one recording,
-    one file of a batch or one imported CSV file out of the plot and keeps
-    the rest. What is removed is
-    no longer exported. If the earliest recording is removed, the time axis
-    starts again from the earliest one left.
+  - Clear Plot..., on the plot's right-click menu, empties the plot, with its
+    title and view, after asking once. It is how you start again.
+
+  - Remove File..., on the plot's right-click menu, takes one recording, one
+    file of a batch or one imported CSV file out of the plot and keeps the
+    rest. What is removed is no longer exported. If the earliest recording
+    is removed, the time axis starts again from the earliest one left.
+
+  - Importing a CSV no longer asks what kind of file it is: the application
+    recognises its own exports and AV phased array antenna logs by
+    themselves. A file that is neither is refused with a message, and the
+    plot is left as it was.
 
   - Extract Calibration lets you choose the PCM channel and the time channel
     of the calibration recording. A calibration recorded on a different
@@ -24,17 +36,28 @@ tmDataQualityAnalyzer v3.5.0 - What's New
 
   Changed:
 
-  - Frame Sync Lock and Receiver SNR are told apart by their lines: Frame
-    Sync Lock (and missed frames) is always drawn solid, and Receiver SNR,
-    from a recording or an antenna's log, always dotted. Both use the same
-    15 colours; past the 15th stream the colours start again from the first.
+  - The plot has two legends: Framesync Series at the top left and SNR
+    Series at the top right.
+
+  - Frame Sync Lock and Receiver SNR are told apart by their lines and
+    colours: Frame Sync Lock (and missed frames) is always drawn solid, and
+    Receiver SNR, from a recording or an antenna's log, always dotted, with
+    closer dots than before. Both use the same 15 colours, Receiver SNR from
+    the other end, so a stream's lock and its SNR are not the same colour.
     Within a receiver the combined channel is the full colour and the other
     two lighter shades of it, as before.
 
-  Improved:
+  - File > Add Recording... is gone: File > Open... does what it did.
 
-  - Processing a recording keeps the data you imported from CSV files on the
-    plot, beside the new recording.
+  - The application has a new icon.
+
+  - The installer offers the application for .ch10 files under "Open with"
+    rather than making it their default, so Windows asks once which
+    application to use, and an uninstall never takes .ch10 away from another
+    application. Administrators can deploy it silently (Group Policy, SCCM,
+    Intune).
+
+  Improved:
 
   - Colours you set in Customize View, or that a template set, are kept when
     another recording, an antenna's log or a batch's next file is added. They
@@ -61,9 +84,6 @@ tmDataQualityAnalyzer v3.5.0 - What's New
   - Process Multiple Files gives files whose names start the same way (such
     as 2024.11.05_run1 and 2024.11.05_run2) separate exports, instead of
     writing both to the same file.
-
-  - Declining the .ch10 association when upgrading no longer leaves .ch10
-    files pointing at nothing.
 
   - A CSV file given on the command line is imported, as it is when dropped
     on the window, instead of being opened as a recording.
