@@ -208,6 +208,70 @@
       ],
       "expect": "caught",
       "note": "a callback inside another run's callback forgets the outer one when it returns"
+    },
+    {
+      "id": "H18",
+      "file": "src/TmDq.Core/Interop/Handles.cs",
+      "old": "        handle.DangerousAddRef(ref added);   // throws ObjectDisposedException once the handle is released",
+      "new": "        added = !handle.IsClosed;",
+      "expect": "caught",
+      "note": "a lease takes no hold: a Dispose meanwhile frees the object under the copy (and the lease's release is one too many)"
+    },
+    {
+      "id": "H19",
+      "file": "src/TmDq.Core/Interop/Handles.cs",
+      "old": "    public void Dispose() => _handle?.DangerousRelease();",
+      "new": "    public void Dispose() { }",
+      "expect": "caught",
+      "note": "a lease never gives its hold back: a disposed handle is never released"
+    },
+    {
+      "id": "H20",
+      "file": "src/TmDq.Core/StreamResult.cs",
+      "old": "        using HandleLease lease = Lease();   // every span below is copied before the result can be freed",
+      "new": "",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.RunTests"
+      ],
+      "expect": "survived",
+      "note": "ToProcessed copies with no hold: only a Dispose on another thread between a call and its copy shows it, a race no test can open without a seam in the product; held by review and HandleTests' lease cases"
+    },
+    {
+      "id": "H21",
+      "file": "src/TmDq.Core/StreamResult.cs",
+      "old": "        using HandleLease lease = Lease();   // the name is the result's: read before it can be freed",
+      "new": "",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.RunTests"
+      ],
+      "expect": "survived",
+      "note": "ChannelName reads the name with no hold: the same race as H20"
+    },
+    {
+      "id": "H22",
+      "file": "src/TmDq.Core/StreamResult.cs",
+      "old": "            using HandleLease lease = Lease();   // the label is the result's: read before it can be freed",
+      "new": "",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.SeriesTests"
+      ],
+      "expect": "survived",
+      "note": "Key reads the label with no hold: the same race as H20"
+    },
+    {
+      "id": "H23",
+      "file": "src/TmDq.Core/CalibrationRun.cs",
+      "old": "        using HandleLease lease = handle.Lease();   // the strings and arrays are the run's: copied before it can be freed",
+      "new": "",
+      "args": [
+        "-class",
+        "TmDq.Core.Tests.CalibrationTests"
+      ],
+      "expect": "survived",
+      "note": "GetResult copies with no hold: the same race as H20"
     }
   ]
 }

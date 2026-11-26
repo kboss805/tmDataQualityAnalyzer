@@ -5,11 +5,15 @@ using Microsoft.Win32.SafeHandles;
 namespace TmDq.Core;
 
 // One class for each kind of native handle, so that a handle of one kind cannot be passed to a function of another,
-// and so that each is released exactly once: when it is disposed (or finalized) and the last native call using it
-// has returned. A call that races a Dispose therefore never reaches a freed handle, and a call after it throws
-// ObjectDisposedException instead of passing a dangling pointer. Native.cs takes these in place of IntPtr (the
-// marshaller holds the handle open for the length of the call); only the free functions, which run in ReleaseHandle,
-// take the raw value. The public parameterless constructors are the marshaller's, for a handle a function returns.
+// and so that each is released exactly once: when it is disposed (or finalized) and the last hold on it has gone.
+// Native.cs takes these in place of IntPtr, and the marshaller holds the handle open for the length of the call, so a
+// call that races a Dispose never passes a freed handle, and a call after it throws ObjectDisposedException instead.
+// That hold ends when the call returns, though, and several calls return pointers into the native object (a label, a
+// result's samples) that are read only afterwards: a Dispose on another thread in between would free them under the
+// read. Such a call and its copy are made under a Lease, which holds the handle open until the copy is done. A span the
+// binding hands out over native memory is no copy, and no lease can cover it: it is valid until the Dispose.
+// Only the free functions, which run in ReleaseHandle, take the raw value. The public parameterless constructors are
+// the marshaller's, for a handle a function returns.
 
 /// <summary>What every handle has in common: it is invalid when zero (or -1), and owned.</summary>
 internal abstract class NativeHandle : SafeHandleZeroOrMinusOneIsInvalid
@@ -19,6 +23,30 @@ internal abstract class NativeHandle : SafeHandleZeroOrMinusOneIsInvalid
     }
 
     protected NativeHandle(IntPtr handle) : this() => SetHandle(handle);
+
+    /// <summary>
+    /// Holds the handle open until the lease is disposed, as the marshaller does for the length of one call: a Dispose
+    /// meanwhile is carried out when the lease ends. For a call that returns pointers into the native object together
+    /// with the copy of what they point at, both of which must happen before it can be freed.
+    /// </summary>
+    /// <exception cref="ObjectDisposedException">The handle has been released.</exception>
+    public HandleLease Lease() => new(this);
+}
+
+/// <summary>A hold on a <see cref="NativeHandle"/>, taken by <see cref="NativeHandle.Lease"/> and given back by
+/// <see cref="Dispose"/> (a <c>using</c>). A ref struct, so that it cannot be stored, boxed or carried across an await.</summary>
+internal readonly ref struct HandleLease
+{
+    private readonly NativeHandle? _handle;
+
+    internal HandleLease(NativeHandle handle)
+    {
+        bool added = false;
+        handle.DangerousAddRef(ref added);   // throws ObjectDisposedException once the handle is released
+        _handle = added ? handle : null;
+    }
+
+    public void Dispose() => _handle?.DangerousRelease();
 }
 
 /// <summary>

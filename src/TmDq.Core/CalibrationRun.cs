@@ -129,7 +129,8 @@ public sealed unsafe class CalibrationRun : IDisposable
     /// <summary>
     /// What the extraction found: a managed copy, valid after the run is disposed. Available once the run has
     /// finished (the observer was told, or <see cref="Wait"/> returned); a cancelled or failed run still has a
-    /// result, whose <see cref="CalibrationResult.Summary"/> and <see cref="CalibrationResult.Error"/> say why.
+    /// result, whose <see cref="CalibrationResult.Summary"/> and <see cref="CalibrationResult.Error"/> say why. The run is
+    /// held open until the copy is done, so a Dispose on another thread meanwhile is carried out after it.
     /// </summary>
     /// <exception cref="TmdqException"><see cref="Status.State"/> while the extraction is still running.</exception>
     /// <exception cref="ObjectDisposedException">The run has been disposed.</exception>
@@ -137,6 +138,7 @@ public sealed unsafe class CalibrationRun : IDisposable
     {
         CalibrationRunHandle handle = _handle;
         ObjectDisposedException.ThrowIf(handle.IsClosed, this);
+        using HandleLease lease = handle.Lease();   // the strings and arrays are the run's: copied before it can be freed
 
         CalibrationInfoNative info = default;
         info.StructSize = (uint)sizeof(CalibrationInfoNative);

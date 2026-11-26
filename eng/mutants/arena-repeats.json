@@ -29,8 +29,8 @@
     {
       "id": "R4",
       "file": "src/TmDq.Core/Interop/Arena.cs",
-      "old": "(Math.Max(count, 0) * sizeof(void*)))",
-      "new": "(Math.Max(count, 0) * sizeof(byte)))",
+      "old": "Bytes(count, (nuint)sizeof(void*))",
+      "new": "Bytes(count, (nuint)sizeof(byte))",
       "expect": "caught",
       "note": "pointer array one byte to a pointer"
     },
@@ -104,6 +104,102 @@
       "new": "streams[i] = arena.Box(StreamToNative(request.Streams[0], arena));",
       "expect": "caught",
       "note": "every stream the first"
+    },
+    {
+      "id": "R14",
+      "file": "src/TmDq.Core/Interop/Arena.cs",
+      "old": "checked((nuint)Math.Max(count, 0) * size)",
+      "new": "unchecked((nuint)Math.Max(count, 0) * size)",
+      "expect": "caught",
+      "note": "an array larger than the address space wraps to a small block instead of throwing"
+    },
+    {
+      "id": "R15",
+      "file": "src/TmDq.Core/Interop/Arena.cs",
+      "old": "checked((nuint)Math.Max(count, 0) * size)",
+      "new": "unchecked((nuint)(uint)(Math.Max(count, 0) * (int)size))",
+      "expect": "caught",
+      "note": "the size in 32-bit arithmetic again: 2^29 doubles come to 0 bytes (the heap overflow the review found)"
+    },
+    {
+      "id": "R16",
+      "file": "src/TmDq.Core/Interop/Arena.cs",
+      "old": "array.CopyTo(new Span<T>(copy, array.Length));",
+      "new": "array.AsSpan(1).CopyTo(new Span<T>(copy, array.Length));",
+      "expect": "caught",
+      "note": "the array fast path copies from the second value on"
+    },
+    {
+      "id": "R17",
+      "file": "src/TmDq.Core/Interop/Arena.cs",
+      "old": "if (text.Contains('\\0', StringComparison.Ordinal))",
+      "new": "if (text.Length < 0)",
+      "expect": "caught",
+      "note": "a NUL is handed over, and the core reads the text only as far as it"
+    },
+    {
+      "id": "R18",
+      "file": "src/TmDq.Core/Interop/Arena.cs",
+      "old": "throwOnInvalidBytes: true",
+      "new": "throwOnInvalidBytes: false",
+      "expect": "caught",
+      "note": "a lone surrogate becomes U+FFFD: the core is handed another path"
+    },
+    {
+      "id": "R19",
+      "file": "src/TmDq.Core/Interop/Text.cs",
+      "old": "if (written < buffer.Length)",
+      "new": "if (written <= buffer.Length)",
+      "expect": "caught",
+      "note": "text that filled the buffer, terminator's place included, is taken as whole"
+    },
+    {
+      "id": "R20",
+      "file": "src/TmDq.Core/Interop/Text.cs",
+      "old": "needed = written;   // truncated: it is longer now than it was when measured",
+      "new": "return Encoding.UTF8.GetString(buffer, 0, buffer.Length - 1);",
+      "expect": "caught",
+      "note": "text that grew between the calls is truncated silently (the old behaviour)"
+    },
+    {
+      "id": "R21",
+      "file": "src/TmDq.Core/Interop/Text.cs",
+      "old": "internal const int BufferAttempts = 4;",
+      "new": "internal const int BufferAttempts = 3;",
+      "expect": "caught",
+      "note": "one buffer fewer"
+    },
+    {
+      "id": "R22",
+      "file": "src/TmDq.Core/Chart.cs",
+      "old": "int written = Library.NonNegative(write(p, ticks.Length));",
+      "new": "int written = Math.Max(write(p, ticks.Length), 0);",
+      "expect": "caught",
+      "note": "a failing second tick call is ignored (the old behaviour gave an axis of zeros)"
+    },
+    {
+      "id": "R23",
+      "file": "src/TmDq.Core/Chart.cs",
+      "old": "if (written <= ticks.Length)",
+      "new": "if (written < ticks.Length)",
+      "expect": "caught",
+      "note": "ticks that exactly fill the buffer are asked for again, until the attempts run out"
+    },
+    {
+      "id": "R24",
+      "file": "src/TmDq.Core/Chart.cs",
+      "old": "return written == ticks.Length ? ticks : ticks[..written];",
+      "new": "return ticks;",
+      "expect": "caught",
+      "note": "fewer ticks on the second call leave zeros at the end"
+    },
+    {
+      "id": "R25",
+      "file": "src/TmDq.Core/Chart.cs",
+      "old": "                needed = written;\n            }\n        }\n        throw new TmdqException(Status.Internal, $\"the tick count",
+      "new": "                return ticks;\n            }\n        }\n        throw new TmdqException(Status.Internal, $\"the tick count",
+      "expect": "caught",
+      "note": "more ticks on the second call are cut to the first count"
     }
   ]
 }

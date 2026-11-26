@@ -44,6 +44,45 @@ public class HandleTests
     }
 
     [Fact]
+    public void ALeaseHoldsTheHandleOpenThroughADisposeUntilTheLastLeaseEnds()
+    {
+        // What a call that returns pointers into the native object, and the copy of what they point at, are made under: the
+        // marshaller's own hold ends when the call returns, before the copy.
+        double[] values = Enumerable.Range(0, 5000).Select(i => (double)i).ToArray();
+        var index = new SeriesIndex(values);
+        SeriesIndexHandle handle = index.Handle;
+
+        using (handle.Lease())
+        {
+            using (handle.Lease())
+            {
+                index.Dispose();
+                Assert.False(handle.IsClosed);      // not released while a lease holds it
+            }
+            Assert.False(handle.IsClosed);          // nor while the outer one still does
+            Assert.Equal(values.Length, Native.tmdq_series_index_count(handle));
+        }
+
+        Assert.True(handle.IsClosed);               // released as the last lease ended
+        Assert.Throws<ObjectDisposedException>(() =>
+        {
+            using HandleLease late = handle.Lease();
+        });
+    }
+
+    [Fact]
+    public void ALeaseOnAHandleNobodyDisposedLeavesItOpen()
+    {
+        double[] values = Enumerable.Range(0, 100).Select(i => (double)i).ToArray();
+        using var index = new SeriesIndex(values);
+        using (index.Handle.Lease())
+        {
+        }
+        Assert.False(index.Handle.IsClosed);       // a lease gives back only its own hold
+        Assert.Equal(values.Length, index.Count);
+    }
+
+    [Fact]
     public void ADisposedIndexGivesItsNativeMemoryBack()
     {
         // An index is about 1.5 bytes a value: forty over two million values is some 120 MB, if none were released.

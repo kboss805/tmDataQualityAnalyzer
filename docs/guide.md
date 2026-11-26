@@ -642,11 +642,14 @@ what it produced, with progress, log and cancel), `CalibrationRun` and `StepFile
 `ImportedStreams`) and `ChartGeometry` with `SeriesIndex` (a series' envelope index, revision 3; `CsvFile.ParsePhasedArrayLog`, revision 4). The public types are in
 the folder's root and the file formats in `Formats/` (a type to a file); what touches the DLL is in `Interop/`: `Native`
 (the C ABI's P/Invoke declarations) and `NativeStructs` (its structs and the struct ids), `Arena` the native memory for one
-call's arguments (strings, a copy of a list, an array of pointers, a boxed struct), `Text` the strings that cross, `ObserverBridge` the callbacks a native run calls back into (an exception
+call's arguments (strings, refused with a `TmdqException` when UTF-8 cannot carry them as they are: a lone surrogate or a NUL; a copy of a list; an array of pointers; a boxed struct; sizes in checked pointer-sized arithmetic), `Text` the strings that cross, `ObserverBridge` the callbacks a native run calls back into (an exception
 never unwinds a native thread), and `Handles`: a `SafeHandle` for each kind of native handle (run, calibration run, stream
 result, series set, series index, time base), so one kind cannot be passed for another, a handle is released exactly once,
-when it is disposed and the last call using it has returned, and a call on a released one throws
-`ObjectDisposedException` rather than reaching a freed pointer. A run's handle owns its `ObserverBridge`, freed with it, after the native free has waited for every thread that calls back: a release
+when it is disposed and the last hold on it has gone, and a call on a released one throws
+`ObjectDisposedException` rather than passing a freed pointer. The marshaller holds a handle only for the length of the call, so a call whose
+answer points into the native object (a label, a calibration's points) is made with its copy under a `Lease` (`HandleLease`,
+`DangerousAddRef`/`DangerousRelease` in a `using`), which carries a Dispose from another thread out after the copy; the spans
+`StreamResult` and `SeriesSet` hand out are views, no copy, valid only until the Dispose. A run's handle owns its `ObserverBridge`, freed with it, after the native free has waited for every thread that calls back: a release
 asked for from one of the observer's own callbacks (`OnFinished` disposing its run), which the library refuses on that thread, is
 queued to the thread pool and done once the callback has returned (`ObserverBridge.IsDelivering` knows the thread).
 `Library` loads `tmdq_core.dll` (the app passes the one beside it, or
@@ -1186,7 +1189,7 @@ the committed recordings against numbers v2.14.2 produced, every setting reachin
 and lifetimes (`RunTests`); calibration against the core's extractor (`CalibrationTests`, an extraction disposed from its own callback included); the file formats byte for
 byte against the core (`FormatsTests`, `PhasedArrayLogTests` for an antenna's log); loading the DLL (`LibraryTests`, `IsolatedLoadTests` in a child process, the
 suite's one skip); `eng\check_release_core.ps1`, the package script's refusal of a Debug core, run on real import lists and on the
-built cores (`ReleaseCoreGuardTests`); `ChartGeometryTests`, `ReceiverParamsTests`, `SeriesTests`, `ArenaTests`, `HandleTests` (a handle released once, when it is disposed and the last call using it has
+built cores (`ReleaseCoreGuardTests`); `ChartGeometryTests`, `ReceiverParamsTests`, `SeriesTests`, `ArenaTests`, `HandleTests` (a handle released once, when it is disposed and the last call or lease using it has
 returned; a Dispose while another thread waits on a run, and a run disposed from its own callback, which still reports its end and is
 released afterwards), `ObserverBridgeTests` (which thread is inside a callback, nested and after a throw); and `TempFilesTests`, the
 helper every test cleans up and reads back through, which waits out a virus scanner's moment's hold.
