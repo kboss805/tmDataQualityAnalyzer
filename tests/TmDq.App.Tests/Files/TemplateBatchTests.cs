@@ -367,6 +367,7 @@ public sealed class TemplateBatchTests : IDisposable, IClassFixture<ShortRecordi
         Assert.Equal(86400.0, later.X[0], 6);
         string[] clock = later.X.Select(vm.Plot.FormatTime).ToArray();
         int version = later.Version;
+        double[] held = later.X;   // as an export being written holds it
         string before = Path.Combine(_dir, "before.csv"), after = Path.Combine(_dir, "after.csv");
         Assert.True(vm.Plot.ExportCsv(before, sourceId: 1));
 
@@ -375,6 +376,8 @@ public sealed class TemplateBatchTests : IDisposable, IClassFixture<ShortRecordi
         Assert.Equal(0.0, later.X[0], 9);                                    // the axis starts at the earliest sample left
         Assert.Equal(clock, later.X.Select(vm.Plot.FormatTime));             // each sample at the clock time it was taken
         Assert.True(later.Version > version);                                // moved, so the chart draws it again
+        Assert.NotSame(held, later.X);                                       // in new arrays: what an export holds is not moved under it
+        Assert.Equal(86400.0, held[0], 6);
         Assert.Equal((0.0, later.X[^1]), (vm.Plot.XViewMin, vm.Plot.XViewMax));
         Assert.Equal(later.X[^1], vm.Plot.XMax, 6);
         Assert.True(vm.Plot.ExportCsv(after));

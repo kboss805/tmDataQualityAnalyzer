@@ -272,17 +272,17 @@
     {
       "id": "EL3",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "            for (int i = 0; i < xs.Length; i++) xs[i] -= shift;",
-      "new": "            for (int i = 0; i < xs.Length; i++) xs[i] -= 0.0;",
+      "old": "                for (int i = 0; i < xs.Length; i++) xs[i] = s.X[i] - shift;",
+      "new": "                for (int i = 0; i < xs.Length; i++) xs[i] = s.X[i];",
       "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.RemovingTheEarliestRecordingStartsTheAxisAtTheNextAndKeepsEverySamplesClockTime" ],
       "expect": "caught",
       "note": "the clock moves and the samples do not: each reads a day late"
     },
     {
       "id": "EL4",
-      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "        foreach (PlotSeries s in _series) s.Version++;\r\n        _window.Shift(shift);",
-      "new": "        _window.Shift(shift);",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotSeries.cs",
+      "old": "        _x = x;\r\n        Version++;",
+      "new": "        _x = x;",
       "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.RemovingTheEarliestRecordingStartsTheAxisAtTheNextAndKeepsEverySamplesClockTime" ],
       "expect": "caught",
       "note": "the samples move but their version does not, so the chart draws them from the old geometry"
@@ -295,6 +295,15 @@
       "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.RemovingTheEarliestRecordingStartsTheAxisAtTheNextAndKeepsEverySamplesClockTime" ],
       "expect": "caught",
       "note": "the span stays where the removed recording put it: zooming out reaches a day past the data"
+    },
+    {
+      "id": "EL6",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "                xs = new double[s.X.Length];",
+      "new": "                xs = s.X;",
+      "args": [ "-method", "TmDq.App.Tests.TemplateBatchTests.RemovingTheEarliestRecordingStartsTheAxisAtTheNextAndKeepsEverySamplesClockTime" ],
+      "expect": "caught",
+      "note": "Remove File moves the times in the arrays an export being written holds"
     },
     {
       "id": "CH1",

@@ -220,19 +220,15 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// <summary>
     /// <see cref="ExportCsv"/> with the file written off the UI thread (the export's matched partner of
     /// <see cref="LoadCsvAsync"/>): what is written is taken on the calling thread, before the first await, so a
-    /// plot cleared or replaced meanwhile does not change the file. A series' values are never written to once it exists,
-    /// so the snapshot shares them; its times are not: they are moved in place when the shared time base moves (a recording
-    /// that starts earlier added, or the earliest removed by Remove File, which the plot's menu offers while an export is
-    /// written), so the snapshot takes a copy of each array of times.
+    /// plot cleared or replaced meanwhile does not change the file. The snapshot shares the series' arrays: their values are
+    /// never written once a series exists, and their times are moved in place only by a run or an import (a recording that
+    /// starts earlier, <see cref="AddStream"/> and <see cref="ShowCsv"/>), which the main window, busy while it writes an
+    /// export, does not start meanwhile; Remove File, which the plot's menu offers during an export, gives the series it
+    /// moves new arrays (<see cref="AdvanceTimeBase"/>) and leaves these as they were.
     /// </summary>
     public Task<bool> ExportCsvAsync(string path, int sourceId = -1)
     {
         (List<CsvColumn> columns, TimeBaseInfo clock) = CsvSnapshot(sourceId);
-        var copies = new Dictionary<IReadOnlyList<double>, double[]>(ReferenceEqualityComparer.Instance);
-        columns = columns.Select(c => c with
-        {
-            X = copies.TryGetValue(c.X, out double[]? copy) ? copy : copies[c.X] = c.X.ToArray(),
-        }).ToList();
         return Task.Run(() => PlotCsv.Write(path, columns, clock));
     }
 
@@ -475,9 +471,19 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         double offset = clock.BaseTimeOffset + shift;
         int days = (int)Math.Floor(offset / 86400.0);
         _timeBase.SetClock(clock.BaseDay + days, offset - days * 86400.0);
-        foreach (double[] xs in _series.Select(s => s.X).Distinct())
-            for (int i = 0; i < xs.Length; i++) xs[i] -= shift;
-        foreach (PlotSeries s in _series) s.Version++;
+        // New arrays, one for each the series share, rather than the old ones moved: an export being written (Remove File is on
+        // the plot's menu meanwhile) holds the old ones.
+        var moved = new Dictionary<double[], double[]>(ReferenceEqualityComparer.Instance);
+        foreach (PlotSeries s in _series)
+        {
+            if (!moved.TryGetValue(s.X, out double[]? xs))
+            {
+                xs = new double[s.X.Length];
+                for (int i = 0; i < xs.Length; i++) xs[i] = s.X[i] - shift;
+                moved[s.X] = xs;
+            }
+            s.MoveTimes(xs);
+        }
         _window.Shift(shift);
     }
 
