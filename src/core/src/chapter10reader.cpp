@@ -76,6 +76,7 @@ bool Chapter10Reader::loadChannels(const std::filesystem::path& filename)
     // The whole load is setup: open, time sync and the TMATS decode all touch irig106's
     // process-wide state, so it is serialised with every other reader's setup.
     const auto setup_lock = lockIrig106Setup();
+    closeFile();   // a load that threw part-way left its handle open: given back before another one is opened
 
     ch10setup::Failure failure = ch10setup::openRecording(setup_lock, filename, m_file_handle, m_status);
     m_file_open = (failure != ch10setup::Failure::Open);   // anything but a failed open leaves a handle to close

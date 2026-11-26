@@ -444,8 +444,8 @@ std::vector<double> roundTickValues(double lower, double upper, int count)
     const double lastIndex = std::floor(upper / step + 1e-9);
     // A step that is not a number or does not divide the range into a sane count (a span beyond what a double can
     // resolve at this step) is no round step: the even division is the honest answer there. So is an index past 2^52,
-    // where adding one to it no longer counts (a range a few units wide far from zero, 1 to 1 + 2e-16 asked for 25
-    // ticks, gave indices near 1e17, and the loop that counted them never ended).
+    // where adding one to it no longer counts (a range a few units of the last place wide: 1 to 1 + 2e-16 asked for 25
+    // ticks gave indices near 1e17, and the loop that counted them in a double never ended).
     constexpr double kExactIndex = 4503599627370496.0;   // 2^52
     if (!(step > 0.0) || !std::isfinite(step) || !std::isfinite(firstIndex) || !std::isfinite(lastIndex) ||
         lastIndex - firstIndex > 4.0 * n + 8.0 || std::abs(firstIndex) >= kExactIndex ||

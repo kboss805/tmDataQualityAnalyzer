@@ -1586,7 +1586,8 @@ TEST_CASE("CalibrationExtractor: a throw on either of its threads fails the extr
 {
     // An exception out of a thread's function ends the host application. The sink is the seam: it is called on the
     // reader's thread ("Reading Chapter 10 file..."), on the driver thread while the worker runs ("processing..."), and
-    // on the driver thread again while the steps are detected (a line per channel). Without the boundary each row ends
+    // on the driver thread again while the steps are detected (a line per channel: the third, so two results are already
+    // made and must be dropped). Without the boundary each row ends
     // the test executable.
     const CalibrationExtractor::Request req = stepCalRequest();
     struct Row { const char* name; const char* needle; const char* summary; };
@@ -1594,7 +1595,7 @@ TEST_CASE("CalibrationExtractor: a throw on either of its threads fails the extr
         {"the reader", "Reading Chapter 10 file...",
          "Reading the calibration recording stopped on an internal error (bad allocation)."},
         {"the worker", "processing...", "Calibration extraction stopped on an internal error (bad allocation)."},
-        {"step detection", "plateau(s) detected", "Calibration extraction stopped on an internal error (bad allocation)."},
+        {"step detection", "C_RCVR1 (word", "Calibration extraction stopped on an internal error (bad allocation)."},
     };
     for (const Row& row : rows)
     {

@@ -24,7 +24,7 @@
       "id": "L3",
       "file": "src/core/src/ch10setup.cpp",
       "old": " ||\n        header.ulDataLen < min_data_length)",
-      "new": ")",
+      "new": " ||\n        header.ulDataLen + min_data_length < min_data_length)",
       "args": ["-tc=Ch10Setup: *,Ch10PacketReader: a *"],
       "expect": "caught",
       "note": "no floor: a TMATS data length under 4 underflows in the decoder, a PCM one is skipped silently"
@@ -240,7 +240,7 @@
       "id": "X7",
       "file": "src/core/include/exceptionboundary.h",
       "old": "            on_throw(e.what());",
-      "new": "            on_throw(\"an unknown exception\");",
+      "new": "            on_throw((static_cast<void>(e), \"an unknown exception\"));",
       "args": ["-tc=ExceptionBoundary: *,PipelineRunner: a stream that throws*"],
       "expect": "caught",
       "note": "a std::exception's own words lost"
@@ -258,7 +258,7 @@
       "id": "G2",
       "file": "src/core/src/chartgeometry.cpp",
       "old": "    for (long long i = 0; i < limit && clock <= bound; ++i)",
-      "new": "    for (long long i = 0; clock <= bound; ++i)",
+      "new": "    for (long long i = 0; i < limit + 1000000000LL && clock <= bound; ++i)",
       "args": ["-tc=ChartGeometry: *"],
       "expect": "survived",
       "note": "equivalent behind the check above: on a clock that resolves the step, a step is at least the span over n - 1, so the bound is never what ends the loop. It is defence in depth against a future edit of that check"
@@ -267,7 +267,7 @@
       "id": "G3",
       "file": "src/core/src/chartgeometry.cpp",
       "old": "lastIndex - firstIndex > 4.0 * n + 8.0 || std::abs(firstIndex) >= kExactIndex ||\n        std::abs(lastIndex) >= kExactIndex)",
-      "new": "lastIndex - firstIndex > 4.0 * n + 8.0)",
+      "new": "lastIndex - firstIndex > 4.0 * n + 8.0 || std::abs(firstIndex) >= kExactIndex * 1e10 ||\n        std::abs(lastIndex) >= kExactIndex * 1e10)",
       "args": ["-tc=ChartGeometry: *"],
       "expect": "caught",
       "note": "indices past 2^52 counted: the ticks are not the multiples they claim (and with the old double counter, a hang)"
