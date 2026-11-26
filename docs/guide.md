@@ -517,7 +517,7 @@ profile, so a batch processes with the linear calibration.
   Multiple Files. Three jobs are types of their own: `ShellPreferences` (Recent Files, the theme, the sidebar, the last
   folder, the legend's choice), `SessionExport` (the data, the image and the log written out) and `BatchRunner` (Apply
   Template's batch and each file's export). Processing a recording (`LoadAsync`) removes the recordings processed before
-  (`ClearProcessedRun`: `Plot.RemoveSource` for each id in `Sources`) and keeps what was imported from CSV files, numbering
+  (`ClearProcessedRun`: `Plot.RemoveSources` with the ids in `Sources`, the window and chart redrawn once for all) and keeps what was imported from CSV files, numbering
   the run `Plot.NextSourceId` so it never shares a source id with an import; with nothing imported it is `ClearRun`, a plot
   started again. Add Recording (`AddRecordingCommand`, `LoadAsync(path, add: true)`) is the same run with nothing removed: with
   something on the plot it appends to `Sources`, names the recording apart from the plot's others (`UniqueSourceLabel`: "name

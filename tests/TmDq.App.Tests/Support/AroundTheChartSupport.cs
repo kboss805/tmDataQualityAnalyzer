@@ -86,7 +86,7 @@ internal static class AroundTheChartSupport
 
         public (string Title, string Label, IReadOnlyList<string> Choices, int Selected) LastChoice;
 
-        public Task<int?> ChooseAsync(string title, string label, IReadOnlyList<string> choices, int selected = 0)
+        public Task<int?> ChooseAsync(string title, string label, IReadOnlyList<string> choices, int selected)
         {
             Asked.Add(title);
             LastChoice = (title, label, choices, selected);

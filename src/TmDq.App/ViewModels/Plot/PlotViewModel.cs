@@ -362,9 +362,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         foreach (PlotSeries s in _series)
         {
             if (!seen.Add(s.SourceId)) continue;
-            list.Add((s.SourceId, _sourceLabels.TryGetValue(s.SourceId, out string? label)
-                ? label
-                : string.Create(CultureInfo.InvariantCulture, $"Source {s.SourceId}")));
+            list.Add((s.SourceId, SourceLabel(s.SourceId)));
         }
         return list;
     }
@@ -407,35 +405,51 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// spans the ones that are left); with another one shown, the view is left where it is.
     /// </summary>
     /// <returns>False, with nothing changed, when no series comes from <paramref name="sourceId"/>.</returns>
-    public bool RemoveSource(int sourceId)
+    public bool RemoveSource(int sourceId) => RemoveSources(new[] { sourceId });
+
+    /// <summary>
+    /// <see cref="RemoveSource"/> for several recordings at once (Open replacing the ones processed before): the window, the axes
+    /// and the chart are worked out and redrawn once for all of them, not once for each. <see cref="SourceRemoved"/> is raised
+    /// for each one removed, in the order given.
+    /// </summary>
+    /// <returns>False, with nothing changed, when no series comes from any of <paramref name="sourceIds"/>.</returns>
+    public bool RemoveSources(IEnumerable<int> sourceIds)
     {
-        if (!_series.Any(s => s.SourceId == sourceId)) return false;
-        string removed = _sourceLabels.GetValueOrDefault(sourceId, string.Empty);
-        if (_series.All(s => s.SourceId == sourceId))
+        List<int> removing = sourceIds.Distinct().Where(id => _series.Any(s => s.SourceId == id)).ToList();
+        if (removing.Count == 0) return false;
+        var gone = new HashSet<int>(removing);
+        var removedLabels = new HashSet<string>(removing.Select(id => _sourceLabels.GetValueOrDefault(id, string.Empty)).Where(l => l.Length > 0));
+        if (_series.All(s => gone.Contains(s.SourceId)))
         {
             Clear();
-            SourceRemoved?.Invoke(this, sourceId);
-            return true;
-        }
-        _series.RemoveAll(s => s.SourceId == sourceId);
-        _sourceLabels.Remove(sourceId);
-        if (_readoutSeriesId is int pin && _series.All(s => s.Id != pin)) _readoutSeriesId = null;
-        // A title that named the recording removed (as a recording's does until it is renamed) names one that is left, the
-        // first; a title the operator wrote is theirs and stays.
-        if (removed.Length > 0 && Title == removed) Title = SourceList()[0].Label;
-        bool drawnChanged = _visibleSource < 0 || _visibleSource == sourceId;
-        if (_visibleSource == sourceId) _visibleSource = -1;
-        if (drawnChanged)
-        {
-            SetVisibleSource(_visibleSource);   // the window and the axes follow what is left; it tells the view
         }
         else
         {
-            SeriesChanged?.Invoke(this, EventArgs.Empty);
+            _series.RemoveAll(s => gone.Contains(s.SourceId));
+            foreach (int id in removing) _sourceLabels.Remove(id);
+            if (_readoutSeriesId is int pin && _series.All(s => s.Id != pin)) _readoutSeriesId = null;
+            // A title that named a recording removed (as a recording's does until it is renamed) names one that is left, the
+            // first; a title the operator wrote is theirs and stays.
+            if (removedLabels.Contains(Title)) Title = SourceList()[0].Label;
+            bool drawnChanged = _visibleSource < 0 || gone.Contains(_visibleSource);
+            if (gone.Contains(_visibleSource)) _visibleSource = -1;
+            if (drawnChanged)
+            {
+                SetVisibleSource(_visibleSource);   // the window and the axes follow what is left; it tells the view
+            }
+            else
+            {
+                SeriesChanged?.Invoke(this, EventArgs.Empty);
+            }
         }
-        SourceRemoved?.Invoke(this, sourceId);
+        foreach (int id in removing) SourceRemoved?.Invoke(this, id);
         return true;
     }
+
+    /// <summary>A recording's name as Plot File gives it, also before it has any series (a recording being added is named
+    /// first): the name it was given (<see cref="SetSourceLabel"/>), else "Source N".</summary>
+    public string SourceLabel(int sourceId) =>
+        _sourceLabels.TryGetValue(sourceId, out string? label) ? label : string.Create(CultureInfo.InvariantCulture, $"Source {sourceId}");
 
     /// <summary>
     /// What shows when Receiver SNR series arrive: of each stream's channels (a receiver's L, R and C, an antenna's H, V and C)

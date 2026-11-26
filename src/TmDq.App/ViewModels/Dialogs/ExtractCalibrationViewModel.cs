@@ -293,8 +293,8 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
     {
         _calPcm = channels?.Pcm ?? Array.Empty<ChannelInfo>();
         _calTime = channels?.Time ?? Array.Empty<ChannelInfo>();
-        CalPcmItems = _calPcm.Select(ChannelText).ToList();
-        CalTimeItems = _calTime.Select(ChannelText).ToList();
+        CalPcmItems = _calPcm.Select(StreamRules.ChannelText).ToList();
+        CalTimeItems = _calTime.Select(StreamRules.ChannelText).ToList();
         int pcm = _calPcm.ToList().FindIndex(c => c.Id == _base.PcmChannelId);
         int time = _calTime.ToList().FindIndex(c => c.Id == _base.TimeChannelId);
         bool timeLacking = time < 0 && _calTime.Count > 0;
@@ -316,9 +316,6 @@ public sealed class ExtractCalibrationViewModel : DialogViewModel
         OnPropertyChanged(nameof(ChannelNote));
         OnPropertyChanged(nameof(HasChannelNote));
     }
-
-    private static string ChannelText(ChannelInfo channel) =>
-        channel.Id.ToString(CultureInfo.InvariantCulture) + " - " + channel.Name;
 
     /// <summary>What the extraction is asked for: the dialog's base, its step file and its clips.</summary>
     public CalibrationRequest ToRequest() => new()

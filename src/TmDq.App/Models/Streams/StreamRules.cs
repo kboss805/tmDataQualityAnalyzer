@@ -265,8 +265,8 @@ public static class StreamRules
             AppRoot = string.IsNullOrEmpty(appRoot) ? null : appRoot,
         };
 
-    /// <summary>The time-channel list's text for a channel: "&lt;id&gt; - &lt;name&gt;", as v2.x listed it (the PCM rows
-    /// show the bare name).</summary>
-    public static string TimeChannelText(ChannelInfo channel) =>
+    /// <summary>A channel in a list: "&lt;id&gt; - &lt;name&gt;", as v2.x listed the time channels (Configure Streams' PCM rows show the
+    /// bare name). Extract Calibration lists the calibration recording's PCM and time channels the same way.</summary>
+    public static string ChannelText(ChannelInfo channel) =>
         channel.Id.ToString(CultureInfo.InvariantCulture) + " - " + channel.Name;
 }

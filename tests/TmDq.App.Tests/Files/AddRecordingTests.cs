@@ -248,7 +248,7 @@ public sealed class AddRecordingTests : System.IDisposable
         Assert.Equal(2, vm.Sources.Count);
         // The two recordings are from different days: the warning names the one just added, not nothing or a batch's last file.
         Assert.Contains(vm.Log.Entries, e => e.Text.Contains("does not overlap", System.StringComparison.Ordinal)
-                                             && e.Text.Contains(Path.GetFileName(safran), System.StringComparison.Ordinal));
+                                             && e.Text.Contains("('" + Path.GetFileName(safran) + "')", System.StringComparison.Ordinal));
     }
 
     /// <summary>Safran's channel 13, as 4.5's oracle runs it (its own byte order); the defaults for everything else.</summary>
