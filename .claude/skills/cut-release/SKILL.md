@@ -175,12 +175,16 @@ app on the PRN sample → the portable ZIP and the MSI (`deploy\tmDataQualityAna
 - **Signing:** uses the cert SHA-1 in `$env:SIGN_CERT_SHA1` (falls back to the bundled Certum OSS
   thumbprint). To build unsigned, pass `-SignCertSha1 ''`. Any signing failure is a listed problem and
   a non-zero exit.
-- **The MSI is per-machine only** (a user without admin rights takes the portable ZIP). It does **not** upgrade a copy
+- **The MSI installs per-user or per-machine.** Elevated (a deployment tool, SYSTEM) it is per-machine; a user without
+  admin rights gets a per-user install in `%LOCALAPPDATA%\Programs` with no elevation; the wizard asks which; `ALLUSERS=1`
+  and `MSIINSTALLPERUSER=1` force one or the other. WiX writes `MSIINSTALLPERUSER=1` into the package and `build_msi.ps1`
+  deletes it (an elevated silent install would otherwise be per-user, into SYSTEM's profile): a build that fails on that
+  check is not a build to ship. It does **not** upgrade a copy
   that an Inno Setup installer put there (every release before the MSI): it refuses, says to uninstall that one first
   (Settings, Apps), and the settings and preferences are kept. Say so in the release notes of the first MSI release. An
   MSI over an older MSI is an upgrade that keeps `settings\` (never overwritten, never removed); the older MSI over a
   newer one is refused. An administrator's switches are public properties (`ASSOCIATE_CH10=0`, `FULLMANUAL=0`,
-  `DESKTOPSHORTCUT=1`, `INSTALLFOLDER=...`): they are in the header of the `.wxs` and in `docs/guide.md`.
+  `DESKTOPSHORTCUT=1`, `APPLICATIONFOLDER=...`): they are in the header of the `.wxs` and in `docs/guide.md`.
 - **WiX:** a repo-local dotnet tool pinned in `dotnet-tools.json` (6.0.2), with its UI extension fetched into the
   gitignored `.wix\` cache the first time. A failed restore or extension fetch fails the MSI step, which the run lists.
 - Antivirus can briefly lock freshly-built exes; the ZIP step already retries — don't panic on a
@@ -268,10 +272,18 @@ What it establishes that nothing else can:
 - **The DLL closure:** the installed app and the portable ZIP open their windows and process the PRN
   sample end to end; `tmdq_core.dll` loads with the VC++ runtime beside it; every PE file verifies.
 
-**What the Sandbox cannot check** (it drives `msiexec` silently and elevated): the **interactive wizard**, and
-**US8.0's criteria about the installer** (see the note in `docs/guide.md`: the MSI is per-machine only, so "Install for me
-only" is the portable ZIP's). Ask the user to click through the wizard once on the release build: the folder, the
-feature list, the progress and the finish page's launch box.
+- **Per-user and per-machine:** an elevated silent install is per-machine (Program Files, HKLM). Without elevation (a
+  restricted token, `runas /trustlevel:0x20000`: an administrator who has not elevated, NOT a standard user) a silent install
+  with no switch is refused for lack of elevation (Windows Installer sends an administrator to per-machine), and with
+  `MSIINSTALLPERUSER=1` it installs, upgrades and uninstalls per-user in `%LOCALAPPDATA%\Programs` with no elevation (HKCU,
+  their Start menu, settings beside the exe, the application opening its window); `MSIINSTALLPERUSER=1` from an elevated
+  prompt is per-user too. **Not tested:** a real standard-user account getting per-user with NO switch (Windows Installer's own
+  rule for `ALLUSERS=2`).
+
+**What the Sandbox cannot check** (it drives `msiexec` silently): the **interactive wizard**, with its "for all users, or
+just for me" page and the folder choice (US8.0's criteria about the installer rest on it: see `docs/guide.md`). Ask the user
+to click through the wizard once on the release build, as an administrator and as a standard user: the scope page, the
+folder, the feature list, the progress and the finish page's launch box.
 
 **A red result is not automatically a product defect.** The first run of this harness
 reported three failures and every one was the harness: a Windows system DLL caught by a

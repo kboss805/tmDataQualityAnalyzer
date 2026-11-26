@@ -18,7 +18,9 @@
 # ours; an uninstall removes it and leaves the settings; the administrator's switches work; the portable ZIP runs too; and
 # an UNSIGNED build of the same exe IS blocked, which is what shows the enforcement was real and not absent.
 #
-# The interactive wizard is NOT exercised: this drives msiexec silently, as a deployment tool does.
+# Elevated, the silent installs are per-machine, as a deployment tool's are (step 3 holds that); step 8c installs, upgrades and
+# uninstalls as a user WITHOUT administrator rights (a restricted token), which is per-user, and 8d is MSIINSTALLPERUSER=1.
+# The interactive wizard (with its "for all users, or just for me" page) is NOT exercised: this drives msiexec silently.
 #
 # ASCII only, written for Windows PowerShell 5.1 (what Sandbox has).
 # =============================================================================
@@ -102,11 +104,44 @@ function Get-ArpEntry {
     @(Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
       ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'tmDataQualityAnalyzer*' })
 }
+function Get-ArpEntryUser {
+    # The Installed apps entries of a per-user install: in the user's own hive.
+    @(Get-ChildItem 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+      ForEach-Object { Get-ItemProperty $_.PSPath } | Where-Object { $_.DisplayName -like 'tmDataQualityAnalyzer*' })
+}
+function Get-ArpEntryAny {
+    # Every Installed apps entry of the product, wherever it is. WINDOWS INSTALLER writes it, not the package: for a per-user
+    # install of this dual-mode package it is under HKLM (the first Sandbox run of the per-user steps found the entry there,
+    # with the install logged as per-user and the files in the user's folder), so the per-user steps count entries, and
+    # what makes the install per-user is the product's registration in the user's own installer hive (Get-PerUserRegistration),
+    # the log's "Deleting ALLUSERS property" and the files, not the hive of the Installed apps entry.
+    @(Get-ArpEntry) + @(Get-ArpEntryUser)
+}
+function Get-PerUserRegistration {
+    # The products Windows Installer holds in the user's own hive: a per-user install is registered there, an all-users one
+    # in the machine's. (The log's "installed in Per-User mode" line appears only when no elevation is needed, so an
+    # elevated install with MSIINSTALLPERUSER=1 has no such line: the first rerun of the per-user steps found that.)
+    @(Get-ChildItem 'HKCU:\SOFTWARE\Microsoft\Installer\Products' -ErrorAction SilentlyContinue |
+      ForEach-Object { (Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue).ProductName } | Where-Object { $_ -like 'tmDataQualityAnalyzer*' })
+}
+function Test-LoggedAllUsersDeleted([string]$LogName) {
+    # What a per-user install does to the package's ALLUSERS=2 (a per-machine one sets it to 1).
+    return [bool](Select-String -Path (Join-Path $OUT $LogName) -Pattern 'Deleting ALLUSERS property' -SimpleMatch -ErrorAction SilentlyContinue)
+}
+function Show-ArpKey([string]$Label) {
+    # Where the Installed apps entry of this product is, as registry paths (the machine hive, its 32-bit view, this user's hive).
+    $roots = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall', 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+    $found = @(foreach ($root in $roots) {
+        Get-ChildItem $root -ErrorAction SilentlyContinue | Where-Object { (Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue).DisplayName -like 'tmDataQualityAnalyzer*' } | ForEach-Object { $_.Name }
+    })
+    Say ('  [{0}] uninstall entries: {1}' -f $Label, $(if ($found.Count) { $found -join ' ; ' } else { '(none in HKLM, its 32-bit view or HKCU)' }))
+}
 function Get-MsiVersion([string]$name) { [version]($name -replace '^.*-v(\d+\.\d+\.\d+)_.*$', '$1') }
-function Test-Ch10Offered {
+function Test-Ch10Offered([string]$Root = 'HKLM') {
     # The MSI offers the application for .ch10 by listing its ProgID under .ch10\OpenWithProgids, and never writes .ch10's
     # default value (which another application may hold, and which an uninstall would delete whoever's it had become).
-    $key = Get-Item 'HKLM:\SOFTWARE\Classes\.ch10\OpenWithProgids' -ErrorAction SilentlyContinue
+    # HKLM for an install for all users, HKCU for a per-user one.
+    $key = Get-Item ($Root + ':\SOFTWARE\Classes\.ch10\OpenWithProgids') -ErrorAction SilentlyContinue
     return (($null -ne $key) -and ($key.GetValueNames() -contains 'tmDataQualityAnalyzer.ch10'))
 }
 
@@ -213,6 +248,7 @@ foreach ($f in 'framesync_patterns\framesync_rcvr_default.toml', 'framesync_patt
 }
 $entries = @(Get-ArpEntry)
 Check 'one entry in Installed apps' ($entries.Count -eq 1) (($entries | ForEach-Object { $_.DisplayName + ' ' + $_.DisplayVersion }) -join '; ')
+Check 'a silent install from an elevated prompt is per-machine (what a deployment tool does), not per-user' (@(Get-ArpEntryUser).Count -eq 0) ''
 if ($entries.Count -eq 1) { Check 'its version is the MSI''s' ([version]$entries[0].DisplayVersion -eq $v1) ([string]$entries[0].DisplayVersion) }
 $ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.ch10' -ErrorAction SilentlyContinue).'(default)'
 Check '.ch10 offers the application (OpenWithProgids)' (Test-Ch10Offered) ''
@@ -360,6 +396,99 @@ Check 'the other application''s .ch10 value is left alone' ($ext -eq $other) $(i
 Check 'our offer for .ch10 is gone' (-not (Test-Ch10Offered)) ''
 Check 'our ProgID key is gone' (-not (Test-Path $progId)) ''
 if (Test-Path 'HKLM:\SOFTWARE\Classes\.ch10') { Remove-Item 'HKLM:\SOFTWARE\Classes\.ch10' -Recurse -Force -ErrorAction SilentlyContinue }
+
+# --- 8c. Install, upgrade and uninstall WITHOUT elevation (US8.0: "install to a user-selected directory for users without admin
+# privileges"). The installer runs under a RESTRICTED token: runas /trustlevel:0x20000 ("Basic User") takes the administrator
+# rights away from this logon, and no password is needed. WHAT THAT IS: an administrator who has not elevated (a UAC-filtered
+# token), NOT a standard user. Windows Installer sends such a user to per-machine for a package like this one (ALLUSERS=2 becomes
+# 1: an administrator is a per-machine installer who needs elevation), so a silent install with no switch is refused for lack of
+# elevation (the first step below, which holds that down). MSIINSTALLPERUSER=1 is how an administrator, or any user, asks for
+# per-user, and the rest of this section proves that works with NO elevation: a restricted token cannot write HKLM or Program
+# Files, so an install that needed either would fail. That a user who is NOT an administrator gets per-user with no switch is
+# Windows Installer's own rule for ALLUSERS=2 and is not tested here (it needs a real standard-user account). ---
+Say ''
+Say '[8c] Install, upgrade and uninstall without elevation (a restricted token)'
+$userApp = Join-Path $env:LOCALAPPDATA 'Programs\tmDataQualityAnalyzer'
+$userExe = Join-Path $userApp 'tmDataQualityAnalyzer.exe'
+$userSettings = Join-Path $userApp 'settings\receiver_params\default.toml'
+$userStartMenu = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\tmDataQualityAnalyzer'
+$progIdUser = 'HKCU:\SOFTWARE\Classes\tmDataQualityAnalyzer.ch10'
+$asUser = Join-Path $LOCAL 'asuser.ps1'
+@'
+param([string]$Log, [string]$Done)
+$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$p = Start-Process msiexec.exe -ArgumentList (@($args) + @('/qn', '/norestart', '/l*v', ('"' + $Log + '"'))) -PassThru -Wait
+('admin={0} exit={1}' -f $admin, $p.ExitCode) | Set-Content -Path $Done
+'@ | Set-Content -Path $asUser -Encoding ASCII
+function Invoke-MsiAsStandardUser([string[]]$MsiArgs, [string]$Name) {
+    # Every path here has no space in it, because runas takes the whole command as one string.
+    $log = Join-Path $OUT ($Name + '.log')
+    $done = Join-Path $OUT ($Name + '.done')
+    Remove-Item $done -ErrorAction SilentlyContinue
+    $inner = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File ' + $asUser + ' -Log ' + $log + ' -Done ' + $done + ' ' + ($MsiArgs -join ' ')
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    Start-Process runas.exe -ArgumentList '/trustlevel:0x20000', ('"' + $inner + '"') -Wait
+    while (-not (Test-Path $done) -and $clock.Elapsed.TotalSeconds -lt 900) {
+        Start-Sleep -Seconds 20
+        Say ('  ... {0} (as a standard user): {1:N0} s' -f $Name, $clock.Elapsed.TotalSeconds)
+    }
+    $result = if (Test-Path $done) { (Get-Content $done -Raw).Trim() } else { 'no result' }
+    Say ('  {0} (as a standard user) took {1:N0} s: {2}' -f $Name, $clock.Elapsed.TotalSeconds, $result)
+    return $result
+}
+$result = Invoke-MsiAsStandardUser @('/i', $first.FullName) 'peruser-refused'
+Check 'an administrator who has not elevated is refused a silent install with no switch (per-machine needs elevation)' (($result -eq 'admin=False exit=1603') -and [bool](Select-String -Path (Join-Path $OUT 'peruser-refused.log') -Pattern 'Error 1925' -SimpleMatch -ErrorAction SilentlyContinue)) $result
+Check 'and it installed nothing' ((-not (Test-Path $userExe)) -and (-not (Test-Path $exe))) ''
+$result = Invoke-MsiAsStandardUser @('/i', $first.FullName, 'MSIINSTALLPERUSER=1') 'peruser-install'
+Check 'with MSIINSTALLPERUSER=1 the installer ran without administrator rights, and succeeded' ($result -eq 'admin=False exit=0') $result
+Check 'installed into the user''s own folder (LocalAppData\Programs)' (Test-Path $userExe) $userExe
+Check 'nothing went to Program Files' (-not (Test-Path $exe)) ''
+Show-ArpKey '8c after the install'
+$entries = @(Get-ArpEntryAny)
+Check 'one entry in Installed apps' ($entries.Count -eq 1) (($entries | ForEach-Object { $_.DisplayName + ' ' + $_.DisplayVersion }) -join '; ')
+if ($entries.Count -eq 1) { Check 'its version is the MSI''s' ([version]$entries[0].DisplayVersion -eq $v1) ([string]$entries[0].DisplayVersion) }
+Check 'registered in the user''s own installer hive, and the log shows ALLUSERS dropped' ((@(Get-PerUserRegistration).Count -eq 1) -and (Test-LoggedAllUsersDeleted 'peruser-install.log')) ''
+Check 'a Start menu shortcut for the user, none for all users' ((Test-Path (Join-Path $userStartMenu 'tmDataQualityAnalyzer.lnk')) -and (-not (Test-Path $startMenu))) ''
+Check '.ch10 is offered in the user''s registry only' ((Test-Ch10Offered 'HKCU') -and (-not (Test-Ch10Offered 'HKLM'))) ''
+$commandUser = (Get-ItemProperty (Join-Path $progIdUser 'shell\open\command') -ErrorAction SilentlyContinue).'(default)'
+Check 'the ProgID opens the per-user exe' ($commandUser -eq ('"' + $userExe + '" "%1"')) ([string]$commandUser)
+Check 'the settings files are in the user''s folder' (Test-Path $userSettings) ''
+$up = Start-Process $userExe -PassThru
+$null = $up.Handle
+$utitle = Wait-Window $up 30
+Check 'the per-user application opens its window' ($utitle -eq 'TM Data Quality Analyzer') ("title '" + $utitle + "'")
+if (Get-Process -Id $up.Id -ErrorAction SilentlyContinue) { Stop-Process -Id $up.Id -Force; Start-Sleep -Seconds 2 }
+if (Test-Path $userSettings) { Add-Content -Path $userSettings -Value $marker }
+$result = Invoke-MsiAsStandardUser @('/i', $second.FullName, 'MSIINSTALLPERUSER=1') 'peruser-upgrade'
+Check 'the upgrade ran without administrator rights, and succeeded' ($result -eq 'admin=False exit=0') $result
+$entries = @(Get-ArpEntryAny)
+Check 'still one entry in Installed apps' ($entries.Count -eq 1) (($entries | ForEach-Object { $_.DisplayName + ' ' + $_.DisplayVersion }) -join '; ')
+if ($entries.Count -eq 1) { Check 'its version is the newer MSI''s' ([version]$entries[0].DisplayVersion -eq $v2) ([string]$entries[0].DisplayVersion) }
+Check 'the edited settings file survived the upgrade' ((Test-Path $userSettings) -and ((Get-Content $userSettings -Raw) -match [regex]::Escape($marker))) ''
+$result = Invoke-MsiAsStandardUser @('/x', $second.FullName) 'peruser-uninstall'
+Check 'the uninstall ran without administrator rights, and succeeded' ($result -eq 'admin=False exit=0') $result
+Check 'the exe is removed' (-not (Test-Path $userExe)) ''
+Check 'no entry left in Installed apps, nor in the user''s installer hive' ((@(Get-ArpEntryAny).Count -eq 0) -and (@(Get-PerUserRegistration).Count -eq 0)) ''
+Check 'the offer for .ch10 and the ProgID are gone' ((-not (Test-Ch10Offered 'HKCU')) -and (-not (Test-Path $progIdUser))) ''
+Check 'the Start menu folder is removed' (-not (Test-Path $userStartMenu)) ''
+Check 'the settings are left for the user, edit included' ((Test-Path $userSettings) -and ((Get-Content $userSettings -Raw) -match [regex]::Escape($marker))) ''
+Remove-Item $userApp -Recurse -Force -ErrorAction SilentlyContinue
+
+# --- 8d. MSIINSTALLPERUSER=1 from an ELEVATED prompt still installs per-user (the switch for an administrator who wants that). ---
+Say ''
+Say '[8d] MSIINSTALLPERUSER=1 from an elevated prompt installs per-user'
+# (the same switch as 8c, from the other side: with elevation available it must still go to the user's folder, not Program Files)
+$code = Invoke-Msi @('/i', ('"' + $third.FullName + '"'), 'MSIINSTALLPERUSER=1') 'install-peruser-switch.log'
+Check 'msiexec exit code 0' ($code -eq 0) ('exit=' + $code)
+Check 'installed into the user''s own folder' ((Test-Path $userExe) -and (-not (Test-Path $exe))) ''
+Show-ArpKey '8d after the install'
+$entries = @(Get-ArpEntryAny)
+Check 'one entry in Installed apps' ($entries.Count -eq 1) (($entries | ForEach-Object { $_.DisplayName + ' ' + $_.DisplayVersion }) -join '; ')
+Check 'registered in the user''s own installer hive, and the log shows ALLUSERS dropped' ((@(Get-PerUserRegistration).Count -eq 1) -and (Test-LoggedAllUsersDeleted 'install-peruser-switch.log')) ''
+$code = Invoke-Msi @('/x', ('"' + $third.FullName + '"')) 'uninstall-peruser-switch.log'
+Check 'uninstall exit code 0' ($code -eq 0) ('exit=' + $code)
+Check 'removed' ((-not (Test-Path $userExe)) -and (@(Get-ArpEntryAny).Count -eq 0) -and (@(Get-PerUserRegistration).Count -eq 0)) ''
+Remove-Item $userApp -Recurse -Force -ErrorAction SilentlyContinue
 
 # --- 9. The portable ZIP, extracted somewhere new, also runs. ---
 Say ''

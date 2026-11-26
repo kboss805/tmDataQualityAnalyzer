@@ -966,10 +966,18 @@ that worktrees also need.
   symbols ZIP and the MSI.
 - **MSI**: `deploy/tmDataQualityAnalyzer.wxs`, built by `deploy/build_msi.ps1` with WiX 6.0.2, a repo-local dotnet tool
   (`dotnet-tools.json`; its UI extension is fetched into the gitignored `.wix\` cache on first use). It replaced the Inno
-  Setup installer, which every release before it used. **Per-machine only**: sites that deploy by Group Policy, SCCM or
-  Intune install elevated, and a user without admin rights takes the portable ZIP. The optional pieces are features
+  Setup installer, which every release before it used. **Per-user or per-machine** (a dual-purpose package, `ALLUSERS=2`):
+  sites that deploy by Group Policy, SCCM or Intune install elevated, as SYSTEM, and get a per-machine install (Program
+  Files, HKLM, the all-users Start menu); a user **without admin rights** gets a per-user one with no elevation, in
+  `%LOCALAPPDATA%\Programs\tmDataQualityAnalyzer` with `settings\` beside it, HKCU, their own Start menu and Installed apps;
+  the wizard (`WixUI_Advanced`) asks "for all users, or just for me" and lets them choose the folder. From the command line:
+  nothing = elevated per-machine, not elevated per-user; `ALLUSERS=1` per-machine; `MSIINSTALLPERUSER=1` per-user even from
+  an elevated prompt. Every registry write is `HKMU`; WiX writes `MSIINSTALLPERUSER=1` into such a package (which would make an
+  elevated silent install per-user, into SYSTEM's profile), so `build_msi.ps1` deletes it and checks that it is gone; and the
+  dialog set's per-machine folder is built from the 32-bit `Program Files`, so two `SetProperty` rows point it at the 64-bit one
+  (held by `RepoFilesTests` and mutants D7-D9). The optional pieces are features
   (`FileAssoc`, `Manual`, `DesktopShortcut`, the last off by default), and an administrator's switches are public
-  properties: `ASSOCIATE_CH10=0`, `FULLMANUAL=0`, `DESKTOPSHORTCUT=1`, `INSTALLFOLDER=...`. **`FileAssoc` offers the
+  properties: `ASSOCIATE_CH10=0`, `FULLMANUAL=0`, `DESKTOPSHORTCUT=1`, `APPLICATIONFOLDER=...`. **`FileAssoc` offers the
   application for `.ch10` and never takes the association:** it registers the ProgID and lists it under
   `.ch10\OpenWithProgids`, and does not write `.ch10`'s default value (a ProgId with an Extension would, and Windows
   Installer's uninstall deletes every value a package wrote, whoever's it has become: found by the Sandbox test, and held by
@@ -980,10 +988,12 @@ that worktrees also need.
   replaces an older MSI and refuses a downgrade. **It does not upgrade an Inno Setup install**: a launch condition refuses
   to install beside one (its uninstall key `{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1`) and says to uninstall it first.
   Windows Installer reports a package that does not claim newer Windows as Windows 8.1, so the Windows-version condition
-  reads the real build from the registry. **US8.0 and the MSI:** the story's criterion that the installer can install to a
-  user-selected directory for users without admin privileges is not met by the MSI (per-machine, it needs elevation; the
-  portable ZIP is that user's), and the criterion that names `onlyifdoesntexist` and `uninsneveruninstall` describes the Inno
-  script, whose guarantees `NeverOverwrite` and `Permanent` now give. The story is the user's to reword; it was not touched.
+  reads the real build from the registry. **US8.0 and the MSI:** its criteria that the installer can install to "Program Files"
+  for admin users and to a user-selected directory for users without admin privileges are what the two modes are (the
+  Sandbox test installs, upgrades and uninstalls per-user with `MSIINSTALLPERUSER=1` under a restricted token, so with no
+  elevation; it does not use a real standard-user account, so that such a user gets per-user with no switch is Windows
+  Installer's own rule, and the wizard's scope and folder pages are unverified too: the test is silent); the criterion that names `onlyifdoesntexist` and `uninsneveruninstall` describes the
+  Inno script, whose guarantees `NeverOverwrite` and `Permanent` now give. The story is the user's to reword; it was not touched.
 - **Portable ZIP**: the same files flat, with a `portable` marker (preferences in a `tmDataQualityAnalyzer` folder beside
   the exe), `UserManual.html`, `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt` and `README.txt`.
 - **Release notes**: `deploy/RELEASENOTES.txt` — installed beside the application (with a Start menu entry) and the GitHub

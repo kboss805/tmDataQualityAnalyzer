@@ -48,10 +48,34 @@
     {
       "id": "D6",
       "file": "deploy/tmDataQualityAnalyzer.wxs",
-      "old": "<RegistryValue Root=\"HKLM\" Key=\"Software\\Classes\\.ch10\\OpenWithProgids\" Name=\"tmDataQualityAnalyzer.ch10\" Type=\"string\" Value=\"\" />",
-      "new": "<RegistryValue Root=\"HKLM\" Key=\"Software\\Classes\\.ch10\" Type=\"string\" Value=\"tmDataQualityAnalyzer.ch10\" />",
+      "old": "<RegistryValue Root=\"HKMU\" Key=\"Software\\Classes\\.ch10\\OpenWithProgids\" Name=\"tmDataQualityAnalyzer.ch10\" Type=\"string\" Value=\"\" />",
+      "new": "<RegistryValue Root=\"HKMU\" Key=\"Software\\Classes\\.ch10\" Type=\"string\" Value=\"tmDataQualityAnalyzer.ch10\" />",
       "expect": "caught",
       "note": "the MSI taking .ch10's default itself (an uninstall then deletes an association another application took)"
+    },
+    {
+      "id": "D7",
+      "file": "deploy/tmDataQualityAnalyzer.wxs",
+      "old": "<RegistryValue Root=\"HKMU\" Key=\"Software\\tmDataQualityAnalyzer\" Name=\"StartMenuShortcuts\"",
+      "new": "<RegistryValue Root=\"HKLM\" Key=\"Software\\tmDataQualityAnalyzer\" Name=\"StartMenuShortcuts\"",
+      "expect": "caught",
+      "note": "a registry write to HKLM (a per-user install by a user without admin rights would fail on it)"
+    },
+    {
+      "id": "D8",
+      "file": "deploy/build_msi.ps1",
+      "old": "DELETE FROM `Property` WHERE `Property`=''MSIINSTALLPERUSER''",
+      "new": "SELECT `Value` FROM `Property` WHERE `Property`=''MSIINSTALLPERUSER''",
+      "expect": "caught",
+      "note": "MSIINSTALLPERUSER left in the package (a silent install from an elevated deployment tool would be per-user, into SYSTEM's profile)"
+    },
+    {
+      "id": "D9",
+      "file": "deploy/tmDataQualityAnalyzer.wxs",
+      "old": "Value=\"[ProgramFiles64Folder][ApplicationFolderName]\"",
+      "new": "Value=\"[ProgramFilesFolder][ApplicationFolderName]\"",
+      "expect": "caught",
+      "note": "the per-machine folder the dialog set builds, in the 32-bit Program Files"
     }
   ]
 }
