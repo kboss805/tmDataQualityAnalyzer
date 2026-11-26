@@ -72,7 +72,7 @@ public static class PlotImageExport
         }
     }
 
-    /// <summary>The chart's data layer, then the legend at its place on the chart.</summary>
+    /// <summary>The chart's data layer, then the legends at their places on the chart.</summary>
     private static async Task DrawAsync(SKCanvas canvas, PlotView view, Size size)
     {
         var frame = new ChartFrame(view.Chart, size);
@@ -80,11 +80,17 @@ public static class PlotImageExport
         frame.Arrange(new Rect(size));
         await DrawingContextHelper.RenderAsync(canvas, frame);
 
-        // The legend is drawn as a visual in its own right, so its scroll is kept. That draws it at its own origin with
+        await DrawLegendAsync(canvas, view.FrameSyncLegend);
+        await DrawLegendAsync(canvas, view.SnrLegend);
+    }
+
+    /// <summary>One legend at its place on the chart, if it is shown.</summary>
+    private static async Task DrawLegendAsync(SKCanvas canvas, PlotLegend legend)
+    {
+        // A legend is drawn as a visual in its own right, so its scroll is kept. That draws it at its own origin with
         // the canvas's transform replaced, and clips to its bounds unless told otherwise (which carry its place on the
         // chart): so it is recorded at its origin, clipped to its size, and the recording, still vector, is played back
         // at its place.
-        PlotLegend legend = view.Legend;
         if (!legend.IsVisible) return;
         Size box = legend.Bounds.Size;
         using var recorder = new SKPictureRecorder();

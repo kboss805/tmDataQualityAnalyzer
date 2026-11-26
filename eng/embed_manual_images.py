@@ -204,12 +204,12 @@ after('<h2 id="interface">7. Interface &amp; settings</h2>',
 
 # The legend-toggle bullet is the one place where the with/without contrast is the
 # point, rather than incidental to whatever else the figure illustrates.
-after('      sessions, and a hidden legend is also left out of exported images.</li>\n',
+after('      sessions, and hidden legends are also left out of exported images.</li>\n',
       fig('FrameSync Perctentage Plot with Legend.png',
-          'The legend shown — one row per visible series, draggable anywhere inside the chart.',
-          'Plot with the legend overlay visible in the top-right corner')
+          'The Framesync Series legend, at the top left of the plot area — one row per visible series, draggable anywhere inside the chart.',
+          'Plot with the Framesync Series legend overlay visible in the top-left corner')
     + fig('FrameSync Perctentage Plot without Legend.png',
-          'The same plot with the legend hidden - right-click the chart and use <strong>Show Legend</strong>, or press <kbd>L</kbd>. A hidden legend is also left out of exported images.',
+          'The same plot with the legends hidden - right-click the chart and use <strong>Show Legend</strong>, or press <kbd>L</kbd>. Hidden legends are also left out of exported images.',
           'The same plot with the legend overlay hidden'))
 
 # The antenna log's figures (US10.0): the question every import asks sits before the section on the log, the log
@@ -225,7 +225,7 @@ before('<h3 id="import-antenna">',
 before('<p><strong>A log joins the plot instead of replacing it.</strong>',
        fig('walk-csv-02-antenna-plot.png',
            'An antenna log of 30 streams imported into an empty plot, here the whole of its 41 minutes: the 30 combined (C) '
-           'series, one hue per stream (taken again from the first after 15), dotted as all Receiver SNR is, on the Receiver SNR scale. The legend is hidden so that the '
+           'series, one hue per stream (the hues come round again after 15), dotted as all Receiver SNR is, on the Receiver SNR scale. The legend is hidden so that the '
            'scale shows; with it, each row reads Stream n C.',
            'Plot of 30 phased array antenna SNR series with the Receiver SNR scale on the right')
      + fig('walk-csv-03-customize.png',

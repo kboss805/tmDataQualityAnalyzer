@@ -119,12 +119,14 @@ public sealed class PlotTests
         Assert.Equal(hues[3], ColorOf(4));
         Assert.All(new[] { 0, 1, 2, 3, 4 }, id => Assert.False(plot.Series.Single(s => s.Id == id).Dotted));   // lock curves: solid
         Assert.All(new[] { 5, 6, 7, 8, 9, 10 }, id => Assert.True(plot.Series.Single(s => s.Id == id).Dotted)); // SNR: dotted
-        Assert.Equal(PlotColors.Shade(hues[0], 1), ColorOf(5));    // receiver 1, its first channel: one tint
-        Assert.Equal(PlotColors.Shade(hues[0], 2), ColorOf(6));    // its second: two
-        Assert.Equal(PlotColors.Shade(hues[1], 1), ColorOf(7));    // receiver 2 has its own hue
-        Assert.Equal(PlotColors.Shade(hues[2], 1), ColorOf(8));
-        Assert.Equal(PlotColors.Shade(hues[3], 1), ColorOf(9));
-        Assert.Equal(hues[3], ColorOf(10));                        // receiver 4's third channel, the combined one: the hue itself
+        // The SNR streams take the hues from the last end, so receiver 1 is not the colour of PCM channel 1.
+        Assert.Equal(PlotColors.Shade(hues[14], 1), ColorOf(5));   // receiver 1, its first channel: one tint
+        Assert.Equal(PlotColors.Shade(hues[14], 2), ColorOf(6));   // its second: two
+        Assert.Equal(PlotColors.Shade(hues[13], 1), ColorOf(7));   // receiver 2 has its own hue
+        Assert.Equal(PlotColors.Shade(hues[12], 1), ColorOf(8));
+        Assert.Equal(PlotColors.Shade(hues[11], 1), ColorOf(9));
+        Assert.Equal(hues[11], ColorOf(10));                       // receiver 4's third channel, the combined one: the hue itself
+        Assert.NotEqual(ColorOf(0), PlotColors.SnrHue(0));         // stream 1 of the two metrics is two colours
     }
 
     [AvaloniaFact]
@@ -153,13 +155,16 @@ public sealed class PlotTests
         {
             // Every SNR stream dotted, whichever round of the hues it is in; every channel of a stream alike.
             Assert.All(Enumerable.Range(0, 3), channel => Assert.True(Of(stream, channel).Dotted));
-            // One hue to a stream, repeated every 15; its combined channel the hue itself, the other two tints of it.
-            Color hue = PlotColors.StreamHues[(stream - 1) % 15];
+            // One hue to a stream, from the palette's last end and repeated every 15; its combined channel the hue itself, the
+            // other two tints of it.
+            Color hue = PlotColors.StreamHues[14 - (stream - 1) % 15];
             Assert.Equal(hue, Of(stream, 2).Color);
             Assert.Equal(PlotColors.Shade(hue, 1), Of(stream, 0).Color);
             Assert.Equal(PlotColors.Shade(hue, 2), Of(stream, 1).Color);
             Assert.Equal(new[] { false, false, true }, Enumerable.Range(0, 3).Select(channel => Of(stream, channel).Strong));
         }
+        Assert.Equal(PlotColors.StreamHues[14], Of(1, 2).Color);   // receiver 1 starts at the palette's last hue ...
+        Assert.Equal(PlotColors.StreamHues[0], Of(15, 2).Color);   // ... and the 15th ends on its first
         Assert.Equal(Of(1, 2).Color, Of(16, 2).Color);   // the 16th stream is the first's hue again, as the 31st is
         Assert.Equal(Of(1, 2).Color, Of(31, 2).Color);
         Assert.NotEqual(Of(1, 0).Color, Of(1, 1).Color);   // the two lighter tints are told apart, in every hue
@@ -1040,8 +1045,10 @@ public sealed class PlotTests
         int plain = Drawn(false, false), dotted = Drawn(true, false), strong = Drawn(false, true);
 
         Assert.True(plain > 100, $"the plain line is {plain} pixels");
-        // A dot and then twice as long a gap: about a third of a plain line's pixels, whatever the anti-aliasing at the ends.
-        Assert.InRange(dotted, plain * 0.20, plain * 0.55);
+        // A dot and then a gap as long: about two thirds of a plain line's pixels as counted here (half of its length, and the
+        // anti-aliasing fills the edges of every dot, which the count takes for line). The gap was twice as long before
+        // v3.5.0, which counts fewer, so a loose pattern is out of this range.
+        Assert.InRange(dotted, plain * 0.56, plain * 0.78);
         // 2.25 against 1.5 pixels thick.
         Assert.InRange(strong, plain * 1.25, plain * 1.9);
     }
@@ -1109,6 +1116,7 @@ public sealed class PlotTests
         void Only(PlotSeries series, double? rightMax = null, (double, double)? view = null)
         {
             plot.SetSeries(new[] { series });
+            plot.RecolorSeries(series.Id, PlotColors.StreamHues[0]);   // red, which the pixel counts below look for, whatever hue it was given
             if (rightMax is double max)
             {
                 plot.SetRightMinOverride(0);

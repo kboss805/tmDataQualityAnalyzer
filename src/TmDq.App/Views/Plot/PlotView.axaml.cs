@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
@@ -13,7 +15,7 @@ namespace TmDq.App.Views.Plot;
 /// <summary>
 /// The plot window's whole content (plan step 4.4), less the drawing (4.3b's
 /// <see cref="PlotChart"/>) and export (4.5): the chart, with nothing around it (US4.1), and over it the chip bar at the
-/// top left and the legend at the top right. Every control is in the right-click menu or on a chip, and the most used
+/// top left and the legends, Framesync Series at the top left and SNR Series at the top right, of the plot area. Every control is in the right-click menu or on a chip, and the most used
 /// have single keys: all of them declared in the AXAML and bound to the plot's <see cref="PlotCommands"/>, which this
 /// view makes for its plot with its <see cref="Prompts"/>.
 /// </summary>
@@ -34,7 +36,11 @@ public sealed partial class PlotView : UserControl
             if (Commands is { } commands) commands.MenuOpening();
             else e.Cancel = true;
         };
-        Overlay.SizeChanged += (_, e) => Legend.HostResized(e.NewSize, Chart.LegendRightEdge(e.NewSize));
+        Overlay.SizeChanged += (_, e) =>
+        {
+            FrameSyncLegend.HostResized(e.NewSize, Chart.LegendLeftEdge(e.NewSize), Chart.LegendTop(e.NewSize));
+            SnrLegend.HostResized(e.NewSize, Chart.LegendRightEdge(e.NewSize), Chart.LegendTop(e.NewSize));
+        };
         // Seen however the key's route treats it (something on the way may have handled it already): what matters is
         // that the chart hears of the step before it next paints, which comes after both.
         Root.AddHandler(KeyDownEvent, OnKeyDownSteps, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -133,12 +139,16 @@ public sealed partial class PlotView : UserControl
 
     private void OnSeriesChanged(object? sender, EventArgs e) => ShowLegend();
 
-    /// <summary>The legend for the plot as it is now.</summary>
+    /// <summary>The legends for the plot as it is now: its Receiver SNR series in the SNR legend, the rest in the Framesync one.
+    /// A legend with nothing to list is not drawn, and the user's choice to hide the legend hides both.</summary>
     private void ShowLegend()
     {
         PlotViewModel? vm = Plot;
         bool hasData = vm?.HasData == true;
         Size host = Overlay.Bounds.Size;
-        Legend.Show(hasData ? vm!.LegendEntries() : Array.Empty<LegendEntry>(), vm?.LegendVisible ?? true, host, Chart.LegendRightEdge(host));
+        IReadOnlyList<LegendEntry> all = hasData ? vm!.LegendEntries() : Array.Empty<LegendEntry>();
+        bool wanted = vm?.LegendVisible ?? true;
+        FrameSyncLegend.Show(all.Where(e => !e.IsSnr).ToList(), wanted, host, Chart.LegendLeftEdge(host), Chart.LegendTop(host));
+        SnrLegend.Show(all.Where(e => e.IsSnr).ToList(), wanted, host, Chart.LegendRightEdge(host), Chart.LegendTop(host));
     }
 }

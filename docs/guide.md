@@ -180,17 +180,17 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] A mouse click and hold pans the X axis.
 - [x] A large plot stays responsive while the wheel, a drag or a held pan or zoom key (the arrows, `+` and `-`) moves it: a dense series is drawn from each pixel column's minimum, maximum and mean, looked up in an index the core builds once per long series rather than walked sample by sample, and while a gesture moves a plot that takes longer than 30 ms to paint, each band is drawn as its outline and each line one pixel wide, the full picture coming back when the drag or the key is released or 150 ms after the last wheel notch. Keys that jump once (`Home`, `Backspace`, `R`) are not gestures and are never drafted. The draft is still each column's minimum to maximum, so a one-sample dropout shows in it; the series, the readout, the CSV and an exported image never change with it (`PlotDraftTests`, `test_chartgeometry`).
 - [x] The user can show or hide individual Frame Sync Lock and Receiver SNR series.
-- [x] A movable legend overlay floats inside the chart instead of sitting in a separate panel below it, showing a line-swatch and label for each visible series.
-- [x] The user can click-drag the legend anywhere inside the plot area to keep it clear of data of interest.
-- [x] The legend defaults to the top-right corner and resets there each new session; with the right axis shown (Receiver SNR) its right edge stops a margin short of that axis's labels instead of covering them.
-- [x] The user can show or hide the legend from the context menu's **Show Legend** item (or `L`). The choice persists across sessions, and a hidden legend is excluded from exported images.
-- [x] The legend background is translucent so plot data behind it stays visible.
-- [x] The legend's height is capped with a vertical scrollbar for dense plots, such as a Receiver SNR file with 48+ channels.
+- [x] Two movable legend overlays float inside the chart instead of sitting in a separate panel below it, each under its own title: **Framesync Series** shows a line-swatch and label for each visible Frame Sync Lock (or missed frames) series, and **SNR Series** the same for each visible Receiver SNR series, so which entry is which metric is never a guess. A legend with nothing to list is not drawn.
+- [x] The user can click-drag either legend anywhere inside the plot area to keep it clear of data of interest.
+- [x] The legends default to the top corners of the plot area, level with each other, and reset there each new session: **Framesync Series** at the top left and **SNR Series** at the top right. The SNR legend's right edge stops a margin short of the right axis's labels, and the Framesync legend starts a margin inside the left axis's, instead of covering them; both start below the View Mode and Reset view chips.
+- [x] The user can show or hide the legends, both together, from the context menu's **Show Legend** item (or `L`). The choice persists across sessions, and hidden legends are excluded from exported images.
+- [x] Each legend's background is translucent so plot data behind it stays visible.
+- [x] Each legend's height is capped with a vertical scrollbar for dense plots, such as a Receiver SNR file with 48+ channels; its title stays in place while the rows scroll.
 - [x] Receiver SNR legend rows show a short label (channel id plus receiver/channel code) instead of the full TMATS-derived stream title, though the full name remains available via tooltip and in CSV export headers.
-- [x] The legend is composited into exported PNG, SVG and PDF plot images at its placed position.
+- [x] The legends are composited into exported PNG, SVG and PDF plot images at their placed positions.
 - [x] The user can rename or recolor an individual series from the Customize View dialog.
 - [x] Frame Sync Lock curves (and a stream's missed frames, in the same colour) are drawn as solid lines, one of 15 hues per stream, assigned automatically in stream order; the 16th stream takes the first hue again.
-- [x] Receiver SNR curves are drawn as dotted lines in the same 15 hues, one per stream (a receiver of a processed recording, or a channel of a phased array antenna, US10.0), so a lock curve and an SNR curve of the same hue are told apart by their line; the 16th stream takes the first hue again.
+- [x] Receiver SNR curves are drawn as dotted lines in the same 15 hues, one per stream (a receiver of a processed recording, or a channel of a phased array antenna, US10.0), taken from the last hue back to the first, where Frame Sync Lock takes them from the first, so stream 1 of the two is two colours, and a lock curve and an SNR curve of the same hue are told apart by their line; the 16th stream takes the hue of the 1st again.
 - [x] Within a stream the combined channel (C) is the strongest: the stream's full hue and a little thicker; its other two channels (L and R, or H and V) are two lighter tints of that hue, so the three read as one stream. The legend's swatch is dotted and as thick as its line.
 - [x] When a plot opens, only the combined channel (C) of each Receiver SNR stream is shown, so a recording of many receivers stays readable; the other channels are one click away in Customize View. A receiver with no combined channel (set up with fewer than three) shows all of its channels. Frame Sync Lock curves are not affected.
 - [x] Frame Sync Lock streams beyond the three primaries, and Receiver SNR channels beyond a stream's first four, use progressively lighter shades of their color so related series stay visually grouped.
@@ -206,7 +206,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The plot window has no external control rows: the chart fills the entire plot area.
 - [x] Every plot control is reached from a right-click context menu on the chart, or from a control overlaid on the chart itself.
 - [x] The context menu leads with **Set Plot Title…**, then **Plot File**, **Remove File…**, **View Mode**, **Customize View…**, **Show Legend**, **Readout**, **X Axis**, **Y Axes** and **Reset View**; entries are disabled until data is loaded. Every entry is a plot control — the menu holds nothing that acts on files.
-- [x] The legend can be shown or hidden from the context menu (or `L`), and the choice persists across sessions.
+- [x] The legends can be shown or hidden from the context menu (or `L`), and the choice persists across sessions.
 - [x] The persistent on-chart controls are gathered into a single chip bar at the chart's top-left (View Mode chip, Reset view chip) rather than scattered around the plot; each chip hides itself when it would be meaningless, and with neither showing the bar collapses to nothing - so it costs no chart space at rest.
 - [x] Frequent actions have chrome-free gestures: Ctrl+drag / middle-drag rubber-bands a time range to zoom, double-click restores the full span, and a crosshair follows the cursor for reading several series at one instant.
 - [x] Mouse-wheel zoom and click-drag pan of the X axis are retained as the primary navigation.
@@ -308,11 +308,11 @@ The stories below follow the workflow a first-time user takes through the applic
 
 **Acceptance Criteria:**
 
-- [x] The current plot is exported as a single image of exactly what the chart shows: the series shown, the left axis's metric in view, the time window and axis limits as they are set, and the legend where it sits (or none when hidden).
+- [x] The current plot is exported as a single image of exactly what the chart shows: the series shown, the left axis's metric in view, the time window and axis limits as they are set, and the legends where they sit (or none when hidden).
   - **Scope:** the image is the view, not the data (the CSV is the data, US6.1), so a chart is made by setting up the screen. The interactive overlays are not part of the chart and are left out: the cursor's crosshair, a zoom band being dragged, the on-chart chips and "Loading...".
 - [x] The user selects the image format from one of the following: svg, png, pdf.
 - [x] The user specifies the image filename and location via the export dialog.
-- [x] The movable legend is rendered into the exported image at its on-plot position.
+- [x] The movable legends are rendered into the exported image at their on-plot positions.
 - [x] A single export dialog lets the user select any combination of image, data, and log exports and run them in one action.
 
 ### US6.1: Export the plotted data to a CSV file — Complete
@@ -355,7 +355,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Importing a CSV bypasses the Configure Streams dialog and processing pipeline, parsing the file straight into the plot.
 - [x] The importer accepts the application's own export format: a `Time (DOY:HH:MM:SS.mmm)` first column followed by one column per series.
 - [x] Frame Sync Lock (`Lock (%)` suffix), Accumulated Missed Frames (`Accumulated Missed Frames` suffix), and Receiver SNR (`_RCVR<N>`) series are recognized by their column headers and routed to the correct axis, metric type, and color.
-- [x] Imported series populate the plot, the on-plot legend, and the Customize View dialog the same way processed data does (axis auto-ranging, time window, visibility toggles all apply).
+- [x] Imported series populate the plot, the on-plot legends, and the Customize View dialog the same way processed data does (axis auto-ranging, time window, visibility toggles all apply).
 - [x] Imported data can be re-exported (CSV/image) and the recent-files list records the imported CSV.
 - [x] A CSV that is not in the application's export format (e.g. the legacy `Day,Time,…` layout, a wrong/missing header, or a file with no parseable data rows) is rejected with a clear error in the log rather than producing garbage series.
 - [x] Malformed or short data rows are skipped, and the user is informed how many rows were skipped.
@@ -429,7 +429,7 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] The time is ISO 8601, UTC, to the millisecond (`2026-11-13T19:15:35.513Z`), and is placed on the plot's time axis the way the application's own `Time (DOY:HH:MM:SS.mmm)` column is, so an imported log and a processed recording line up by clock time.
 - [x] A sample is three rows with the same time, one for each polarization (`HPol`, `VPol` and `Comb` in the file: Horizontal, Vertical and Combined, shown as H, V and C in the application), in any order; each row holds one value for every stream. The order the three rows come in does not change what is plotted.
 - [x] Each column after the polarization is a stream of its own, as each receiver is in a processed recording (the file calls them `Stream 1` to `Stream 30`), and each polarization of it is one series: 30 streams of three give 90 series. The polarizations are shown as **H** (Horizontal), **V** (Vertical) and **C** (Combined), not the application's L, R and C names for a receiver's channels. Each series is named so that its stream and its polarization are plain in the legend and in Customize View; the SCU's name (`SCU1`) is part of the name when a file holds more than one.
-- [x] Imported series populate the plot, the on-plot legend and Customize View as processed data does (axis auto-ranging, time window, visibility toggles, colours), and the file is recorded in the Recent Files list. The values are SNR in dB, drawn on the Receiver SNR axis with those of a processed recording.
+- [x] Imported series populate the plot, the on-plot SNR legend and Customize View as processed data does (axis auto-ranging, time window, visibility toggles, colours), and the file is recorded in the Recent Files list. The values are SNR in dB, drawn on the Receiver SNR axis with those of a processed recording.
 - [x] Only the combined (C) series of each stream shows at first (30 of the sample's 90); the rest are a click away in Customize View. The colours are US4.0's: one hue for each stream, every series dotted as all Receiver SNR is, and the combined series the strongest of a stream's three.
 - [x] A log joins the plot instead of replacing it. Imported while the plot shows anything, it is added as a recording of its own (named for its file in the Plot File selector) and placed by its clock time against what is shown, so a processed recording and the log can be compared; the plot's title and the recording stay. A log that does not overlap what is shown in time is said so in the log, and added anyway. A telemetry CSV still replaces the plot, as US6.3 says, and so does a log imported into an empty plot. Opening or processing a recording replaces the recordings processed before and keeps what was imported (an antenna's log or an exported CSV), so the comparison can be made with the log imported before the recording or after it.
 - [x] A phased array log is never exported as data: the third party's system writes it, so there is nothing for this application to hand back. Export Data (CSV) does not include its series, even with them on the plot beside series of a telemetry receiver, which US6.1 still exports in full, and on a plot of an antenna's log alone the Export dialog's **Export Data** box is disabled, with a line saying why. The plot image export (US6.0) applies to a plot of these series as to any other.
@@ -617,7 +617,7 @@ profile, so a batch processes with the linear calibration.
   recording's stream, named for the recording when the plot holds more than one). `PlotChart` draws it (from the core's
   geometry, each long series' envelope looked up in its `SeriesIndex`, a cached data layer in one bitmap painted again in
   place until the chart's size in pixels changes, the layout's text measured once until the font, the theme or the scaling changes, a draft while a gesture
-  moves a plot that is slow to paint, the gestures), and `PlotView` holds what is over it (the legend, `PlotLegend`, the chip bar, the
+  moves a plot that is slow to paint, the gestures), and `PlotView` holds what is over it (the two legends, `PlotLegend` twice, the chip bar, the
   right-click menu, the keys, Customize View). The menu, the chips and the keys are declared in `PlotView.axaml` and
   bound to `PlotCommands`, which the view makes for its plot with its prompts: a command for each item, chip and key
   (none runs without data, which disables the item and lets the key go on), what the chips and the menu show, and the
@@ -625,7 +625,7 @@ profile, so a batch processes with the linear calibration.
   Two rules the plot keeps in one place each: the **zoom** (`PlotTimeWindow.ZoomedAbout`, reached as
   `PlotViewModel.WindowZoomedAbout`, with the `KeyZoomFactor` and `WheelZoomFactor` steps) is the keys' about the window's
   centre and the wheel's about the pointer's time, refused below `MinZoomSpanSeconds` for both, the chart keeping only the
-  pixel maths and the direction; and **each view listens to what it depends on**: the legend to `SeriesChanged` (the
+  pixel maths and the direction; and **each view listens to what it depends on**: the legends to `SeriesChanged` (the
   series, their names, colours and visibility, and the lock axis's view) and `LegendVisible`, the chart to `SeriesChanged`
   (it drops what it built for series no longer shown), `RangesChanged` (it paints its data layer again) and the title,
   so a pan step rebuilds no legend row and the legend's switch repaints no line.
@@ -1264,8 +1264,8 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   released when the chart leaves the window), and five classes around the chart, which share `Support\AroundTheChartSupport`:
   `ChartPlotStateTests` (the plot's state the legend, chips and menu read, and which notifications repaint the data
   layer), `ChartMenuCommandTests` (the right-click menu's commands, asked through a fake of the prompts),
-  `CustomizeViewStateTests` (Customize View's rows and what a choice in it does, each recording's streams on their own), `ChartViewTests` (the legend and what
-  rebuilds it, the zoom rule, chips, menu, keys, read from the controls and from rendered frames) and
+  `CustomizeViewStateTests` (Customize View's rows and what a choice in it does, each recording's streams on their own), `ChartViewTests` (the legends and what
+  rebuilds them, the zoom rule, chips, menu, keys, read from the controls and from rendered frames) and
   `ChartPromptWindowTests` (each prompt's window: OK answers, Cancel does not), `PlotSourcesTests` (the recordings' names, the one shown, the list and the next id, and what removing some does, on their own), and `RemoveFileTests` (Remove File: a recording's series, name and CSV columns go and the others stay, what is refitted, the notice that keeps Save Template honest, the title that follows, and what the dialog starts on).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV), `PhasedArrayImportTests` (the kind question every import asks, an antenna's log as 90 series read H, V and C, and none of it exported),

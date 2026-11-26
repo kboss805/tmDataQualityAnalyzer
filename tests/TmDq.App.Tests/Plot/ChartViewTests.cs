@@ -51,8 +51,8 @@ public sealed class ChartViewTests
         Assert.Equal(view.X + 8, chip.X, 6);
         Assert.Equal(view.Y + 8, chip.Y, 6);
         Assert.Equal(26, chip.Height, 6);
-        // The legend, top right, does not meet it.
-        Assert.False(chip.Intersects(Frames.InWindow(s.View.Legend, s.Window)));
+        // The Framesync legend, top left, does not meet it: it starts at the plot area, under the chips.
+        Assert.False(chip.Intersects(Frames.InWindow(s.View.FrameSyncLegend, s.Window)));
 
         // Neither chip has anything to do for one SNR stream at rest: the bar takes no room.
         plot.SetSeries(SnrOnly().Series.ToArray());
@@ -131,23 +131,31 @@ public sealed class ChartViewTests
     }
 
     [AvaloniaFact]
-    public void TheLegendFloatsAtTheTopRightWithARowPerSeriesShown()
+    public void TheFramesyncLegendFloatsAtTheTopLeftOfThePlotAreaUnderItsTitleWithARowPerSeriesShown()
     {
         var plot = new PlotViewModel();
         Shown s = Show(plot);
-        PlotLegend legend = s.View.Legend;
+        PlotLegend legend = s.View.FrameSyncLegend;
         Assert.False(legend.IsVisible);
+        Assert.Equal("Framesync Series", legend.Title);
 
         plot.SetSeries(LockStream(0, "CH-01 PRN 15 5M", 1, 0));
         Dispatcher.UIThread.RunJobs();
         Assert.True(legend.IsVisible);
         Assert.Equal(1, legend.RowCount);
         Rect box = Frames.InWindow(legend, s.Window), view = Frames.InWindow(s.View, s.Window);
-        Assert.Equal(view.Right - PlotLegend.EdgeMargin, box.Right, 6);
-        Assert.Equal(view.Top + PlotLegend.EdgeMargin, box.Top, 6);
-        // A real row, well beyond the frame's own padding.
+        Rect area = s.View.Chart.PlotArea;
+        // In the plot area's top left corner, a margin in: clear of the left axis's labels and of the chips above the area.
+        Assert.Equal(view.X + area.Left + PlotLegend.EdgeMargin, box.Left, 6);
+        Assert.Equal(view.Y + area.Top + PlotLegend.EdgeMargin, box.Top, 6);
+        // A real row, well beyond the frame's own padding, under a title that does not scroll with the rows.
         Assert.True(box.Width > 2 * PlotLegend.ContentMargin + 40, $"the legend is {box.Width} wide");
         Assert.True(box.Height > 2 * PlotLegend.ContentMargin + 8, $"the legend is {box.Height} high");
+        TextBlock title = legend.GetVisualDescendants().OfType<TextBlock>().Single(b => b.Text == "Framesync Series");
+        Assert.Equal(FontWeight.SemiBold, title.FontWeight);
+        Assert.True(Frames.InWindow(title, s.Window).Bottom <= Frames.InWindow(legend.Rows[0], s.Window).Top, "the title is not above the first row");
+        // The title's room is counted in the legend's height: a row that fits is not scrolled under it.
+        Assert.True(legend.Scroll.Extent.Height <= legend.Scroll.Viewport.Height + 0.5, "a legend of one row scrolls");
 
         plot.SetSeries(LockStream(0, "CH-01 PRN 15 5M", 1, 0).Concat(LockStream(2, "CH-02 PRN 15 20M", 2, 1)));
         Dispatcher.UIThread.RunJobs();
@@ -161,16 +169,96 @@ public sealed class ChartViewTests
         Assert.Null(ToolTip.GetTip(row));   // its label is its whole name
         Assert.Equal(3, Frames.InWindow(legend.Rows[1], s.Window).Top - Frames.InWindow(legend.Rows[0], s.Window).Bottom, 6);
 
+        plot.Clear();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(legend.IsVisible);
+        Assert.Equal(0, legend.RowCount);
+        s.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheSnrLegendFloatsAtTheTopRightOfThePlotAreaWithAShortRowPerSeriesAndTheFullNameAHoverAway()
+    {
+        var plot = new PlotViewModel();
+        Shown s = Show(plot);
+        PlotLegend legend = s.View.SnrLegend;
+        Assert.False(legend.IsVisible);
+        Assert.Equal("SNR Series", legend.Title);
+
         plot.SetSeries(new[] { Snr(0, 40, 0, 3, 0, "40 - CH-01 2250.5MHZ AGC 800Kbps RNRZ-L L_RCVR3") });
         Dispatcher.UIThread.RunJobs();
-        row = (StackPanel)legend.Rows[0];
+        Assert.True(legend.IsVisible);
+        Assert.Equal(1, legend.RowCount);
+        var row = (StackPanel)legend.Rows[0];
         Assert.Equal("CH40 L_RCVR3", ((TextBlock)row.Children[1]).Text);
         Assert.Equal("40 - CH-01 2250.5MHZ AGC 800Kbps RNRZ-L L_RCVR3", ToolTip.GetTip(row));
+        Rect box = Frames.InWindow(legend, s.Window), view = Frames.InWindow(s.View, s.Window);
+        Rect area = s.View.Chart.PlotArea;
+        // In the plot area's top right corner, a margin in: clear of the right axis's labels, level with the left legend's place.
+        Assert.Equal(view.X + area.Right - PlotLegend.EdgeMargin, box.Right, 6);
+        Assert.Equal(view.Y + area.Top + PlotLegend.EdgeMargin, box.Top, 6);
+        Assert.NotNull(legend.GetVisualDescendants().OfType<TextBlock>().SingleOrDefault(b => b.Text == "SNR Series"));
 
         plot.Clear();
         Dispatcher.UIThread.RunJobs();
         Assert.False(legend.IsVisible);
         Assert.Equal(0, legend.RowCount);
+        s.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void TheTwoLegendsListEachOnesOwnMetricAndALegendWithNothingToListIsNotDrawn()
+    {
+        var plot = new PlotViewModel();
+        Shown s = Show(plot);
+        PlotLegend frameSync = s.View.FrameSyncLegend, snr = s.View.SnrLegend;
+
+        plot.SetSeries(LockStream(0, "Ch 5", 5, 0).Concat(new[] { Snr(10, 40, 0, 1, 0), Snr(11, 40, 0, 1, 2) }));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal((true, true), (frameSync.IsVisible, snr.IsVisible));
+        Assert.Equal(new[] { "Ch 5" }, frameSync.Rows.Select(r => ((Panel)r).Children.OfType<TextBlock>().Single().Text));
+        Assert.Equal(new[] { "CH40 L_RCVR1", "CH40 C_RCVR1" }, snr.Rows.Select(r => ((Panel)r).Children.OfType<TextBlock>().Single().Text));
+        // Side by side, in their own corners, level, and not on each other.
+        Rect left = Frames.InWindow(frameSync, s.Window), right = Frames.InWindow(snr, s.Window);
+        Assert.True(left.Right < right.Left, $"the legends meet: {left} and {right}");
+        Assert.Equal(left.Top, right.Top, 6);
+
+        // A plot with only one metric draws only its legend.
+        plot.SetSeries(LockStream(0, "Ch 5", 5, 0));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal((true, false), (frameSync.IsVisible, snr.IsVisible));
+        plot.SetSeries(new[] { Snr(10, 40, 0, 1, 0) });
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal((false, true), (frameSync.IsVisible, snr.IsVisible));
+
+        // Show Legend hides the two together, and brings both back.
+        plot.SetSeries(LockStream(0, "Ch 5", 5, 0).Concat(new[] { Snr(10, 40, 0, 1, 0) }));
+        plot.LegendVisible = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal((false, false), (frameSync.IsVisible, snr.IsVisible));
+        plot.LegendVisible = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal((true, true), (frameSync.IsVisible, snr.IsVisible));
+        s.Window.Close();
+    }
+
+    [AvaloniaFact]
+    public void AFramesyncLegendDraggedOffTheChartStopsAMarginInsideItsCorner()
+    {
+        PlotViewModel plot = LockPlot();
+        Shown s = Show(plot);
+        PlotLegend legend = s.View.FrameSyncLegend;
+        Point grab = s.At(legend);
+        s.Window.MouseDown(grab, MouseButton.Left, RawInputModifiers.None);
+        s.Window.MouseMove(grab + new Point(-2000, -2000), RawInputModifiers.LeftMouseButton);
+        s.Window.MouseUp(grab + new Point(-2000, -2000), MouseButton.Left, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(legend.UserMoved);
+        Assert.Equal(new Point(PlotLegend.EdgeMargin, PlotLegend.EdgeMargin), legend.Position);
+        // Moved, it stays where it was put when the chart changes size.
+        s.View.Width = 800;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new Point(PlotLegend.EdgeMargin, PlotLegend.EdgeMargin), legend.Position);
         s.Window.Close();
     }
 
@@ -197,18 +285,11 @@ public sealed class ChartViewTests
     }
 
     [AvaloniaFact]
-    public void TheLegendSitsLeftOfTheRightAxisLabelsWhileThatAxisIsShown()
+    public void TheSnrLegendSitsLeftOfTheRightAxisLabelsAndTheFramesyncOneRightOfTheLeftAxisLabels()
     {
         var plot = new PlotViewModel();
         Shown s = Show(plot);
-        PlotLegend legend = s.View.Legend;
-        double Right() => legend.Position.X + legend.Bounds.Width;
-
-        // No right axis, no gutter: the legend keeps to the chart's own edge, as it always did.
-        plot.SetSeries(LockStream(0, "Ch 5", 5, 0));
-        Dispatcher.UIThread.RunJobs();
-        Assert.False(plot.RightAxisVisible);
-        Assert.Equal(s.View.Bounds.Width - PlotLegend.EdgeMargin, Right(), 6);
+        PlotLegend right = s.View.SnrLegend, left = s.View.FrameSyncLegend;
 
         // Receiver SNR is on the right axis, whose labels and title are in the gutter beyond the plot area: the legend ends
         // a margin inside the plot area, so it covers none of them (it covered them once: v3.0 to v3.2).
@@ -217,12 +298,19 @@ public sealed class ChartViewTests
         Assert.True(plot.RightAxisVisible);
         Rect area = s.View.Chart.PlotArea;
         Assert.True(area.Right < s.View.Bounds.Width - 40, $"the gutter is {s.View.Bounds.Width - area.Right} wide");
-        Assert.Equal(area.Right - PlotLegend.EdgeMargin, Right(), 6);
+        Assert.Equal(area.Right - PlotLegend.EdgeMargin, right.Position.X + right.Bounds.Width, 6);
 
         // Resized, it follows the plot area, not the chart.
         s.View.Width = 800;
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal(s.View.Chart.PlotArea.Right - PlotLegend.EdgeMargin, Right(), 6);
+        Assert.Equal(s.View.Chart.PlotArea.Right - PlotLegend.EdgeMargin, right.Position.X + right.Bounds.Width, 6);
+
+        // The left legend starts a margin inside the plot area, which leaves the left axis's labels and title uncovered.
+        plot.SetSeries(LockStream(0, "Ch 5", 5, 0));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(plot.LeftAxisVisible);
+        Assert.True(s.View.Chart.PlotArea.Left > 40, $"the left gutter is {s.View.Chart.PlotArea.Left} wide");
+        Assert.Equal(s.View.Chart.PlotArea.Left + PlotLegend.EdgeMargin, left.Position.X, 6);
         s.Window.Close();
     }
 
@@ -231,7 +319,7 @@ public sealed class ChartViewTests
     {
         PlotViewModel plot = LockPlot();
         Shown s = Show(plot);
-        PlotLegend legend = s.View.Legend;
+        PlotLegend legend = s.View.FrameSyncLegend;
         Control row = legend.Rows[0];
         string Label() => ((Panel)legend.Rows[0]).Children.OfType<TextBlock>().Single().Text!;
         Assert.Equal("Ch 5", Label());
@@ -387,7 +475,7 @@ public sealed class ChartViewTests
     {
         PlotViewModel plot = SnrOnly(48);
         Shown s = Show(plot);
-        PlotLegend legend = s.View.Legend;
+        PlotLegend legend = s.View.SnrLegend;
         Assert.Equal(48, legend.RowCount);
         Assert.Equal(240, legend.Bounds.Height, 6);   // 60 % of the chart's 400
         Assert.True(legend.Scroll.Extent.Height > legend.Scroll.Viewport.Height);
@@ -414,19 +502,18 @@ public sealed class ChartViewTests
         Assert.True(legend.Scroll.Offset.Y > 0);
 
         // So wide a name is capped too, at a fraction of the chart's width.
-        plot.SetSeries(new[] { Snr(0, 40, 0, 1, 0, new string('W', 300)) });
         plot.SetSeries(new[] { PlotFixtures.Lock(0, new string('W', 300), 1, 0, X3, X3) });
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal(270, legend.Bounds.Width, 6);   // 45 % of the chart's 600
+        Assert.Equal(270, s.View.FrameSyncLegend.Bounds.Width, 6);   // 45 % of the chart's 600
         s.Window.Close();
     }
 
     [AvaloniaFact]
     public void TheLegendIsDraggedAnywhereInsideTheChartAndKeptThere()
     {
-        PlotViewModel plot = LockPlot();
+        PlotViewModel plot = SnrOnly();
         Shown s = Show(plot);
-        PlotLegend legend = s.View.Legend;
+        PlotLegend legend = s.View.SnrLegend;
         Point start = legend.Position;
         Assert.False(legend.UserMoved);
 
@@ -451,7 +538,7 @@ public sealed class ChartViewTests
         s.View.Height = 200;
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(200 - legend.Bounds.Height - PlotLegend.EdgeMargin, legend.Position.Y, 6);
-        plot.SetSeries(LockStream(0, "Ch 6", 6, 0));
+        plot.SetSeries(new[] { Snr(0, 41, 0, 2, 0) });
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(PlotLegend.EdgeMargin, legend.Position.X);
 
@@ -466,14 +553,19 @@ public sealed class ChartViewTests
     }
 
     [AvaloniaFact]
-    public void AnUndraggedLegendFollowsTheTopRightWhenTheChartIsResized()
+    public void AnUndraggedLegendFollowsItsCornerWhenTheChartIsResized()
     {
-        PlotViewModel plot = LockPlot();
+        var plot = new PlotViewModel();
+        plot.SetSeries(LockStream(0, "Ch 5", 5, 0).Concat(new[] { Snr(10, 40, 0, 1, 0) }));
         Shown s = Show(plot);
         s.View.Width = 800;
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal(800 - s.View.Legend.Bounds.Width - PlotLegend.EdgeMargin, s.View.Legend.Position.X, 6);
-        Assert.Equal(PlotLegend.EdgeMargin, s.View.Legend.Position.Y);
+        PlotLegend left = s.View.FrameSyncLegend, right = s.View.SnrLegend;
+        Rect area = s.View.Chart.PlotArea;
+        Assert.Equal(area.Left + PlotLegend.EdgeMargin, left.Position.X, 6);
+        Assert.Equal(area.Right - right.Bounds.Width - PlotLegend.EdgeMargin, right.Position.X, 6);
+        Assert.Equal(area.Top + PlotLegend.EdgeMargin, left.Position.Y, 6);
+        Assert.Equal(left.Position.Y, right.Position.Y, 6);
         s.Window.Close();
     }
 
@@ -485,7 +577,7 @@ public sealed class ChartViewTests
         plot.SetSeries(new[] { PlotFixtures.Lock(0, "yellow", 1, 0, new[] { 0.0, 2.0 }, new[] { 50.0, 50.0 }) });
         plot.RecolorSeries(0, yellow);
         Shown s = Show(plot);
-        Color Swatch() => ((ImmutableSolidColorBrush)((Border)((Panel)s.View.Legend.Rows[0]).Children[0]).Background!).Color;
+        Color Swatch() => ((ImmutableSolidColorBrush)((Border)((Panel)s.View.FrameSyncLegend.Rows[0]).Children[0]).Background!).Color;
         Assert.Equal(ChartPalette.Light.SeriesColor(yellow), Swatch());
         Assert.NotEqual(yellow, Swatch());
         // A row built after the view is shown (a recolour rebuilds them) is in the theme's version of its colour from the start.
@@ -519,7 +611,7 @@ public sealed class ChartViewTests
         });
         Shown s = Show(plot);
         Dispatcher.UIThread.RunJobs();
-        Border Swatch(int row) => Assert.IsType<Border>(((StackPanel)s.View.Legend.Rows[row]).Children[0]);
+        Border Swatch(int row) => Assert.IsType<Border>(((StackPanel)(row == 0 ? s.View.FrameSyncLegend : s.View.SnrLegend).Rows[row == 0 ? 0 : row - 1]).Children[0]);
 
         // A Frame Sync Lock series is solid: a bar in its colour.
         Assert.IsType<ImmutableSolidColorBrush>(Swatch(0).Background);
@@ -550,7 +642,7 @@ public sealed class ChartViewTests
         plot.SetRightMinOverride(0);
         plot.SetRightMaxOverride(100);
         Shown s = Show(plot);
-        PlotLegend legend = s.View.Legend;
+        PlotLegend legend = s.View.SnrLegend;
         Assert.Equal(ChartPalette.Light.LegendBackground, ((ImmutableSolidColorBrush)legend.Background!).Color);
         Assert.Equal(185, ChartPalette.Light.LegendBackground.A);
 
@@ -582,21 +674,21 @@ public sealed class ChartViewTests
     {
         PlotViewModel plot = LockPlot();
         Shown s = Show(plot);
-        Assert.True(s.View.Legend.IsVisible);
+        Assert.True(s.View.FrameSyncLegend.IsVisible);
         plot.LegendVisible = false;
         Dispatcher.UIThread.RunJobs();
-        Assert.False(s.View.Legend.IsVisible);
+        Assert.False(s.View.FrameSyncLegend.IsVisible);
         plot.SetSeries(LockStream(0, "Ch 5", 5, 0).Concat(LockStream(2, "Ch 6", 6, 1)));
         Dispatcher.UIThread.RunJobs();
-        Assert.False(s.View.Legend.IsVisible);
-        Assert.Equal(2, s.View.Legend.RowCount);
+        Assert.False(s.View.FrameSyncLegend.IsVisible);
+        Assert.Equal(2, s.View.FrameSyncLegend.RowCount);
         plot.Clear();   // a new recording keeps the choice
         plot.SetSeries(LockStream(0, "Ch 5", 5, 0));
         Dispatcher.UIThread.RunJobs();
-        Assert.False(s.View.Legend.IsVisible);
+        Assert.False(s.View.FrameSyncLegend.IsVisible);
         plot.LegendVisible = true;
         Dispatcher.UIThread.RunJobs();
-        Assert.True(s.View.Legend.IsVisible);
+        Assert.True(s.View.FrameSyncLegend.IsVisible);
         s.Window.Close();
     }
 
@@ -704,10 +796,10 @@ public sealed class ChartViewTests
         Assert.True(legend.IsChecked);
         await Choose(legend);
         Assert.False(plot.LegendVisible);
-        Assert.False(s.View.Legend.IsVisible);
+        Assert.False(s.View.FrameSyncLegend.IsVisible);
         Assert.False(Item(Menus.Open(s.View), "Show Legend").IsChecked);
         await Choose(Item(Menus.Open(s.View), "Show Legend"));
-        Assert.True(s.View.Legend.IsVisible);
+        Assert.True(s.View.FrameSyncLegend.IsVisible);
         s.Window.Close();
     }
 

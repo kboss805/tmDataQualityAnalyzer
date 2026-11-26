@@ -177,7 +177,7 @@ public sealed class ExportImportTests
         return count;
     }
 
-    private static Rect LegendBox(PlotView view) => new(view.Legend.Position, view.Legend.Bounds.Size);
+    private static Rect LegendBox(PlotLegend legend) => new(legend.Position, legend.Bounds.Size);
 
     private static async Task<SKBitmap> PngOf(PlotView view)
     {
@@ -201,25 +201,45 @@ public sealed class ExportImportTests
         (PlotView view, Window window) = Show(plot);
         using SKBitmap first = await PngOf(view);
         Assert.Equal((600, 400), (first.Width, first.Height));
-        Rect topRight = LegendBox(view);
+        Rect topRight = LegendBox(view.SnrLegend);
         Assert.True(Near(first, topRight, LineColour) > 20, "no swatch where the legend is");
         Assert.True(Near(first, new Rect(0, view.Chart.RightToPixel(10) - 3, 600, 6), LineColour) > 200, "no line");
 
         // Dragged, it is drawn where it was put, and nowhere else.
-        Point grab = Frames.InWindow(view.Legend, window).Center;
+        Point grab = Frames.InWindow(view.SnrLegend, window).Center;
         window.MouseDown(grab, MouseButton.Left, RawInputModifiers.None);
         window.MouseMove(grab + new Point(-300, 120), RawInputModifiers.LeftMouseButton);
         window.MouseUp(grab + new Point(-300, 120), MouseButton.Left, RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
         using SKBitmap moved = await PngOf(view);
-        Assert.True(Near(moved, LegendBox(view), LineColour) > 20, "no swatch where the legend was dragged");
+        Assert.True(Near(moved, LegendBox(view.SnrLegend), LineColour) > 20, "no swatch where the legend was dragged");
         Assert.Equal(0, Near(moved, topRight, LineColour));
 
         // Hidden, it is not drawn.
         plot.LegendVisible = false;
         Dispatcher.UIThread.RunJobs();
         using SKBitmap hidden = await PngOf(view);
-        Assert.Equal(0, Near(hidden, LegendBox(view), LineColour));
+        Assert.Equal(0, Near(hidden, LegendBox(view.SnrLegend), LineColour));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task APngHoldsBothLegendsEachAtItsOwnCorner()
+    {
+        Color blue = Color.FromRgb(30, 90, 220);
+        PlotViewModel plot = LowLine();
+        plot.SetSeries(plot.Series.Concat(new[] { PlotFixtures.Lock(1, "lock", 5, 1, new[] { 0.0, 2.0 }, new[] { 20.0, 20.0 }) }).ToArray());
+        plot.RecolorSeries(0, LineColour);
+        plot.RecolorSeries(1, blue);
+        (PlotView view, Window window) = Show(plot);
+        using SKBitmap image = await PngOf(view);
+        Rect framesync = LegendBox(view.FrameSyncLegend), snr = LegendBox(view.SnrLegend);
+        Assert.True(framesync.Right < snr.Left, "the legends meet");
+        Assert.True(Near(image, framesync, blue) > 20, "no Framesync swatch where its legend is");
+        Assert.True(Near(image, snr, LineColour) > 20, "no SNR swatch where its legend is");
+        // Each legend holds only its own metric's swatch.
+        Assert.Equal(0, Near(image, framesync, LineColour));
+        Assert.Equal(0, Near(image, snr, blue));
         window.Close();
     }
 
