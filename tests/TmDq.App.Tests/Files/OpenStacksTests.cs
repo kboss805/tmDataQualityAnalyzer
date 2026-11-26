@@ -13,15 +13,16 @@ using Xunit;
 namespace TmDq.App.Tests;
 
 /// <summary>
-/// Add Recording: processes another recording as Open does, but keeps everything on the plot (the recordings processed before and
-/// what was imported), each recording its own entry in Plot File and Remove File. With an empty plot it is Open.
+/// Open stacks: a recording opened with something on the plot is processed and added beside it (the recordings processed before and
+/// what was imported), each recording its own entry in Plot File and Remove File, and nothing on the plot is replaced. An empty plot is
+/// where a recording starts. (File > Add Recording was this, before Open did it too.)
 /// </summary>
 [Collection(NativeCoreCollection.Name)]
-public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
+public sealed class OpenStacksTests : IClassFixture<ShortRecordings>
 {
     private readonly ShortRecordings _recordings;
 
-    public AddRecordingTests(ShortRecordings recordings)
+    public OpenStacksTests(ShortRecordings recordings)
     {
         NativeCore.EnsureLoaded();
         _recordings = recordings;
@@ -37,7 +38,7 @@ public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
     private static string NameOf(string path) => MainWindowViewModel.BaseName(Path.GetFileName(path));
 
     [AvaloniaFact]
-    public async Task AddingARecordingKeepsTheOneOnThePlotAndAddsTheNewBesideIt()
+    public async Task OpeningASecondRecordingKeepsTheOneOnThePlotAndAddsTheNewBesideIt()
     {
         var vm = new MainWindowViewModel();
         await vm.LoadAsync(Prn);
@@ -45,7 +46,7 @@ public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
         int onePlot = vm.Plot.Series.Count;
         int firstId = vm.Sources[0].SourceId;
 
-        await vm.LoadAsync(Second, add: true);
+        await vm.LoadAsync(Second);
 
         Assert.Same(first, Assert.Single(vm.Plot.Series, s => s.SourceId == firstId && s.Metric == MetricType.FrameSyncLock));   // untouched
         Assert.True(vm.Plot.Series.Count > onePlot);
@@ -57,7 +58,7 @@ public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
-    public async Task AddingARecordingLeavesTheColoursShownAndColoursTheNewOneAsItWouldBeAlone()
+    public async Task OpeningASecondRecordingLeavesTheColoursShownAndColoursTheNewOneAsItWouldBeAlone()
     {
         var alone = new MainWindowViewModel();
         await alone.LoadAsync(Second);
@@ -67,7 +68,7 @@ public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
         vm.Plot.RecolorSeries(first.Id, Avalonia.Media.Colors.Teal);   // as Customize View or a template recolours it
         int firstId = first.SourceId;
 
-        await vm.LoadAsync(Second, add: true);
+        await vm.LoadAsync(Second);
 
         Assert.All(vm.Plot.Series.Where(s => s.SourceId == firstId && s.IsLeftAxis), s => Assert.Equal(Avalonia.Media.Colors.Teal, s.Color));
         Assert.Equal(alone.Plot.Series.Select(s => (s.Metric, s.Color, s.Dotted, s.Strong)),
@@ -75,41 +76,43 @@ public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
-    public async Task AddingWithNothingOnThePlotIsOpen()
+    public async Task OpeningWithNothingOnThePlotTitlesItAndNumbersItFromZero()
     {
         var vm = new MainWindowViewModel();
 
-        await vm.LoadAsync(Prn, add: true);
+        await vm.LoadAsync(Prn);
 
         Assert.Equal(NameOf(Prn), vm.Plot.Title);
         Assert.Single(vm.Sources);
         Assert.Equal(NameOf(Prn), Assert.Single(vm.Plot.SourceList()).Label);
         Assert.Equal(0, vm.Sources[0].SourceId);
-        Assert.Contains(vm.Log.Entries, e => e.Text.Contains("Opening: ", System.StringComparison.Ordinal));
+        Assert.Contains(vm.Log.Entries, e => e.Text.Contains("Opening: ", System.StringComparison.Ordinal));   // there was nothing to add to
     }
 
     [AvaloniaFact]
-    public async Task OpenStillReplacesTheRecordingsOnThePlot()
+    public async Task OpenNoLongerReplacesAnythingAndAThirdOpenIsStackedToo()
     {
         var vm = new MainWindowViewModel();
         await vm.LoadAsync(Prn);
-        await vm.LoadAsync(Second, add: true);
+        await vm.LoadAsync(Second);
         Assert.Equal(2, vm.Sources.Count);
+        int series = vm.Plot.Series.Count;
 
         await vm.LoadAsync(Prn);
 
-        Assert.Single(vm.Sources);
-        Assert.Equal(NameOf(Prn), Assert.Single(vm.Plot.SourceList()).Label);
+        Assert.Equal(3, vm.Sources.Count);                              // what was there stays, and the third is beside it
+        Assert.True(vm.Plot.Series.Count > series);
         Assert.Equal(NameOf(Prn), vm.Plot.Title);
+        Assert.Equal(new[] { Prn, Second, Prn }, vm.Sources.Select(s => s.FilePath));
     }
 
     [AvaloniaFact]
-    public async Task TheSameRecordingAddedAgainIsNamedApartInPlotFileAndRemoveFile()
+    public async Task TheSameRecordingOpenedAgainIsNamedApartInPlotFileAndRemoveFile()
     {
         var vm = new MainWindowViewModel();
         await vm.LoadAsync(Prn);
-        await vm.LoadAsync(Prn, add: true);
-        await vm.LoadAsync(Prn, add: true);
+        await vm.LoadAsync(Prn);
+        await vm.LoadAsync(Prn);
 
         string name = NameOf(Prn);
         Assert.Equal(new[] { name, name + " (2)", name + " (3)" }, vm.Plot.SourceList().Select(x => x.Label));
@@ -122,12 +125,12 @@ public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
-    public async Task AddingKeepsWhatWasImportedAsWellAsWhatWasProcessed()
+    public async Task OpeningKeepsWhatWasImportedAsWellAsWhatWasProcessed()
     {
         var vm = new MainWindowViewModel(new MainWindowServices { CsvKinds = new FakeCsvKinds { Always = CsvKind.PhasedArrayAntenna } });
         await vm.ImportCsvAsync(AntennaLog);
         await vm.LoadAsync(Prn);
-        await vm.LoadAsync(Second, add: true);
+        await vm.LoadAsync(Second);
 
         Assert.Equal(90, vm.Plot.Series.Count(s => s.IsPhasedArray));
         Assert.Equal(3, vm.Plot.SourceList().Count);                    // the log and the two recordings
@@ -147,11 +150,11 @@ public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
             await vm.LoadAsync(Prn);
             int series = vm.Plot.Series.Count;
 
-            await vm.LoadAsync(junk, add: true);                        // not a recording
+            await vm.LoadAsync(junk);                        // not a recording
             Assert.Equal((series, 1), (vm.Plot.Series.Count, vm.Sources.Count));
 
             cancel = true;
-            await vm.LoadAsync(Second, add: true);                     // Configure Streams cancelled
+            await vm.LoadAsync(Second);                     // Configure Streams cancelled
             Assert.Equal((series, 1), (vm.Plot.Series.Count, vm.Sources.Count));
             Assert.Equal(NameOf(Prn), vm.Plot.Title);
         }
@@ -171,7 +174,7 @@ public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
         int series = vm.Plot.Series.Count;
 
         cancelRun = true;
-        await vm.LoadAsync(Second, add: true);
+        await vm.LoadAsync(Second);
 
         Assert.Equal((series, 1), (vm.Plot.Series.Count, vm.Sources.Count));
         Assert.Equal(NameOf(Prn), Assert.Single(vm.Plot.SourceList()).Label);
@@ -179,22 +182,22 @@ public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
-    public async Task TheMenuEntryIsTheViewModelsAndAsksThePicker()
+    public async Task TheMenuEntryIsTheViewModelsAndAsksThePickerEachTimeAndStacks()
     {
         var picker = new FakeRecordingPicker();
         var vm = new MainWindowViewModel(new MainWindowServices { Picker = picker });
-        Assert.True(vm.AddRecordingCommand.CanExecute(null));
+        Assert.True(vm.OpenCommand.CanExecute(null));
 
         picker.Answers.Enqueue(Prn);
-        await vm.AddRecordingCommand.ExecuteAsync(null);                // an empty plot: it is Open
+        await vm.OpenCommand.ExecuteAsync(null);
         picker.Answers.Enqueue(Second);
-        await vm.AddRecordingCommand.ExecuteAsync(null);
+        await vm.OpenCommand.ExecuteAsync(null);                        // with something on the plot: added beside it
 
         Assert.Equal(2, picker.Asked);
         Assert.Equal(2, vm.Sources.Count);
 
-        // Without a picker there is nothing to ask, as for Open.
-        Assert.False(new MainWindowViewModel().AddRecordingCommand.CanExecute(null));
+        // Without a picker there is nothing to ask.
+        Assert.False(new MainWindowViewModel().OpenCommand.CanExecute(null));
     }
 
     [AvaloniaFact]
@@ -202,7 +205,7 @@ public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
     {
         var vm = new MainWindowViewModel();
         await vm.LoadAsync(Prn);
-        await vm.LoadAsync(Second, add: true);
+        await vm.LoadAsync(Second);
         Assert.Equal(2, vm.Sources.Count);
 
         vm.Plot.RemoveSource(vm.Sources[1].SourceId);
@@ -219,7 +222,7 @@ public sealed class AddRecordingTests : IClassFixture<ShortRecordings>
         var vm = new MainWindowViewModel(new MainWindowServices { Configurator = FakeConfigurator.SafranOrDefault(), AppRoot = Repo.Root });
         await vm.LoadAsync(Prn);
 
-        await vm.LoadAsync(safran, add: true);
+        await vm.LoadAsync(safran);
 
         Assert.Equal(2, vm.Sources.Count);
         // The two recordings are from different days: the warning names the one just added, not nothing or a batch's last file.

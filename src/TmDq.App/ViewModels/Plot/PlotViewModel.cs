@@ -432,7 +432,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     public bool RemoveSource(int sourceId) => RemoveSources(new[] { sourceId });
 
     /// <summary>
-    /// <see cref="RemoveSource"/> for several recordings at once (Open replacing the ones processed before): the window, the axes
+    /// <see cref="RemoveSource"/> for several recordings at once (Clear Plot): the window, the axes
     /// and the chart are worked out and redrawn once for all of them, not once for each. <see cref="SourceRemoved"/> is raised
     /// for each one removed, in the order given.
     /// </summary>
