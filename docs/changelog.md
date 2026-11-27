@@ -12,6 +12,14 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### A packet reader prepared again forgets the earlier prepare's queues (v3.5.1, PR 2)
+
+**What was wrong.** Found by the sweep (latent: the application makes one reader per run). `Ch10PacketReader::prepare` may be called again (it gives its earlier handle back and clears its channel table) but kept `m_routing` and `m_all_queues`, so a run fed and ended the earlier call's queues too: queues of streams that, in a host, may already be destroyed.
+
+**What changed.** `prepare` clears both with the channel table.
+
+**How it was checked.** `Ch10PacketReader: a reader prepared again routes only to the queues of its last prepare` (the last prepare's queue gets every packet and one end marker; the first gets nothing). Mutants L90 (routing kept) and L91 (queues kept) of `eng/mutants/reader-lifetime.json` CAUGHT, L90 by a hang: the earlier queue fills, nothing drains it, and the reader blocks, which the harness counts as caught.
+
 #### An imported CSV whose rows are out of time order is shown to its latest time; a first stamp below zero is a first row (v3.5.1, PR 2)
 
 **What was wrong.** Found by the sweep. The CSV reader took the span (`xMax`) from each column's last row, and the plot took a series' end from its last sample (`SpanOf`, `SetVisibleSource`), so a file whose rows are not in time order (a clock that stepped back, a file edited by hand) was cut short at the view's end. And the reader used a negative first time as its "no first row yet" mark, so a first stamp that reads below zero (`001:00:-1:00.000`) re-seeded the base on the next row and both rows read 0.
