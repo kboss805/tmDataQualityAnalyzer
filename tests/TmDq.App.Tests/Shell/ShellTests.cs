@@ -167,11 +167,13 @@ public sealed class ShellTests : IDisposable
                       Entry(window, "File", "Save Template...").Command, Entry(window, "Import/Export", "Import from CSV...").Command,
                       Entry(window, "Import/Export", "Export...").Command));
         Assert.Equal(new KeyGesture(Key.O, KeyModifiers.Control), Entry(window, "File", "Open...").InputGesture);
-        Assert.NotNull(ToolTip.GetTip(Entry(window, "File", "Open...")));   // it says that it adds beside what is there
-        Assert.Equal(("Import a previously exported CSV file", "Export plot data and images"),
-                     ((string)ToolTip.GetTip(Entry(window, "Import/Export", "Import from CSV..."))!, (string)ToolTip.GetTip(Entry(window, "Import/Export", "Export..."))!));
-        Assert.NotNull(ToolTip.GetTip(Entry(window, "File", "Save Template...")));
-        Assert.NotNull(ToolTip.GetTip(Entry(window, "File", "Process Multiple Files...")));
+        // The tips, word for word: Open and Import say they add beside what is there, Process Multiple Files that it clears first.
+        static string Tip(MainWindow w, string menu, string entry) => (string)ToolTip.GetTip(Entry(w, menu, entry))!;
+        Assert.Equal("Process a recording and add it to the plot, beside what is already there", Tip(window, "File", "Open..."));
+        Assert.Equal("Import a CSV this application exported, or an antenna log, and add it to the plot", Tip(window, "Import/Export", "Import from CSV..."));
+        Assert.Equal("Export plot data and images", Tip(window, "Import/Export", "Export..."));
+        Assert.Equal("Save the processed recording's stream settings, names and colors as a template", Tip(window, "File", "Save Template..."));
+        Assert.Equal("Process several recordings with a saved template; the plot is cleared first", Tip(window, "File", "Process Multiple Files..."));
 
         // The help and About are the view model's commands, as every other entry is: each asks the help service.
         Assert.Equal((vm.OpenManualCommand, vm.ShowAboutCommand), (Entry(window, "Help", "User Manual").Command, Entry(window, "Help", "About").Command));
@@ -232,7 +234,7 @@ public sealed class ShellTests : IDisposable
     }
 
     [Fact]
-    public void OpenOffersRecordingsOnlyAndImportCsvExportedCsvsOnly()
+    public void OpenOffersRecordingsOnlyAndImportCsvCsvFilesOnly()
     {
         // US6.3: Open stays Chapter-10-only, Import CSV is CSV-only; v2.x's filters, with no "All files" to
         // reach a CSV through Open.
@@ -242,10 +244,10 @@ public sealed class ShellTests : IDisposable
         Assert.Equal(new[] { "*.ch10" }, recordings.Patterns);
 
         FilePickerOpenOptions csv = StorageDataFilePicker.CsvOptions(null);
-        Assert.Equal("Import CSV File", csv.Title);
+        Assert.Equal("Import from CSV", csv.Title);
         Assert.False(csv.AllowMultiple);
         FilePickerFileType exported = Assert.Single(csv.FileTypeFilter!);
-        Assert.Equal("Exported CSV", exported.Name);
+        Assert.Equal("CSV Files", exported.Name);
         Assert.Equal(new[] { "*.csv" }, exported.Patterns);
     }
 

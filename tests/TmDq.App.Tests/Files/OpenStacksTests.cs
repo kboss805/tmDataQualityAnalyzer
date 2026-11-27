@@ -14,7 +14,7 @@ namespace TmDq.App.Tests;
 /// <summary>
 /// Open stacks: a recording opened with something on the plot is processed and added beside it (the recordings processed before and
 /// what was imported), each recording its own entry in Plot File and Remove File, and nothing on the plot is replaced. An empty plot is
-/// where a recording starts. (File > Add Recording was this, before Open did it too.)
+/// where a recording starts.
 /// </summary>
 [Collection(NativeCoreCollection.Name)]
 public sealed class OpenStacksTests : IClassFixture<ShortRecordings>

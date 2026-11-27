@@ -27,7 +27,7 @@ using Xunit;
 namespace TmDq.App.Tests;
 
 /// <summary>
-/// Save as Template and Apply Template to Files in the main window (plan step 4.7, US1.1): v2.14.2's main window's
+/// Save Template and Process Multiple Files in the main window (plan step 4.7, US1.1): v2.14.2's main window's
 /// and batch's flow and messages, a batch over copies of the PRN sample, its per-file export held to the
 /// CSV v2.14.2 wrote, and the windows.
 /// </summary>
@@ -467,7 +467,7 @@ public sealed class TemplateBatchTests : IDisposable, IClassFixture<ShortRecordi
         Assert.Equal((3, false), (source.TimeChannelIndex, source.SwapBytes));
     }
 
-    // ---- Apply Template to Files --------------------------------------------------------------------------------------
+    // ---- Process Multiple Files ---------------------------------------------------------------------------------------
 
     [Fact]
     public void ATemplateThatCannotBeUsedIsAnErrorInV214sWords()
@@ -827,7 +827,7 @@ public sealed class TemplateBatchTests : IDisposable, IClassFixture<ShortRecordi
         Task<int?> chosen = dialogs.ChooseSourceAsync(new[] { "a (source 0)", "b (source 1)" });
         Dispatcher.UIThread.RunJobs();
         var window = Assert.IsType<ChoiceWindow>(Assert.Single(owner.OwnedWindows));
-        Assert.Equal("Save as Template", window.Title);
+        Assert.Equal("Save Template", window.Title);
         Assert.Contains(window.GetVisualDescendantsOf<TextBlock>(), t => t.Text == "Capture the per-stream settings from which source?");
         Assert.Equal(0, window.Choices.SelectedIndex);
         window.Choices.SelectedIndex = 1;

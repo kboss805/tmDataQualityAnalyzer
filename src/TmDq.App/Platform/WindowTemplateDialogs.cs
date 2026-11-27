@@ -20,5 +20,5 @@ public sealed class WindowTemplateDialogs : ITemplateDialogs
     }
 
     public Task<int?> ChooseSourceAsync(IReadOnlyList<string> choices) =>
-        new ChoiceWindow("Save as Template", "Capture the per-stream settings from which source?", choices).ShowDialog<int?>(_owner);
+        new ChoiceWindow("Save Template", "Capture the per-stream settings from which source?", choices).ShowDialog<int?>(_owner);
 }

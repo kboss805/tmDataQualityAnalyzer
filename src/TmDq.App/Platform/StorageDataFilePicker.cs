@@ -10,7 +10,7 @@ namespace TmDq.App.Platform;
 /// <summary>The platform's file dialogs, owned by a window, with v2.x's titles and filters.</summary>
 public sealed class StorageDataFilePicker : IDataFilePicker
 {
-    private static readonly FilePickerFileType ExportedCsv = new("Exported CSV") { Patterns = new[] { "*.csv" } };
+    private static readonly FilePickerFileType CsvFiles = new("CSV Files") { Patterns = new[] { "*.csv" } };
     private static readonly FilePickerFileType Csv = new("CSV Files") { Patterns = new[] { "*.csv" } };
     private static readonly FilePickerFileType Png = new("PNG Files") { Patterns = new[] { "*.png" } };
     private static readonly FilePickerFileType Pdf = new("PDF Files") { Patterns = new[] { "*.pdf" } };
@@ -21,12 +21,13 @@ public sealed class StorageDataFilePicker : IDataFilePicker
 
     public StorageDataFilePicker(TopLevel owner) => _owner = owner;
 
-    /// <summary>What Import CSV offers: exported CSVs only (US6.3), starting at <paramref name="start"/>.</summary>
+    /// <summary>What Import from CSV offers: CSV files only, an export of this application or an antenna's log (US6.3, US10.0), starting at
+    /// <paramref name="start"/>.</summary>
     public static FilePickerOpenOptions CsvOptions(IStorageFolder? start) => new()
     {
-        Title = "Import CSV File",
+        Title = "Import from CSV",
         AllowMultiple = false,
-        FileTypeFilter = new[] { ExportedCsv },
+        FileTypeFilter = new[] { CsvFiles },
         SuggestedStartLocation = start,
     };
 

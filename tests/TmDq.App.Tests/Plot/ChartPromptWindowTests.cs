@@ -30,19 +30,19 @@ public sealed class ChartPromptWindowTests
     public ChartPromptWindowTests() => NativeCore.EnsureLoaded();
 
     [AvaloniaTheory]
-    [InlineData(0, "12", true)]
-    [InlineData(0, " -3 ", true)]
-    [InlineData(0, "12.5", false)]
-    [InlineData(0, "1e1", false)]
-    [InlineData(0, "twelve", false)]
-    [InlineData(0, "", false)]
-    [InlineData(1, "12.54", true)]
-    [InlineData(1, ".5", true)]
-    [InlineData(1, "1e1", true)]
-    [InlineData(1, "1,5", false)]
-    [InlineData(1, "NaN", false)]
-    [InlineData(1, "-", false)]
-    public void TheNumberPromptHasNoArrowsAndRefusesTextThatIsNotANumber(int decimals, string typed, bool accepted)
+    [InlineData(0, "12", true, null)]
+    [InlineData(0, " -3 ", true, null)]
+    [InlineData(0, "12.5", false, "Not a whole number.")]
+    [InlineData(0, "1e1", false, "Not a whole number.")]
+    [InlineData(0, "twelve", false, "Not a whole number.")]
+    [InlineData(0, "", false, "Enter a whole number.")]
+    [InlineData(1, "12.54", true, null)]
+    [InlineData(1, ".5", true, null)]
+    [InlineData(1, "1e1", true, null)]
+    [InlineData(1, "1,5", false, "Not a number.")]
+    [InlineData(1, "NaN", false, "Not a number.")]
+    [InlineData(1, "-", false, "Not a number.")]
+    public void TheNumberPromptHasNoArrowsAndRefusesTextThatIsNotANumber(int decimals, string typed, bool accepted, string? problem)
     {
         var w = Frames.Shown(new NumberPromptWindow("Set", "Value:", 5, 0, 99, decimals));
         Assert.Empty(w.GetVisualDescendants().OfType<NumericUpDown>());
@@ -52,8 +52,7 @@ public sealed class ChartPromptWindowTests
         w.Field.Text = typed;
         Assert.Equal(accepted, w.OkButton.IsEnabled);
         Assert.Equal(!accepted, w.Problem.IsVisible);
-        if (!accepted)
-            Assert.Equal(typed.Trim().Length == 0 ? "Enter a " + (decimals == 0 ? "whole " : "") + "number." : "Not a " + (decimals == 0 ? "whole " : "") + "number.", w.Problem.Text);
+        if (!accepted) Assert.Equal(problem, w.Problem.Text);   // the words, as given: not rebuilt from the rule they come from
         w.Field.Text = "7";
         Assert.True(w.OkButton.IsEnabled);
         Assert.False(w.Problem.IsVisible);

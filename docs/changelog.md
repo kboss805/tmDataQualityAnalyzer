@@ -12,6 +12,17 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The app's words and tests read against v3.5.0 (v3.5.1, PR 2)
+
+From the sweep, no behaviour changed beyond the words a user reads:
+- **Picker titles and tips say what the menu says and what the action does:** Import from CSV's picker is "Import from CSV" with the filter "CSV Files" (it reads antenna logs too, not only exports); the template pickers are "Process Multiple Files" and "Save Template", as is the source chooser; the Import tip says it reads an export or an antenna log and adds it, and Process Multiple Files' tip says the plot is cleared first.
+- **Comments and docs:** the old names (Save as Template, Apply Template, Import CSV) in `MainWindowServices`, `MainWindowViewModel` and the batch tests; Plot File "which batch runs bring" (`PlotCommands.CanChoosePlotFile`, `PlotView.axaml`) and the guide's "only the Apply Template batch puts them there" (Open and imports bring several recordings too); `IRunHost`'s doc naming a member it no longer has; the right-click menu's comment without Clear Plot; `ImportedDataKeptTests`' doc saying recordings are "replaced"; the guide's "no stream's arrays are copied" (the plot copies each series' samples when it adds a stream) and `ExportImportTests`' "byte for byte against v2.14.2's" (recorded exports, v2.14.2's cells on the sample grid).
+- **Dead code:** `ShellPreferences.Current` (no caller in the product or the tests).
+- **Tests that could not fail on what they claim:** `ShellTests` checked only that three tooltips exist (now every tip word for word); `ChartPromptWindowTests` rebuilt its expected problem text from the rule it tests (now each case states its words).
+- **One harness, not two:** the chart-in-a-window record `PlotTests` and `PlotDraftTests` each wrote out is `Support/ShownChart.cs`.
+
+Checked by the app suite's classes these touch (`ShellTests`, `ChartPromptWindowTests`, `TemplateBatchTests`, `LayerTests`, `PreferencesTests`, `PlotTests`, `PlotDraftTests`): all pass; the full suites run at the end of this PR.
+
 #### Open reads the plot again after Configure Streams, and reports a core error instead of crashing (v3.5.1, PR 2)
 
 **What was wrong.** Found by the sweep. `LoadAsync` decided whether the recording is added beside what is shown (`keep`) before it opened the file, but the plot's menu stays live meanwhile: a plot emptied by Clear Plot or Remove File while Configure Streams was up was still treated as one to add to (no title, a "(2)" name). And a `TmdqException` from building a stream's series escaped the command to the crash report (a dropped file goes through it too).

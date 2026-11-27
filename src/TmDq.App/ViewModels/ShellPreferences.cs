@@ -25,8 +25,6 @@ internal sealed class ShellPreferences : ObservableObject
         ToggleSidebarCommand = new RelayCommand(() => SidebarVisible = !SidebarVisible);
     }
 
-    public Preferences Current => _store.Current;
-
     /// <summary>The recordings and CSVs opened last, the newest first (the menu's Recent Files).</summary>
     public IReadOnlyList<string> RecentFiles => _store.Current.RecentFiles;
 

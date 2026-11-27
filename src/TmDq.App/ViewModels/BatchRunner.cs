@@ -12,8 +12,9 @@ using TmDq.Core;
 
 namespace TmDq.App.ViewModels;
 
-/// <summary>What a batch needs from the window it runs in: the status line (information; the batch's own end is its result), the file being run (named in the warning
-/// that a recording shares no time with the others), and a run with the progress dialog up.</summary>
+/// <summary>What a batch needs from the window it runs in: the status line (information; the batch's own end is its result), and a run
+/// with the progress dialog up (which also notes the file being run, named in the warning that a recording shares no time with the
+/// others).</summary>
 internal interface IRunHost
 {
     void SetStatus(string status);

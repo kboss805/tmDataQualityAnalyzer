@@ -232,7 +232,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     /// <summary>Save as Template: one processed recording's rows and its series' looks, to a file (US1.1).</summary>
     public IAsyncRelayCommand SaveTemplateCommand { get; }
 
-    /// <summary>Apply Template to Files: a template run over recordings chosen together, one after another (US1.1).</summary>
+    /// <summary>Process Multiple Files: a template run over recordings chosen together, one after another (US1.1).</summary>
     public IAsyncRelayCommand ApplyTemplateCommand { get; }
 
     // Only ever while busy: Save as Template is told when the work ends.
@@ -434,7 +434,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     }
 
     /// <summary>
-    /// Apply Template to Files (US1.1): a template, read with its errors in
+    /// Process Multiple Files (US1.1): a template, read with its errors in
     /// the log; then the recordings; each checked against the template; the confirmation; then the batch.
     /// </summary>
     private async Task ApplyTemplateAsync()

@@ -76,7 +76,7 @@ public sealed class PlotCommands : ObservableObject, IDisposable
     /// <summary>The Reset view chip: only once the view differs from the default.</summary>
     public bool CanResetView => _plot.CanResetView;
 
-    /// <summary>Plot File: something to choose between only with more than one recording, which batch runs bring.</summary>
+    /// <summary>Plot File: something to choose between only with more than one recording (a batch, a second Open, an import).</summary>
     public bool CanChoosePlotFile => _plot.HasData && _plot.SourceList().Count > 1;
 
     public bool LegendVisible => _plot.LegendVisible;

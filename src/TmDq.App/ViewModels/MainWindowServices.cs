@@ -25,7 +25,7 @@ public sealed class MainWindowServices
     /// <summary>The log's clock; without it the system's.</summary>
     public TimeProvider? Clock { get; init; }
 
-    /// <summary>The CSV to import and Export's Browse dialogs; without them Import CSV is unavailable.</summary>
+    /// <summary>The CSV to import and Export's Browse dialogs; without them Import from CSV is unavailable.</summary>
     public IDataFilePicker? Files { get; init; }
 
     /// <summary>The Export dialog; without it Export is unavailable.</summary>
@@ -34,7 +34,7 @@ public sealed class MainWindowServices
     /// <summary>What writes the plot as an image; without it an image export fails, and a batch writes no images.</summary>
     public IPlotImageExporter? ImageExporter { get; init; }
 
-    /// <summary>Save as Template's and Apply Template's file dialogs; without them both are unavailable.</summary>
+    /// <summary>Save Template's and Process Multiple Files' file dialogs; without them both are unavailable.</summary>
     public ITemplateFilePicker? TemplateFiles { get; init; }
 
     /// <summary>The batch confirmation and the choice of recording; without them Apply Template is unavailable.</summary>
