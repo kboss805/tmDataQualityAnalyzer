@@ -285,6 +285,14 @@ just for me" page and the folder choice (US8.0's criteria about the installer re
 to click through the wizard once on the release build, as an administrator and as a standard user: the scope page, the
 folder, the feature list, the progress and the finish page's launch box.
 
+Two hand checks found real defects in v3.5.0 and nothing automatic can: **(1) install "only for me", leave "Launch
+tmDataQualityAnalyzer" checked and click Finish: the application must start** (it did not: the launch used a path the wizard
+resolved before the scope page chose a folder; the verbose log, `msiexec /i <msi> /l*v %TEMP%\x.log` (UTF-16), said return
+value 1631). The Sandbox cannot see it, because its install is silent and elevated, and a launch cannot be run from the
+engine's scripting session at all ("not permitted in a restricted engine"). **(2) Look at the wizard's pictures** (the
+welcome and finish page, the banner): they are drawn by `eng\gen_installer_images.py` from the icon, and a stock WiX
+picture means a `WixUIDialogBmp` or `WixUIBannerBmp` variable stopped resolving.
+
 **A red result is not automatically a product defect.** The first run of this harness
 reported three failures and every one was the harness: a Windows system DLL caught by a
 loose name filter, a registry KEY checked where the VALUE is the contract, and a check for

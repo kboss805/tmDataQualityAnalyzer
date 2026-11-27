@@ -242,9 +242,11 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _isLoading, value);
     }
 
-    /// <summary>Reads a CSV, an exported one or an antenna's log (told apart by the file, <see cref="PlotCsv.Parse"/>), and shows it
-    /// in place of whatever was shown (US6.3), or, with <paramref name="add"/> (and always for an antenna's log, US10.0), adds it to
-    /// what is shown as a recording of its own; false, with nothing changed, for a file that is neither.</summary>
+    /// <summary>Reads a CSV, an exported one or an antenna's log (told apart by the file, <see cref="PlotCsv.Parse"/>), and, with
+    /// <paramref name="add"/> (and always for an antenna's log, US10.0), adds it to what is shown as a recording of its own; without,
+    /// it is the plot's only recording (US6.3). The main window passes <c>add</c> whenever the plot holds something, so what a
+    /// user imports always stacks, and the replacing form is what an empty plot does and what a caller gets by not asking.
+    /// False, with nothing changed, for a file that is neither kind.</summary>
     public bool LoadCsv(string path, string? sourceLabel = null, bool add = false)
     {
         if (PlotCsv.Parse(path) is not { } parsed) return false;
@@ -279,7 +281,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     private void ShowCsv(CsvData data, CsvKind kind, string? sourceLabel, bool add)
     {
         // An antenna's log is always added to what the plot shows, to be compared with it (US10.0); any other CSV is when the
-        // caller asks (the main window does, whenever the plot holds something) and replaces it otherwise.
+        // caller asks (the main window does, whenever the plot holds something); without, the file is the plot's only recording.
         bool added = (add || kind == CsvKind.PhasedArrayAntenna) && _series.Count > 0;
         _timeBase ??= new TimeBase();
         int? sourceId = null;
