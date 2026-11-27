@@ -12,6 +12,12 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### xunit stays on 3.2.2: Avalonia's headless test runner does not run on xunit 4 (v3.5.1, PR 3: tried)
+
+**What was tried.** xunit.v3 3.2.2 to 4.0.3 (the plan's PR 3). The library's suite ran on it (438 passed; the In-Process Runner v4.0.3), but in the application's suite every Avalonia test (`[AvaloniaFact]`, `[AvaloniaTheory]`) failed at discovery with `MissingMethodException: Xunit.v3.TestIntrospectionHelper.GetTestCaseDetails(...)`: `Avalonia.Headless.XUnit` 12.2.0, the latest release, is built against xunit 3.2.2's extensibility API, which 4.0 changed. No release or prerelease of it depends on xunit 4 yet (all of 12.1.4 to 12.2.0 name `xunit.v3.extensibility.core` 3.2.2).
+
+**What stays.** Both test projects on 3.2.2: running the library's tests on 4.x alone would need a second xunit version in `Directory.Packages.props`, against its one-version rule, for no measured gain (the plan's measurement: a mutant's time is its build, so xunit 4 cannot speed the mutation check, and its `all` parallel mode is measured only once the app suite can run on it). `Directory.Packages.props` says why beside the pin; move when an `Avalonia.Headless.XUnit` built for xunit 4 ships.
+
 #### Avalonia 12.1.4 to 12.2.0 (v3.5.1, PR 3)
 
 A minor release of the UI framework, taken alone so that anything it moves is its own. `AvaloniaVersion` in `Directory.Packages.props` moves every Avalonia package together (the app's, the headless test host's).
