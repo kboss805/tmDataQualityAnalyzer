@@ -12,6 +12,14 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Process Multiple Files says it clears the plot, and its Cancel stops the batch (v3.5.1, PR 2)
+
+**The user's decisions (2026-11-27):** the batch keeps clearing the plot (it is the one action that does not stack) but says so, and Cancel in the progress dialog stops the whole batch instead of skipping one file.
+
+**What changed.** The confirmation window states that the plot is cleared first and what Cancel does (`BatchApplyViewModel.ClearsThePlot`, the `ClearsNote` text). `BatchRunner`: Cancel skips this file and every one after it ("Batch cancelled at <file>: the files after it were not processed."), keeps the files processed (they stay on the plot and are what Save Template captures), still exports those when a folder was chosen, and ends "Batch cancelled: N processed, M skipped.", logged as a warning (`BatchResult.Cancelled`). A `TmdqException` or `IOException` from a file's run is now skipped like a failed file instead of escaping the batch, which left its kept files unrecorded; no test provokes one (the core gives no way to), so that part is unchecked. The manual, the walkthrough and the guide say both.
+
+**How it was checked.** `TemplateBatchTests`: Cancel at the second of three files stops the batch (the progress dialog is shown twice, not three times), the first file stays with the template's names and colours, the status and the log; the confirmation window's note, word for word. Mutants B8 to B11 of `eng/mutants/apply-template-busy.json` CAUGHT (Cancel no longer stopping, the headline, the log level, the note). The confirmation's manual figure changes with the note: re-rendered at the end of this PR.
+
 #### Customize View's Receiver SNR tab names each channel for a screen reader (v3.5.1, PR 2)
 
 **What was wrong.** Found by the sweep: on the Receiver SNR tab each receiver's channel boxes read "L", "R" and "C", so a screen reader heard three receivers' "L" alike, and each receiver's open/close toggle took the same name as the receiver's box inside it. `AccessibleNamesTests` showed Customize View on its first tab only, so the receivers were never in the tree it read.

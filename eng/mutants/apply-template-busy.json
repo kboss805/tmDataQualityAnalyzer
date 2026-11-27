@@ -85,6 +85,42 @@
         "-class",
         "TmDq.App.Tests.PreferencesTests"
       ]
+    },
+    {
+      "id": "B8",
+      "file": "src/TmDq.App/ViewModels/BatchRunner.cs",
+      "old": "                cancelled = true;\n",
+      "new": "",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.TemplateBatchTests"],
+      "expect": "caught",
+      "note": "Cancel skips one file and the batch carries on"
+    },
+    {
+      "id": "B9",
+      "file": "src/TmDq.App/ViewModels/BatchRunner.cs",
+      "old": "$\"Batch {(cancelled ? \"cancelled\" : \"complete\")}: {processed}",
+      "new": "$\"Batch {(\"complete\")}: {processed}",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.TemplateBatchTests"],
+      "expect": "caught",
+      "note": "a cancelled batch reads as complete"
+    },
+    {
+      "id": "B10",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "            if (result.Cancelled) Log.Warning(result.Summary);",
+      "new": "            if (result.Cancelled && false) Log.Warning(result.Summary);",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.TemplateBatchTests"],
+      "expect": "caught",
+      "note": "a cancelled batch is logged as a success"
+    },
+    {
+      "id": "B11",
+      "file": "src/TmDq.App/Views/Dialogs/BatchApplyWindow.axaml",
+      "old": "    <TextBlock x:Name=\"ClearsNote\" Text=\"{x:Static vm:BatchApplyViewModel.ClearsThePlot}\" TextWrapping=\"Wrap\" />\n",
+      "new": "",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.TemplateBatchTests"],
+      "expect": "caught",
+      "note": "the confirmation does not say that the plot is cleared"
     }
   ]
 }

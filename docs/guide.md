@@ -507,7 +507,9 @@ recording or all (`PlotViewModel.SetVisibleSource`), orthogonal to per-series vi
 recording's rows of Configure Streams, its time channel's place and byte order, and each series' name and colour
 (`TemplateFile`, the same JSON v2.x wrote); **File > Process Multiple Files…** checks each chosen file's PCM channel ids
 against the template's (the core's `TemplateMatcher`, exact-set match), then runs every match in turn (`BatchRunner`),
-optionally exporting a CSV and the plot images per file. A template stores only a calibration's inputs, never its
+optionally exporting a CSV and the plot images per file. It is the one action that clears the plot first, and the
+confirmation says so (`BatchApplyViewModel.ClearsThePlot`); Cancel in the progress dialog stops the batch, the files after it
+skipped and the ones processed kept, and a file the core or the disk cannot finish is skipped like one that fails. A template stores only a calibration's inputs, never its
 profile, so a batch processes with the linear calibration.
 
 ### Core Components

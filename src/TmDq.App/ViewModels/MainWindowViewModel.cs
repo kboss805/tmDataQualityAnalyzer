@@ -530,7 +530,8 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
             SetSources(result.Sources);
             // The bar says how many; the log also says where the output went.
             Report(result.Headline, result.Skipped > 0 ? LogLevel.Warning : LogLevel.Success);
-            Log.Success(result.Summary);
+            if (result.Cancelled) Log.Warning(result.Summary);
+            else Log.Success(result.Summary);
         }
         catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
         {

@@ -119,13 +119,14 @@ public sealed class TemplateBatchTests : IDisposable, IClassFixture<ShortRecordi
         }
     }
 
-    private sealed class CancelFirst : IProcessingDialog
+    /// <summary>The progress dialog, pressing its Cancel the <paramref name="at"/>'th time it is shown (1 for the first).</summary>
+    private sealed class CancelAt(int at) : IProcessingDialog
     {
         public int Shown;
 
         public void Show(ProcessingViewModel vm)
         {
-            if (Shown++ == 0) vm.CancelCommand.Execute(null);
+            if (++Shown == at) vm.CancelCommand.Execute(null);
         }
 
         public void Close()
@@ -232,17 +233,22 @@ public sealed class TemplateBatchTests : IDisposable, IClassFixture<ShortRecordi
     }
 
     [Fact]
-    public async Task ATemplatesNamesAndColoursGoOnEveryFileWhenAskedAndAFailedFileIsSaidSo()
+    public async Task ATemplatesNamesAndColoursGoOnEveryFileWhenAskedAndCancelStopsTheBatchKeepingWhatWasDone()
     {
-        string one = Copy("flight 1.ch10"), two = Copy("flight 2.ch10");
-        var vm = new MainWindowViewModel(new MainWindowServices { ProcessingDialog = new CancelFirst(), AppRoot = Repo.Root });
+        string one = Copy("flight 1.ch10"), two = Copy("flight 2.ch10"), three = Copy("flight 3.ch10");
+        var dialog = new CancelAt(2);
+        var vm = new MainWindowViewModel(new MainWindowServices { ProcessingDialog = dialog, AppRoot = Repo.Root });
         int before = vm.Log.Entries.Count;
-        await vm.RunBatchAsync(PrnTemplate(), new[] { one, two }, null, reuseAppearance: true);
+        await vm.RunBatchAsync(PrnTemplate(), new[] { one, two, three }, null, reuseAppearance: true);
         string[] lines = Lines(vm, before);
-        Assert.Contains("Error Batch file failed to process: flight 1", lines);
-        Assert.Equal("Success Batch complete: 1 processed, 1 skipped.", lines[^1]);
-        Assert.Equal(new[] { (1, "flight 2") }, vm.Plot.SourceList());
-        Assert.Equal("flight 2", vm.Plot.Title);
+        // Cancel at the second file stops the batch: the third is never run (the dialog is not shown again), the first stays.
+        Assert.Equal(2, dialog.Shown);
+        Assert.Contains("Warning Batch cancelled at flight 2: the files after it were not processed.", lines);
+        Assert.Equal("Warning Batch cancelled: 1 processed, 2 skipped.", lines[^1]);
+        Assert.Equal(("Batch cancelled: 1 processed, 2 skipped.", Models.Logging.LogLevel.Warning), (vm.Status, vm.StatusLevel));
+        Assert.Single(vm.Sources);   // the file kept is one Save Template captures
+        Assert.Equal(new[] { (0, "flight 1") }, vm.Plot.SourceList());
+        Assert.Equal("flight 1", vm.Plot.Title);
         Assert.Equal(-1, vm.Plot.VisibleSource);   // one file: nothing to choose
         Assert.Equal(new[] { "Fifteen", "Fifteen", "Eleven", "Eleven" }, vm.Plot.Series.Select(s => s.Name));
         Assert.Equal(new[] { Color.Parse("#ff6a0dad"), Color.Parse("#ff6a0dad"), Color.Parse("#ff1f77b4"), Color.Parse("#ff1f77b4") },
@@ -766,6 +772,9 @@ public sealed class TemplateBatchTests : IDisposable, IClassFixture<ShortRecordi
         Assert.True(window.IsDialog);
         Assert.Equal("Process Multiple Files", window.Title);
         Assert.Equal(vm.Summary, window.FindControl<TextBlock>("Summary")!.Text);
+        Assert.Equal("The plot is cleared first: what it shows now, recordings and imports alike, is removed and these files take its " +
+                     "place. Cancel during processing stops the batch; the files already processed stay.",
+                     window.FindControl<TextBlock>("ClearsNote")!.Text);
         Assert.Equal("Also export a CSV + plot images (Frame Sync Lock and Missed Frames) per file", window.FindControl<CheckBox>("ExportBox")!.Content);
         Assert.Equal("Reuse the template's saved series names and colors", window.FindControl<CheckBox>("ReuseBox")!.Content);
         Assert.Equal(true, window.FindControl<CheckBox>("ReuseBox")!.IsChecked);
