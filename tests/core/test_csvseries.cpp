@@ -836,8 +836,10 @@ TEST_CASE("csvseries: the core reads every generated file as the code it replace
         bom += bytes.starts_with("\xEF\xBB\xBF");
         utf16 += bytes.starts_with("\xFF\xFE") || bytes.starts_with("\xFE\xFF");
     }
-    // What v2.14.2's importer answered for the same 400 files (recorded), and the counts of what they were.
-    CHECK(f.h == 7563245506736825023ULL);
+    // What v2.14.2's importer answered for the same 400 files (recorded), and the counts of what they were. One departure, on
+    // purpose (v3.5.1): the span is the largest time, not the last row's, so the 76 files whose rows are out of time order have a
+    // larger xMax. With xMax taken v2.14.2's way the digest is 7563245506736825023, as recorded: nothing else moved.
+    CHECK(f.h == 6022506852956961405ULL);
     CHECK(loaded == 350);
     CHECK(failed == 50);
     CHECK(with_skips == 268);
@@ -1514,6 +1516,22 @@ TEST_CASE("csvseries: a fraction that rounds up to a whole second carries into t
     CHECK(clocktime::format(5, 0.0, 0.9994, true) == "005:00:00:00.999");     // below the half: stays
     CHECK(clocktime::format(5, 0.0, 12.3456, true) == "005:00:00:12.346");
     CHECK(clocktime::format(5, 0.0, 3600.9996, false) == "005:01:00:00");     // no milliseconds: truncated, as it always was
+}
+
+TEST_CASE("csvseries: a file whose rows are out of time order spans to its largest time, and a time below zero is a first row")
+{
+    TempDir dir;
+    // Rows out of order: the span is the largest time after the first row's, not the last row's.
+    const CsvParseResult unsorted = parseBytes(dir, kTimeHeader + ",A Lock (%)\n1:00:00:10.000,1\n1:00:00:30.000,2\n1:00:00:20.000,3\n");
+    REQUIRE(unsorted.success);
+    CHECK(unsorted.series[0].xValues == std::vector<double>{0.0, 20.0, 10.0});
+    CHECK(unsorted.xMax == 20.0);
+    // A first stamp that reads below zero is the base, as any first stamp is: the next row is a minute after it, not a second base.
+    const CsvParseResult negative = parseBytes(dir, kTimeHeader + ",A Lock (%)\n1:00:-1:00.000,1\n1:00:00:00.000,2\n");
+    REQUIRE(negative.success);
+    CHECK(negative.baseTimeOffset == -60.0);
+    CHECK(negative.series[0].xValues == std::vector<double>{0.0, 60.0});
+    CHECK(negative.xMax == 60.0);
 }
 
 TEST_CASE("csvseries: days and hours far apart are counted wide, not wrapped")

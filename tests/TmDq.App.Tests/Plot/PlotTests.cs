@@ -473,6 +473,24 @@ public sealed class PlotTests
     }
 
     [AvaloniaFact]
+    public void ASeriesWhoseTimesAreOutOfOrderIsShownToItsLatestTimeAndFromItsEarliest()
+    {
+        // The span was the last sample's time (5 here), so the 100 s sample of an out-of-order import was past the view's end.
+        var plot = new PlotViewModel();
+        plot.SetSeries(new[]
+        {
+            PlotFixtures.Lock(0, "Lock A", 1, 0, new[] { 0.0, 1.0, 2.0, 100.0, 3.0, 4.0, 5.0 }, new[] { 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0 }),
+            PlotFixtures.Make(1, "Lock B", MetricType.FrameSyncLock, 2, 1, new[] { 50.0, 20.0, 40.0, double.NaN }, new[] { 1.0, 2.0, 3.0, 4.0 }, source: 1),
+        });
+        Assert.False(plot.Series[0].SortedX);
+        Assert.Equal((0.0, 100.0), (plot.XViewMin, plot.XViewMax));
+
+        // Plot File on the second recording: from its earliest time to its latest, wherever they are in the file.
+        plot.SetVisibleSource(1);
+        Assert.Equal((20.0, 50.0), (plot.XViewMin, plot.XViewMax));
+    }
+
+    [AvaloniaFact]
     public void TheReadoutOfASeriesWhoseTimesAreOutOfOrderIsStillTheNearestSample()
     {
         // An imported CSV can hold times that are not in order (a clock that stepped back, a file edited by hand). The

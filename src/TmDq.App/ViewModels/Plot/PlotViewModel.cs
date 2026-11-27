@@ -436,8 +436,9 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         foreach (PlotSeries s in _series)
         {
             if (!EffectiveVisible(s) || s.X.Length == 0) continue;
-            lo = Math.Min(lo, s.X[0]);
-            hi = Math.Max(hi, s.X[^1]);
+            (double first, double last) = Extent(s);
+            lo = Math.Min(lo, first);
+            hi = Math.Max(hi, last);
         }
         if (lo <= hi) _window.Show(lo, hi);
         ComputeSnrRange();
@@ -562,8 +563,23 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     {
         double xMax = 0.0;
         foreach (PlotSeries s in series)
-            if (s.X.Length > 0) xMax = Math.Max(xMax, s.X[^1]);
+            if (s.X.Length > 0) xMax = Math.Max(xMax, Extent(s).Last);
         return xMax;
+    }
+
+    /// <summary>A series' earliest and latest time: its ends when its times are in order, else found by a pass (an imported
+    /// CSV's rows need not be), NaN skipped. (<see cref="double.MaxValue"/>, <see cref="double.MinValue"/>) when it has none.</summary>
+    private static (double First, double Last) Extent(PlotSeries s)
+    {
+        if (s.SortedX) return (s.X[0], s.X[^1]);
+        double first = double.MaxValue, last = double.MinValue;
+        foreach (double x in s.X)
+        {
+            if (double.IsNaN(x)) continue;
+            if (x < first) first = x;
+            if (x > last) last = x;
+        }
+        return (first, last);
     }
 
     // ---- the axes -----------------------------------------------------------------------------------------------

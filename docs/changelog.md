@@ -12,6 +12,16 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### An imported CSV whose rows are out of time order is shown to its latest time; a first stamp below zero is a first row (v3.5.1, PR 2)
+
+**What was wrong.** Found by the sweep. The CSV reader took the span (`xMax`) from each column's last row, and the plot took a series' end from its last sample (`SpanOf`, `SetVisibleSource`), so a file whose rows are not in time order (a clock that stepped back, a file edited by hand) was cut short at the view's end. And the reader used a negative first time as its "no first row yet" mark, so a first stamp that reads below zero (`001:00:-1:00.000`) re-seeded the base on the next row and both rows read 0.
+
+**What changed.** `CsvSeriesParser` takes the largest time for the span and a flag for the first row. `PlotViewModel` finds an out-of-order series' earliest and latest time by a pass (`Extent`; a series in order still reads its two ends). Rows before the first row's time still read below zero and stay outside the view, as before; that part is unchanged.
+
+**One departure from v2.14.2, on purpose:** the v2.14.2 import digest (`csvseries: the core reads every generated file as the code it replaced did`) is re-pinned. Of its 400 generated files, the 76 with rows out of time order now have a larger `xMax`; recomputed with `xMax` taken the old way, the digest is exactly the recorded one, so nothing else moved (checked with a throwaway comparison, not kept).
+
+**How it was checked.** A native case for both (an out-of-order file spans to its largest time; a first stamp of -60 s is the base and the next row is at 60 s), `PlotTests.ASeriesWhoseTimesAreOutOfOrderIsShownToItsLatestTimeAndFromItsEarliest`; mutants K4 and K5 of `eng/mutants/csv_export_grid.json` and Z6 of `eng/mutants/plot-zoom-and-legend.json` CAUGHT.
+
 #### Process Multiple Files says it clears the plot, and its Cancel stops the batch (v3.5.1, PR 2)
 
 **The user's decisions (2026-11-27):** the batch keeps clearing the plot (it is the one action that does not stack) but says so, and Cancel in the progress dialog stops the whole batch instead of skipping one file.

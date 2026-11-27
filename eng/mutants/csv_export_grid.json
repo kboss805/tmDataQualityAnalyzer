@@ -158,6 +158,24 @@
       "args": ["-tc=csvseries: a fraction that rounds up*"],
       "expect": "caught",
       "note": "the carry past midnight keeps the day"
+    },
+    {
+      "id": "K4",
+      "file": "src/core/src/csvseriesparser.cpp",
+      "old": "            have_first            = true;\n",
+      "new": "",
+      "args": ["-tc=csvseries*"],
+      "expect": "caught",
+      "note": "a first stamp below zero is taken for 'no first row yet': the base is seeded again on the next row"
+    },
+    {
+      "id": "K5",
+      "file": "src/core/src/csvseriesparser.cpp",
+      "old": "            for (const double x : s.xValues)\n",
+      "new": "            for (const double x : {s.xValues.back()})\n",
+      "args": ["-tc=csvseries*"],
+      "expect": "caught",
+      "note": "the span is the last row's time, so an out-of-order file is cut short"
     }
   ]
 }
