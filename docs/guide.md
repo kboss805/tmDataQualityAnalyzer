@@ -817,7 +817,9 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
 ### Naming Conventions
 
 - **C++ (the core)**:
-  - Types, enums, type aliases and namespaces are PascalCase (`Chapter10Reader`, `FrameProcessor`, `PCMConstants`);
+  - Types, enums, type aliases and namespaces are PascalCase (`Chapter10Reader`, `FrameProcessor`, `PCMConstants`), except
+    the small lower-case namespaces of free functions, each named for its file, that `.clang-tidy` lists (`textfile`,
+    `clocktime`, `csvlines`, `tmatswalk`, ...): a new one goes in that list;
     constants are `kPascalCase` in a namespace (`PCMConstants::kCommonWordLen`); functions and methods are camelCase;
     private and protected members are `m_` with snake_case (`m_frame_setup`); value types (`ProcessingParams`,
     `StreamJob`, `ProcessedStreamData`, `CalibrationProfile`) have camelCase fields.

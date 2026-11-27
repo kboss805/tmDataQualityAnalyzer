@@ -12,6 +12,17 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The core's leftovers from the sweep (v3.5.1, PR 2)
+
+No behaviour changed:
+- **Six unused includes** gone (`<limits>` in `abi_run.cpp`, `<mutex>` in `abi_calibration.cpp`, `<cstdint>` in `calibrationextractor.cpp`, `<cstdlib>` in `ch10packetreader.cpp`, `<cstddef>` in `ch10packetreader.h`, `constants.h` in `stepplateaus.cpp`), each checked for a use first; the two adjacent anonymous namespaces of `abi_run.cpp` are one.
+- **One UTF-8 path conversion:** the ABI's `tmdq::pathFromUtf8` calls the core's `textfile::pathFromUtf8` instead of repeating it.
+- **Comments that described old behaviour:** `PacketQueue` called itself MPSC (it is single-producer, single-consumer); `Chapter10Reader`'s channel-list members spoke of a combo box no UI has (they stay, for the tests that pin v2.x's lists: decision D3); the runner and the extractor said a handler starting the next run from the end report is not turned away, but `start()` joins the driver thread, which is the one reporting, so such a start is refused (latent: one runner per run through the ABI); "the Receiver SNR dialog" (now a Receiver SNR stream's setup dialog, or Extract Calibration); `frameprocessor.h`'s "no longer opens" and `processingparams.h`'s "AGC run".
+- **The naming rule's exceptions are listed:** six lower-case namespaces of free functions (`ch10setup`, `csvlines`, `receivernames`, `stepplateaus`, `stepsaturated`, `tmatswalk`) were in neither `.clang-tidy`'s ignore list nor the guide; both list them now.
+- **Checked and left:** `tmdq_file_time_channel` and `tmdq_file_pcm_channel` set an error without clearing one first, but `setError` replaces the last message, so nothing stale is reported.
+
+Checked: the native suite, Release, 578 cases (575 plus this PR's three), 0 warnings, imports on the allow-list.
+
 #### The app's words and tests read against v3.5.0 (v3.5.1, PR 2)
 
 From the sweep, no behaviour changed beyond the words a user reads:

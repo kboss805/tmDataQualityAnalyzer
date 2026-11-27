@@ -127,7 +127,7 @@ CheckOptions:
   readability-identifier-naming.EnumConstantIgnoredRegexp: '^TMDQ_.*'
   readability-identifier-naming.TypeAliasCase: CamelCase
   readability-identifier-naming.NamespaceCase: CamelCase
-  readability-identifier-naming.NamespaceIgnoredRegexp: '^(tmdq|tmdq_test|textformat|textparse|textfile|chart|clocktime)$'
+  readability-identifier-naming.NamespaceIgnoredRegexp: '^(tmdq|tmdq_test|textformat|textparse|textfile|chart|clocktime|ch10setup|csvlines|receivernames|stepplateaus|stepsaturated|tmatswalk)$'
   readability-identifier-naming.FunctionCase: camelBack
   readability-identifier-naming.FunctionIgnoredRegexp: '^tmdq_.*'
   readability-identifier-naming.MethodCase: camelBack
