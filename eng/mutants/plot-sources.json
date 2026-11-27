@@ -186,7 +186,7 @@
       "old": "            Sources.ForgetNames();   // the new file is the only recording",
       "new": "            _ = Sources.Shown;   // the new file is the only recording",
       "expect": "caught",
-      "note": "an import that replaces the plot keeps the earlier recording's name for its source"
+      "note": "a file shown as the plot's only recording keeps the earlier recording's name for its source"
     },
     {
       "id": "CO1",

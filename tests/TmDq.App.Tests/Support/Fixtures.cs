@@ -80,7 +80,7 @@ internal static class Recordings
     /// <summary>
     /// The first packets of the PRN sample, up to <paramref name="maxBytes"/>, cut where a packet starts, written to
     /// <paramref name="path"/>: a recording of the same streams and clock that processes in a fraction of the time, for tests that
-    /// need a recording that processes rather than these numbers (Add Recording, imports kept). Every packet starts with the
+    /// need a recording that processes rather than these numbers (Open stacking, imports kept). Every packet starts with the
     /// Chapter 10 sync (0xEB25) and gives its length at byte 4, so the walk checks each start and refuses a file it cannot follow.
     /// </summary>
     public static string WritePrnPrefix(string path, long maxBytes)

@@ -131,7 +131,7 @@ public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
             Assert.True(vm.Plot.ExportCsv(csv));
             Assert.Equal(PrnName, Assert.Single(vm.Plot.SourceList()).Label);
 
-            Assert.True(vm.Plot.LoadCsv(csv));   // straight into the plot, which replaces what it held, with no name given
+            Assert.True(vm.Plot.LoadCsv(csv));   // straight into the plot (no add), which replaces what it held, with no name given
 
             Assert.Equal("Source 0", Assert.Single(vm.Plot.SourceList()).Label);
         }

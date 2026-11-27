@@ -120,6 +120,10 @@ try {
         -intermediatefolder (Join-Path $Work 'obj') -o $OutFile `
         (Join-Path $Here 'tmDataQualityAnalyzer.wxs') $settingsWxs
     if ($LASTEXITCODE -ne 0) { throw 'wix build failed' }
+    # WiX leaves a .wixpdb (its build's debug data) beside the package; nothing here reads it, and a stray file in deploy\ is
+    # what a release would otherwise have to remember not to attach.
+    $wixPdb = [System.IO.Path]::ChangeExtension($OutFile, '.wixpdb')
+    if (Test-Path -LiteralPath $wixPdb) { Remove-Item -LiteralPath $wixPdb -Force }
 } finally {
     Pop-Location
 }

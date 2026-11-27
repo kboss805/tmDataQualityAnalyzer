@@ -110,7 +110,7 @@ after('<p>Each PCM channel row in the Configure Streams dialog has:</p>',
           'stream is fully configured before you press Process.',
           'Configure Streams dialog listing four PCM channels with Process, Mode, Configure and Ready columns'))
 
-after('<p>Right-click anywhere on the chart. Entries stay disabled until a file has been processed.</p>',
+after('<p>Right-click anywhere on the chart. Entries stay disabled until something is on the plot: a processed recording or an imported CSV.</p>',
       fig('Main Context Menu.png',
           'The plot’s right-click menu — every plot control lives here. Entries that need more than '
           'one loaded file, such as Plot File, stay disabled until they apply.',

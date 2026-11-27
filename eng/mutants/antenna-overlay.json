@@ -24,7 +24,7 @@
       "old": "bool added = (add || kind == CsvKind.PhasedArrayAntenna) && _series.Count > 0;",
       "new": "bool added = false;",
       "expect": "caught",
-      "note": "the plot replaces what was shown, whatever the kind"
+      "note": "nothing is added beside what is shown: every file replaces it, whatever the kind"
     },
     {
       "id": "O4",
