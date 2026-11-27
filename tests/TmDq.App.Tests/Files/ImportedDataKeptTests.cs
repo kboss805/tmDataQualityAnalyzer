@@ -15,6 +15,7 @@ namespace TmDq.App.Tests;
 /// log (US10.0) or this application's own export is kept, the recordings processed before are replaced as they always were,
 /// and the new run is numbered so that it never shares a source id with an import.
 /// </summary>
+[Collection(NativeCoreCollection.Name)]
 public sealed class ImportedDataKeptTests : IClassFixture<ShortRecordings>
 {
     private readonly ShortRecordings _recordings;

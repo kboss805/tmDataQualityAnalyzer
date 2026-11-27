@@ -12,13 +12,11 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
-#### The app tests no longer queue behind one collection (v3.5.1, PR 1)
+#### The shared native-core test collection stays (v3.5.1, PR 1: tried and reverted)
 
-**What was slow.** 35 of the app suite's 58 test files shared `NativeCoreCollection`, so xunit ran their 726 tests one at a time (51.8 s of the suite's 53 s wall time). The collection existed for two tests, `AMissingNativeCoreIsReportedNotThrown` and `ApplyTemplateWithoutTheNativeCoreSaysSoAndStops`, which point `TMDQ_CORE_DLL` at a missing file for a moment.
+**What was tried.** 35 of the app suite's 58 test files share `NativeCoreCollection`, so xunit runs their 726 tests one at a time, because two tests point `TMDQ_CORE_DLL` at a missing file for a moment. Moving those two into a collection of their own that runs alone, and dropping the shared one, took the suite from 53 s to 38 s on the development machine (28 cores), 0 failures in nine runs there, including four on 4 threads and three pinned to 4 logical cores.
 
-**What changed.** The two tests are one class of their own, `MissingCoreTests`, in a collection with `DisableParallelization` (xunit runs it alone, after the others finish); `NativeCoreCollection` and its attribute on 31 classes are gone. The two fakes the template test uses are `internal` now so the new class can share them. Mutant E4 of `eng/mutants/app-error-paths.json` (the wording of `CoreNotLoaded`) runs its new home, `MissingCoreTests`, instead of `OpenToChartTests`.
-
-**How it was checked.** The app suite, Release: 914 passed, 0 failed, 34 not run (the baseline unchanged), in 38 s of test time against about 53 s before. The two tests cannot fail from a race in a way a test could assert; they are as they were, in a collection that excludes the others.
+**Why it was reverted.** On the hosted runner (4 cores) it bought nothing and cost reliability. `main`'s three latest runs took 87, 89 and 97 s of app-test time; this change took 79 and 98 s, and failed both runs with a recording "being used by another process" when a test's own `Dispose` deleted its folder (`ShortRecordings`, then `TemplateBatchTests`), the same kind of failure the notes record as rare on CI. It could not be reproduced here, so the cause is not known (a close delayed behind the irig106 setup lock, or the runner's scanner on a busier disk, are the candidates); what is known is that the gain exists only where cores are idle. A change that is faster here and flaky there is the wrong trade for a suite whose job is to be trusted, so the collection stays. **If this is tried again,** do it only with the reproduction found first (the flake hunt of PR 3), and measure the hosted run, not this machine.
 
 #### `eng\mutants_affected.ps1`: the kept lists a change reaches (v3.5.1, PR 1)
 

@@ -28,7 +28,10 @@ namespace TmDq.App.Tests;
 /// through the native core, and show the lock percentage (plan step 3.4 built this first). The committed PRN sample's first PCM
 /// channel is 13, "CH-01 PRN 15 5M", whose numbers with these settings the managed tests already pin (116 one-second
 /// windows, mean 93.531893 %), so the app is held to a known answer, and to the core's own result for the same run.
+/// One class on purpose: a test here points TMDQ_CORE_DLL elsewhere, and xunit runs a class's tests one at a time
+/// (and the classes of <see cref="NativeCoreCollection"/> one at a time with it).
 /// </summary>
+[Collection(NativeCoreCollection.Name)]
 public sealed class OpenToChartTests
 {
     private static string Prn => Repo.Recording("prn_testfile, sample.ch10");
@@ -221,6 +224,26 @@ public sealed class OpenToChartTests
         private readonly Action<int> _report;
         public SyncProgress(Action<int> report) => _report = report;
         public void Report(int value) => _report(value);
+    }
+
+    [AvaloniaFact]
+    public async Task AMissingNativeCoreIsReportedNotThrown()
+    {
+        string? before = Environment.GetEnvironmentVariable("TMDQ_CORE_DLL");
+        Environment.SetEnvironmentVariable("TMDQ_CORE_DLL", Path.Combine(Path.GetTempPath(), "tmdq-no-such-core", "tmdq_core.dll"));
+        try
+        {
+            var vm = new MainWindowViewModel();
+            await vm.LoadAsync(Prn);
+            Assert.Null(Startup.FirstLockSeries(vm.Plot));
+            Assert.False(vm.IsBusy);
+            Assert.StartsWith("The processing core could not be loaded: ", vm.Status);
+            Assert.Equal((vm.Status, Models.Logging.LogLevel.Error), (vm.Log.Entries[^1].Text, vm.Log.Entries[^1].Level));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TMDQ_CORE_DLL", before);
+        }
     }
 
     [AvaloniaFact]

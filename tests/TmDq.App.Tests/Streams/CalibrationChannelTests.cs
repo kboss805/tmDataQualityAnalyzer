@@ -22,6 +22,7 @@ namespace TmDq.App.Tests;
 /// recording has them, and extracts again on a change. The lists come from a stand-in for the core and the extraction
 /// is a runner that only records what it was asked, except where the real core is wanted.
 /// </summary>
+[Collection(NativeCoreCollection.Name)]
 public sealed class CalibrationChannelTests
 {
     // The dialog reads its step file through the core, so every case needs it loaded, whichever test ran before.

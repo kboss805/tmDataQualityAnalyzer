@@ -14,6 +14,7 @@ namespace TmDq.App.Tests;
 /// The plot's state behind the chart's legend, chips and menu (plan step 4.4): what they read of the series, the ranges and
 /// the window, with no control shown.
 /// </summary>
+[Collection(NativeCoreCollection.Name)]
 public sealed class ChartPlotStateTests
 {
     public ChartPlotStateTests() => NativeCore.EnsureLoaded();

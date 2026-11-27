@@ -11,6 +11,7 @@ namespace TmDq.App.Tests;
 /// first met, the id a new one takes, and what removing some does to the names, the one shown and the title. The plot's own
 /// cases (<c>RemoveFileTests</c>, <c>TemplateTests</c>) hold what it does with them.
 /// </summary>
+[Collection(NativeCoreCollection.Name)]
 public sealed class PlotSourcesTests
 {
     public PlotSourcesTests() => NativeCore.EnsureLoaded();

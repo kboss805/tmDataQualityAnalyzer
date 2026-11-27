@@ -24,6 +24,7 @@ namespace TmDq.App.Tests;
 /// <summary>
 /// The windows of the chart's prompts (plan step 4.4): each answers on OK and nothing on Cancel.
 /// </summary>
+[Collection(NativeCoreCollection.Name)]
 public sealed class ChartPromptWindowTests
 {
     public ChartPromptWindowTests() => NativeCore.EnsureLoaded();

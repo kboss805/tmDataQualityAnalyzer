@@ -29,6 +29,7 @@ namespace TmDq.App.Tests;
 /// The chart's view (plan step 4.4): the legend, the chip bar, the right-click menu and the keys, read from the controls
 /// and, where it is drawing that matters, from rendered frames.
 /// </summary>
+[Collection(NativeCoreCollection.Name)]
 public sealed class ChartViewTests
 {
     public ChartViewTests() => NativeCore.EnsureLoaded();

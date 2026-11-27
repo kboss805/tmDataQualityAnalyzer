@@ -26,6 +26,7 @@ namespace TmDq.App.Tests;
 /// reader can say. Held for every window the application has, and for the windows that are filled with rows (the streams
 /// of a recording, the series of a plot), whose controls are made per row.
 /// </summary>
+[Collection(NativeCoreCollection.Name)]
 public sealed class AccessibleNamesTests
 {
     public AccessibleNamesTests() => NativeCore.EnsureLoaded();

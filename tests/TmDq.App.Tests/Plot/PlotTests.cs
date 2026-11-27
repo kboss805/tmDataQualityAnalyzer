@@ -26,6 +26,7 @@ namespace TmDq.App.Tests;
 /// and takes the gestures (<see cref="PlotChart"/>). The drawing cases are v2.x's chart's, read from rendered
 /// frames.
 /// </summary>
+[Collection(NativeCoreCollection.Name)]
 public sealed class PlotTests
 {
     private static string Prn => Repo.Recording("prn_testfile, sample.ch10");

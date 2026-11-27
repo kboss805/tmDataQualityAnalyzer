@@ -34,7 +34,7 @@
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
       "old": "public const string CoreNotLoaded = \"The processing core could not be loaded: \";",
       "new": "public const string CoreNotLoaded = \"The processing core was not loaded: \";",
-      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.MissingCoreTests"],
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.OpenToChartTests"],
       "expect": "caught",
       "note": "the shared wording changed: Open's test holds the text itself, not the constant"
     },

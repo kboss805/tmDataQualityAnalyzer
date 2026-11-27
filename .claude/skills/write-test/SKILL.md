@@ -86,9 +86,8 @@ each suite has its house style and helpers. Build and run with the **build-and-t
   `ContextMenu.Open` alone skips its `Opening`.
 - **Never await a modal dialog in a test.** Give the code under test a fake (`Support/StreamFakes.cs`, `Support/MainWindowFakes.cs`, `Support/Fixtures.cs`: use one there before writing another, and the
   `I*` services in `src/TmDq.App/Services`) and assert on what it was asked.
-- **A test that changes a process-wide variable** (`TMDQ_CORE_DLL` pointing at a missing file) goes in
-  `MissingCoreTests`' collection, which runs alone after the rest: no other class shares a collection, so the classes that
-  load the native core run side by side (the suite went from 53 s to 38 s when they stopped queueing behind that one).
+- **Classes that load the native core** join `[Collection(NativeCoreCollection.Name)]`, which runs them
+  one at a time (one of them points `TMDQ_CORE_DLL` at a missing file for a moment).
 - **A test that only needs a recording that processes** takes `IClassFixture<ShortRecordings>` (the first 8 MB of the PRN sample, cut on a packet, made once for the class), not the whole 77 MB sample: two such classes went from 18 s to 2.3 s.
 - **Files:** `Repo.Recording("<name>")`, `Repo.File("settings/...")` (both through `RepoPaths`, which the library tests
   use too). A temporary path is `TempFiles.NewPath("<stem>", ".ext")`, never composed inline; a window shown for a test

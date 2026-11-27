@@ -24,6 +24,7 @@ namespace TmDq.App.Tests;
 /// test builds its view model with fakes, so nothing else notices a service left out (a menu entry that does nothing) or a
 /// theme toggle that changes no window.
 /// </summary>
+[Collection(NativeCoreCollection.Name)]
 public class CompositionRootTests : IDisposable
 {
     private const string Csv =
