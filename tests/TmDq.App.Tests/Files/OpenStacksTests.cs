@@ -228,6 +228,27 @@ public sealed class OpenStacksTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
+    public async Task APlotClearedWhileConfigureStreamsIsUpIsWhereTheRecordingStarts()
+    {
+        // The plot's menu stays live while a recording opens, so Clear Plot can empty the plot under it: the run then starts
+        // the plot (titled and named for the recording), not one added beside what is no longer there.
+        MainWindowViewModel? vm = null;
+        int asked = 0;
+        var configurator = FakeConfigurator.Choosing((path, file) =>
+        {
+            if (asked++ == 1) vm!.Plot.RemoveSources(vm.Plot.SourceList().Select(s => s.Id).ToList());   // Clear Plot, meanwhile
+            return new StreamsChoice(FirstChannelRun.Request(path, file), System.Array.Empty<TmDq.App.Models.Streams.StreamSetup>(), 0);
+        });
+        vm = new MainWindowViewModel(new MainWindowServices { Configurator = configurator });
+        await vm.LoadAsync(Prn);
+        await vm.LoadAsync(Second);
+
+        Assert.Equal(NameOf(Second), vm.Plot.Title);
+        Assert.Equal(NameOf(Second), Assert.Single(vm.Plot.SourceList()).Label);
+        Assert.Single(vm.Sources);
+    }
+
+    [AvaloniaFact]
     public async Task ARecordingThatFailsToOpenOrIsCancelledLeavesTheWholePlotAsItWas()
     {
         string junk = TempFiles.NewPath("add-junk", ".ch10");

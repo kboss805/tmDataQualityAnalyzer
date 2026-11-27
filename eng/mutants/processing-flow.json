@@ -227,6 +227,15 @@
       "args": [ "-method", "TmDq.App.Tests.CrashReportTests.TheMessageSaysWhereTheReportIsOrThatItCouldNotBeSavedAndWhere" ],
       "expect": "caught",
       "note": "the message asks for the report without saying it holds the user's file paths"
+    },
+    {
+      "id": "A14",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "            keep = Plot.HasData;\n            ClearUnlessAdding();",
+      "new": "            ClearUnlessAdding();",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.OpenStacksTests"],
+      "expect": "caught",
+      "note": "a plot emptied while Configure Streams is up is taken as one the recording is added to"
     }
   ]
 }

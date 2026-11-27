@@ -584,6 +584,9 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
                 Report($"Cancelled. {name} was not processed.");
                 return;
             }
+            // Read again: the plot's menu stays live while the recording opens and Configure Streams is up, so Clear Plot or Remove
+            // File may have emptied it, and the run is then a recording's first, titled with its name.
+            keep = Plot.HasData;
             ClearUnlessAdding();
             // The run is numbered after what the plot keeps, so that a CSV imported before it never shares its source id.
             RunRequest request = choice.Request with { SourceId = Plot.NextSourceId };
@@ -610,6 +613,13 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
             Report(e.Message, LogLevel.Error);
             // A run with nothing processed has logged the core's own reasons already.
             if (e is not NothingProcessedException) Log.Error(e.Message);
+        }
+        catch (TmdqException e)
+        {
+            // The core refused the results (building a stream's series): said, not thrown out of the command to the crash report.
+            string error = $"ERROR: {name} could not be shown: {e.Message}";
+            Report(error, LogLevel.Error);
+            Log.Error(error);
         }
         catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
         {

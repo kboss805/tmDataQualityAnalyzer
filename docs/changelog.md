@@ -12,6 +12,14 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Open reads the plot again after Configure Streams, and reports a core error instead of crashing (v3.5.1, PR 2)
+
+**What was wrong.** Found by the sweep. `LoadAsync` decided whether the recording is added beside what is shown (`keep`) before it opened the file, but the plot's menu stays live meanwhile: a plot emptied by Clear Plot or Remove File while Configure Streams was up was still treated as one to add to (no title, a "(2)" name). And a `TmdqException` from building a stream's series escaped the command to the crash report (a dropped file goes through it too).
+
+**What changed.** `keep` is read again once Configure Streams has answered; a `TmdqException` is reported in the status and the log ("ERROR: <file> could not be shown: ..."). The drop handler stays `async void`, as an event handler must be: with this catch, what it awaits reports its own errors. The same window in Import CSV (the parse is short and has no dialog) is left.
+
+**How it was checked.** `OpenStacksTests.APlotClearedWhileConfigureStreamsIsUpIsWhereTheRecordingStarts`; mutant A14 of `eng/mutants/processing-flow.json` CAUGHT. The `TmdqException` catch has no test: no input makes the core refuse a stream's series it has just built.
+
 #### A packet reader prepared again forgets the earlier prepare's queues (v3.5.1, PR 2)
 
 **What was wrong.** Found by the sweep (latent: the application makes one reader per run). `Ch10PacketReader::prepare` may be called again (it gives its earlier handle back and clears its channel table) but kept `m_routing` and `m_all_queues`, so a run fed and ended the earlier call's queues too: queues of streams that, in a host, may already be destroyed.
