@@ -136,6 +136,65 @@ public sealed class OpenStacksTests : IClassFixture<ShortRecordings>
         Assert.Equal(2, vm.Sources.Count);
     }
 
+    /// <summary>The first sample of each source on the plot, in the order the sources were added.</summary>
+    private static double[] StartsBySource(MainWindowViewModel vm) =>
+        vm.Plot.Series.GroupBy(s => s.SourceId).OrderBy(g => g.Key).Select(g => g.Min(s => s.X[0])).ToArray();
+
+    [AvaloniaFact]
+    public async Task ARecordingOpenedAfterALogIsPlacedByTheClockAsAnImportAfterItWouldBe()
+    {
+        // An import states a day and a time of day and no absolute time, so the recording was placed by its epoch seconds, a
+        // lifetime after the log (found reading v3.5.0: the log at 0 to 2478 s, the recording at 1.78e9 s, a 56-year axis).
+        var after = new MainWindowViewModel();
+        await after.LoadAsync(Prn);
+        await after.ImportCsvAsync(AntennaLog);
+        double[] expected = StartsBySource(after);      // the recording at 0, the log by its clock
+
+        var before = new MainWindowViewModel();
+        await before.ImportCsvAsync(AntennaLog);
+        await before.LoadAsync(Prn);
+        double[] starts = StartsBySource(before);       // the log first (source 0), the recording second
+
+        Assert.Equal(2, starts.Length);
+        Assert.Equal(expected[0], starts[1], 1);        // the recording
+        Assert.Equal(expected[1], starts[0], 1);        // the log
+        Assert.True(before.Plot.XViewMax < 1.0e8, $"the axis spans {before.Plot.XViewMax} s");
+    }
+
+    [AvaloniaFact]
+    public async Task ARecordingOpenedAfterAnImportThatStartsEarlierIsPlacedByTheSameClock()
+    {
+        // Importing a file that starts before everything shown moves the clock earlier; the base must move with it, or the
+        // next recording is placed by the old one.
+        string csv = TempFiles.NewPath("earlier-export", ".csv");
+        try
+        {
+            var maker = new MainWindowViewModel();
+            await maker.LoadAsync(Prn);
+            Assert.True(maker.Plot.ExportCsv(csv));
+            string text = File.ReadAllText(csv);
+            string earlier = System.Text.RegularExpressions.Regex.Replace(text, @"^(\d{3}):(\d\d:\d\d:\d\d\.\d{3})",
+                m => $"{int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) - 1:D3}:{m.Groups[2].Value}",
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+            File.WriteAllText(csv, earlier);
+
+            var vm = new MainWindowViewModel();
+            await vm.LoadAsync(Prn);
+            await vm.ImportCsvAsync(csv);
+            await vm.LoadAsync(Second);
+
+            double[] starts = StartsBySource(vm);       // the first recording, the import, the second recording
+            Assert.Equal(3, starts.Length);
+            Assert.Equal(86400.0, starts[0], 0);        // a day after the file (the export snaps to its sample grid: within a second)
+            Assert.Equal(0.0, starts[1], 1);
+            Assert.Equal(starts[0], starts[2], 1);      // the same recording again, at the same clock time
+        }
+        finally
+        {
+            TempFiles.Delete(csv);
+        }
+    }
+
     [AvaloniaFact]
     public async Task ARecordingThatFailsToOpenOrIsCancelledLeavesTheWholePlotAsItWas()
     {

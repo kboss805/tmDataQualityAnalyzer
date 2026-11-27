@@ -12,6 +12,14 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### A recording opened after an imported log or CSV is placed by the clock (v3.5.1, PR 2)
+
+**What was wrong.** Found by the code sweep for v3.5.1 and reproduced: import an antenna log (or an exported CSV), then Open a recording, and the recording sat at its epoch seconds, about 1.78e9 s, a lifetime after the log (the log at 0 to 2,478 s; the axis spanned 56 years). An import states a day and a time of day but no absolute time, so the time base's clock was set and its absolute seconds were not, and `AddStream` placed the recording against an absolute base of 0. Stacking made it reachable in v3.5.0; the other order (a recording, then a log) was right, because an import is placed by the clock. A second form: a file that starts before everything shown moves the clock earlier (`ShowCsv`) but left the absolute base where it was, so the next recording was placed by the old one.
+
+**What changed.** `PlotViewModel` remembers that the clock came from an import (`_clockOnly`). The next recording added gives the base the clock's moment, in the year the recording says (an import has no year), through the existing `TimeBase.Adopt`, so no ABI changed (`AbsoluteFromClock`); an import that starts earlier moves the absolute base with the clock. `Clear` forgets the flag.
+
+**How it was checked.** `OpenStacksTests`: a recording opened after a log lands where it lands when the log is imported after it (both orders compare equal, and the axis is under 1e8 s), and a recording opened after an import that starts a day earlier lands at the same clock time as the first. Mutants O21 to O24 of `eng/mutants/antenna-overlay.json`: all four CAUGHT (the import's clock taken for an absolute time; the call removed; the one-based day of the year; the base not moving with the clock).
+
 #### The shared native-core test collection stays (v3.5.1, PR 1: tried and reverted)
 
 **What was tried.** 35 of the app suite's 58 test files share `NativeCoreCollection`, so xunit runs their 726 tests one at a time, because two tests point `TMDQ_CORE_DLL` at a missing file for a moment. Moving those two into a collection of their own that runs alone, and dropping the shared one, took the suite from 53 s to 38 s on the development machine (28 cores), 0 failures in nine runs there, including four on 4 threads and three pinned to 4 logical cores.
