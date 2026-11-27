@@ -1,3 +1,66 @@
+tmDataQualityAnalyzer v3.5.1 - What's New
+=================================
+
+  Installing over v3.5.0 replaces it and keeps your settings files and
+  window preferences. Choose the same "for all users" or "only for me" as
+  you did for v3.5.0, so that it is replaced rather than installed beside.
+  If you have a version older than v3.5.0 installed with its setup.exe,
+  please read the v3.5.0 notes below.
+
+  Changed:
+
+  - Process Multiple Files says, before it starts, that it clears the plot
+    first. Cancel in its progress window now stops the whole batch: the
+    files already processed stay on the plot (and are exported, when you
+    chose a folder), and the rest are skipped. It used to skip only the
+    file being processed and go on with the next.
+
+  Improved:
+
+  - Export Data is about twice as fast on a large plot. The files it writes
+    are the same.
+
+  - A screen reader names each channel on the Receiver SNR tab of Customize
+    View ("L of RCVR 3"), each receiver's box and its open/close button.
+    The three receivers' channels used to sound alike.
+
+  - The file pickers and tips name what the menu names (Import from CSV,
+    Process Multiple Files, Save Template), and the Import tip says that it
+    reads an exported CSV or an antenna's log and adds it to the plot.
+
+  Fixed:
+
+  - A recording opened after importing an antenna's log or an exported CSV
+    is placed on the time axis by its clock, beside the log. It used to be
+    placed decades later, which stretched the time axis over 56 years.
+
+  - Zoom Back goes back to the view you had, after opening a recording that
+    starts earlier than what the plot showed. It used to land off by the
+    difference.
+
+  - An imported CSV whose rows are not in time order is shown to its latest
+    time instead of being cut short. A first time stamp just below zero no
+    longer moves the next row to zero.
+
+  - A CSV file that cannot be read (no longer there, or held open by another
+    program) is reported as unreadable, with the reason, instead of as a
+    file of the wrong layout.
+
+  - The cursor's time label no longer shows a time such as 01:00:00.1000
+    when the fraction of a second rounds up: it reads 01:00:01.000.
+
+  - Clearing the plot while Configure Streams was open no longer leaves the
+    recording named as a second file, without the plot's title. An error
+    while showing a stream is reported in the log instead of closing the
+    application.
+
+  - The user manual's description of Plot File, the CSV's file prefix, the
+    right-click menu and the keyboard (Backspace for Zoom Back) says what
+    the application does.
+
+  Everything else is as in v3.5.0, below.
+
+
 tmDataQualityAnalyzer v3.5.0 - What's New
 =================================
 

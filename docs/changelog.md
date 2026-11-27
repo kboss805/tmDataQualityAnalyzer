@@ -10,7 +10,9 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
-### Unreleased
+### v3.5.1 — The deep dive after v3.5.0: placement after an import, the batch's Cancel, a faster export
+
+A patch release (2026-11-27), the v3.5.1 plan's four PRs (`docs/future_plans/v3.5.1.md`). What the user sees: a recording opened after an imported antenna log or CSV is placed by its clock instead of decades later, Zoom Back is right after a recording that starts earlier is stacked, an out-of-order CSV is shown to its end, an unreadable CSV says so, the cursor's label carries a rounded-up fraction, Process Multiple Files says it clears the plot and its Cancel stops the batch (#415), the CSV export is about twice as fast (#415), the Receiver SNR tab is named for a screen reader (#415), and the manuals read against v3.5.0 (#414). Underneath: Avalonia 12.2.0 (xunit stays on 3.2.2), figures that render the same twice, the kept-mutant run in reach of every change (`eng\mutants_affected.ps1`) and all 734 run again (#416). The release PR itself carries the version, the notes and the re-rendered figures alone.
 
 #### Every kept mutant run again on Avalonia 12.2: every verdict as recorded (v3.5.1, PR 3)
 
