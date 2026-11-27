@@ -212,6 +212,24 @@
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.OpenStacksTests"],
       "expect": "caught",
       "note": "a recording that starts earlier shifts every series and leaves Zoom Back in the old seconds"
+    },
+    {
+      "id": "O26",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "            return e.Message.TrimEnd();",
+      "new": "            return null;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests"],
+      "expect": "caught",
+      "note": "a file another program holds is reported as a CSV of the wrong layout"
+    },
+    {
+      "id": "O27",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "            return \"the file is not there.\";",
+      "new": "            return null;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests"],
+      "expect": "caught",
+      "note": "a stale Recent Files entry is reported as a CSV of the wrong layout"
     }
   ]
 }

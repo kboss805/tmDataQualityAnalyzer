@@ -270,6 +270,28 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         "ERROR: '{0}' is not a recognized CSV: neither an export of this application (a 'Time (DOY:HH:MM:SS.mmm)' column) nor an " +
         "AV Phased Array Antenna log (the header 'Time, Name, Polarity, Stream 1, ...'), with data rows. Nothing was imported.");
 
+    private static readonly CompositeFormat CsvNotReadable = CompositeFormat.Parse(
+        "ERROR: '{0}' could not be read: {1} Nothing was imported.");
+
+    /// <summary>Why a file cannot be read (it is not there, or another program holds it), or null if it can: so that a stale Recent
+    /// Files entry or a file open elsewhere is not reported as a CSV of the wrong layout.</summary>
+    private static string? UnreadableBecause(string path)
+    {
+        try
+        {
+            using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return null;
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return "the file is not there.";
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return e.Message.TrimEnd();
+        }
+    }
+
     private async Task OpenAsync()
     {
         string? path = await _picker!.PickRecordingAsync();
@@ -298,6 +320,13 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         try
         {
             Log.Add("Importing CSV: " + name);
+            if (UnreadableBecause(path) is { } why)
+            {
+                string unreadable = string.Format(CultureInfo.InvariantCulture, CsvNotReadable, name, why);
+                Report(unreadable, LogLevel.Error);
+                Log.Error(unreadable);
+                return;
+            }
             // Whatever is imported joins what the plot shows, so that imports stack and can be compared (US6.3, US10.0); an
             // empty plot is where one starts.
             bool joins = Plot.HasData;

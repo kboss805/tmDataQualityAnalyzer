@@ -12,6 +12,14 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### A CSV that cannot be read says so, not that it is of the wrong layout (v3.5.1, PR 2)
+
+**What was wrong.** `PlotCsv.Parse` turns every reader error into "neither layout", so a stale Recent Files entry, or a file another program holds open, was reported as "not a recognized CSV ... Nothing was imported".
+
+**What changed.** Import CSV first opens the file for reading (sharing it, as the readers do); a file that is not there reads "could not be read: the file is not there.", one that is held gives the system's reason, and only a file that opens and fits neither layout gets the layout message.
+
+**How it was checked.** `PhasedArrayImportTests.AFileThatIsNotThereOrIsHeldElsewhereIsSaidToBeUnreadableNotOfTheWrongLayout`; mutants O26 and O27 of `eng/mutants/antenna-overlay.json` CAUGHT.
+
 #### The cursor's time label carries a fraction that rounds up to a whole second (v3.5.1, PR 2)
 
 **What was wrong.** `clocktime::format` (the cursor readout's label, through `tmdq_clock_time_format`) split the fraction off after the day, hour, minute and second fields, so a time of 3600.9996 s read `01:00:00.1000`: the fraction rounded up to 1000 ms and did not carry. v2.14.2 did the same. The CSV's time column uses `formatMilliseconds` and was never affected.
