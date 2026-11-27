@@ -113,7 +113,7 @@ Checked by the app suite's classes these touch (`ShellTests`, `ChartPromptWindow
 
 **What changed.** The fraction is rounded first; at 1000 ms it carries into the seconds, and on into the minutes, hours and day. Every other stamp is unchanged, tie for tie: a first attempt that rounded the whole time to milliseconds first changed three of the 16,000 generated stamps of the v2.14 digest test by 1 ms (exact half-millisecond ties), and was dropped for this one, which leaves that digest as recorded.
 
-**How it was checked.** A native case for the carry into the seconds, the minutes, the hours and the day, the stamps just below the half and without milliseconds; the v2.14 digest test unchanged; mutants K1 to K3 of `eng/mutants/csv_export_grid.json` all CAUGHT (the boundary, the lost carry, the lost day).
+**How it was checked.** A native case for the carry into the seconds, the minutes, the hours and the day, the stamps just below the half and without milliseconds; the v2.14 digest test unchanged; the managed `FormatsDigest` held one recorded stamp of exactly this case (`rounding-up`, 0.9996 s, recorded as `007:00:00:00.1000`), changed by hand to the carried `007:00:00:01.000` and said so in its header; mutants K1 to K3 of `eng/mutants/csv_export_grid.json` all CAUGHT (the boundary, the lost carry, the lost day).
 
 #### Zoom Back no longer lands off after Open stacks a recording that starts earlier (v3.5.1, PR 2)
 

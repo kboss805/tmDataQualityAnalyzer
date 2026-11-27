@@ -11,6 +11,8 @@ namespace TmDq.Core.Tests;
 /// from v2.14.2's writer, which put every sample on its own millisecond; two of them (one-stream and
 /// ties-either-side-of-base, the only ones with a steady rate to put on a grid) were re-recorded from the core when
 /// the export moved each column onto the clock rounded to its sample rate, and the other twelve are unchanged.
+/// One K line was changed by hand in v3.5.1: rounding-up (0.9996 s) recorded "007:00:00:00.1000", v2.14.2's own fraction
+/// that rounded to 1000 ms without carrying; it carries now ("007:00:00:01.000"), and every other stamp is as recorded.
 /// Result lines: P|name|pattern|mask|hasBits|bits|legacy|inverted|hasRandomized|randomized;
 /// C|name|success|baseDay|baseOffset|xMax|skipped|n, then n of s|i|metric|name|label|receiver|channel|order|source|yMin|yMax|xs|ys;
 /// W|name|ok|bytes; M|name|ok|missing|extra; K|name|text; X|name|ok|bytes.
@@ -434,7 +436,7 @@ internal static class FormatsDigest
         "K|midnight|3030323a30303a30303a30302e353030",
         "K|midnight-whole|3030323a30303a30303a3030",
         "K|three-days|3336383a32333a35393a3539",
-        "K|rounding-up|3030373a30303a30303a30302e31303030",
+        "K|rounding-up|3030373a30303a30303a30312e303030",
         "K|rounding-half|3030373a30303a30303a30312e303030",
         "K|rounding-whole|3030373a30303a30303a3539",
         "K|negative-elapsed|3031303a30303a30303a34392e353030",

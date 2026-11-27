@@ -61,16 +61,16 @@
     {
       "id": "O8",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "foreach (PlotSeries s in _series) s.Version++;\n                _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);\n                start = 0.0;",
-      "new": "_timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);\n                start = 0.0;",
+      "old": "                foreach (PlotSeries s in _series) s.Version++;\n                // The base moves earlier",
+      "new": "                // The base moves earlier",
       "expect": "caught",
       "note": "the samples moved and the chart is not told, so it draws its cached geometry"
     },
     {
       "id": "O9",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "foreach (PlotSeries s in _series) s.Version++;\n                _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);\n                start = 0.0;",
-      "new": "foreach (PlotSeries s in _series) s.Version++;\n                start = 0.0;",
+      "old": "_timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);\n                start = 0.0;",
+      "new": "start = 0.0;",
       "expect": "caught",
       "note": "the clock stays at the first log's, so the axis reads the wrong time"
     },

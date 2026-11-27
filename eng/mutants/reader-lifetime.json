@@ -38,8 +38,8 @@
     {
       "id": "T4",
       "file": "src/core/src/ch10packetreader.cpp",
-      "old": "    m_channel_info.clear();\n    m_time_channel_id = time_channel_id;",
-      "new": "    m_channel_info.clear();\n    m_tmats_info = Irig106::SuTmatsInfo{};\n    m_time_channel_id = time_channel_id;",
+      "old": "    m_all_queues.clear();\n    m_time_channel_id = time_channel_id;",
+      "new": "    m_all_queues.clear();\n    m_tmats_info = Irig106::SuTmatsInfo{};\n    m_time_channel_id = time_channel_id;",
       "args": [
         "-tc=*decoded TMATS*"
       ],
