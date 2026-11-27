@@ -11,7 +11,7 @@
 
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <AvaloniaVersion>12.1.4</AvaloniaVersion>
+    <AvaloniaVersion>12.2.0</AvaloniaVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +22,9 @@
     <PackageVersion Include="Avalonia.Headless.XUnit" Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Skia" Version="$(AvaloniaVersion)" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- Not 4.x yet: Avalonia.Headless.XUnit (12.2.0, the latest) is built against xunit 3.2.2's extensibility API, and on
+         xunit 4.0.3 every [AvaloniaFact] fails at discovery (MissingMethodException, TestIntrospectionHelper.GetTestCaseDetails).
+         Tried in v3.5.1 (PR 3); move when an Avalonia.Headless.XUnit built for xunit 4 ships. -->
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
   </ItemGroup>
 
