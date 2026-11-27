@@ -16,7 +16,6 @@ namespace TmDq.App.Tests;
 /// flag cases are v2.x's: the stream-format flags round-trip through the pattern file and the per-session fields
 /// stay out of it.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class StreamFilesTests : IDisposable
 {
     private readonly string _dir = TempFiles.NewPath("streamfiles");

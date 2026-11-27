@@ -10,6 +10,16 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
+### Unreleased
+
+#### The app tests no longer queue behind one collection (v3.5.1, PR 1)
+
+**What was slow.** 35 of the app suite's 58 test files shared `NativeCoreCollection`, so xunit ran their 726 tests one at a time (51.8 s of the suite's 53 s wall time). The collection existed for two tests, `AMissingNativeCoreIsReportedNotThrown` and `ApplyTemplateWithoutTheNativeCoreSaysSoAndStops`, which point `TMDQ_CORE_DLL` at a missing file for a moment.
+
+**What changed.** The two tests are one class of their own, `MissingCoreTests`, in a collection with `DisableParallelization` (xunit runs it alone, after the others finish); `NativeCoreCollection` and its attribute on 31 classes are gone. The two fakes the template test uses are `internal` now so the new class can share them. Mutant E4 of `eng/mutants/app-error-paths.json` (the wording of `CoreNotLoaded`) runs its new home, `MissingCoreTests`, instead of `OpenToChartTests`.
+
+**How it was checked.** The app suite, Release: 914 passed, 0 failed, 34 not run (the baseline unchanged), in 38 s of test time against about 53 s before. The two tests cannot fail from a race in a way a test could assert; they are as they were, in a collection that excludes the others.
+
 ### v3.5.0 — Everything stacks on one plot, two legends, and an MSI installer
 
 A minor release (2026-11-26). What the user sees: nothing replaces the plot any more - Open adds a recording beside what is shown and Add Recording is gone (#410, after #391), imports stack (#409) and are recognised from the file with no question (#411), Clear Plot empties it (#410) and Remove File takes one file out, starting on a file (#389, #411); processing keeps what was imported (#390); Extract Calibration chooses the calibration recording's channels (#387, #388); one palette of 15 hues draws Frame Sync Lock solid and Receiver SNR dotted (#402), with Receiver SNR from the palette's other end, tighter dots and two legends, Framesync Series and SNR Series (#407); a new icon (#406); and the installer is a Windows Installer package (MSI, WiX 6.0.2) in place of the Inno Setup program, per-user or per-machine as the wizard asks (#405, #412), with US8.0 reworded by the user for it (its "only for me" criterion met by the user's own installs: the wizard, and a standard account). Under them, a review of every layer before the release: the core refuses packets whose lengths it cannot trust, keeps exceptions inside its threads and asks for a Data Rate the TMATS lacks (#400); the binding's leases, checked sizes and strict UTF-8 paths (#399); the app's colours kept, Customize View per recording, one calibration extraction at a time and a batch's files named apart (#401); the scripts' toolset pin (#397); the tidy-ups of #392-#396; the mutation check's managed verdicts made the real tests' (#403); and the project's settings allowing Auto-fix (#408). Baselines at this release: native 575, managed 439 passed (440 in all), app 914 passed with 34 not run (948 in all).

@@ -41,7 +41,6 @@ namespace TmDq.App.Tests;
 /// the log sidebar's toggle, a file dropped on the window, the light and dark themes, and the manual. v2.x's
 /// main-window shell cases are ported among them.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class ShellTests : IDisposable
 {
     private readonly string _dir = TempFiles.NewPath("shell");

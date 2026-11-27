@@ -45,7 +45,6 @@ namespace TmDq.App.Tests;
 /// by threads that race, and says how long it took: <see cref="Steady"/> sets its lines in one order, and its
 /// percentages and seconds in one wording, before each capture.</para>
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class ManualFiguresTests : IDisposable
 {
     public const string OutputVariable = "TMDQ_MANUAL_FIGURES";

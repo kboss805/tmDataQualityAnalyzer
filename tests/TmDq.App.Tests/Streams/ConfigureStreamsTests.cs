@@ -20,7 +20,6 @@ namespace TmDq.App.Tests;
 /// 13, PRN15, and 15, PRN11), and the whole path from Open through it to the chart: the rows, the recording's own
 /// settings, the gear and its dialog, Apply to all, Process, Cancel, and what a run of several streams shows.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class ConfigureStreamsTests
 {
     private static string Prn => Repo.Recording("prn_testfile, sample.ch10");

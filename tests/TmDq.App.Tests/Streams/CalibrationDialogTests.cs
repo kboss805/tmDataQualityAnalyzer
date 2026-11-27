@@ -27,7 +27,6 @@ namespace TmDq.App.Tests;
 /// extraction. The extraction itself is the core's, held to the core's own answers by the managed library's tests;
 /// these hold what the dialogs do with it, against step_cal, as v2.x's stream setup cases did.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class CalibrationDialogTests : IDisposable
 {
     private readonly string _dir = TempFiles.NewPath("cal");

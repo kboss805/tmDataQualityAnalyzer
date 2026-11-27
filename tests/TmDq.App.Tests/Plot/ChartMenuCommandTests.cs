@@ -12,7 +12,6 @@ namespace TmDq.App.Tests;
 /// <summary>
 /// The commands behind the chart's right-click menu (plan step 4.4), asked through a fake of the prompts.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class ChartMenuCommandTests
 {
     public ChartMenuCommandTests() => NativeCore.EnsureLoaded();

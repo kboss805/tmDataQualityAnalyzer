@@ -27,7 +27,6 @@ namespace TmDq.App.Tests;
 /// The rules behind them are tested without windows (StreamRulesTests, ConfigureStreamsTests,
 /// StreamSetupViewModelTests); these hold the windows to them.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class StreamWindowsTests
 {
     private static string Prn => Repo.Recording("prn_testfile, sample.ch10");

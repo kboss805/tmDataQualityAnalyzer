@@ -16,7 +16,6 @@ namespace TmDq.App.Tests;
 /// what was imported), each recording its own entry in Plot File and Remove File, and nothing on the plot is replaced. An empty plot is
 /// where a recording starts. (File > Add Recording was this, before Open did it too.)
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class OpenStacksTests : IClassFixture<ShortRecordings>
 {
     private readonly ShortRecordings _recordings;

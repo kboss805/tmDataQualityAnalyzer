@@ -23,7 +23,6 @@ namespace TmDq.App.Tests;
 /// so the app must read them as written and write their very bytes. The batch is v2.14.2's batch loop, its
 /// messages word for word, run over copies of the PRN sample.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class TemplateTests : IDisposable
 {
     private readonly string _dir = TempFiles.NewPath("templates");

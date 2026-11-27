@@ -27,7 +27,6 @@ namespace TmDq.App.Tests;
 /// a one-sample dropout, the full picture must come back when the gesture stops, a light plot is never drafted, and
 /// an export is never a draft.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class PlotDraftTests
 {
     public PlotDraftTests() => NativeCore.EnsureLoaded();

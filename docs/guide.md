@@ -1134,7 +1134,7 @@ folders by area (`Plot/`, `Streams/`, `Files/`, `Shell/`, `Build/`, `Soak/`; see
 library tests' `Env`, `RepoPaths`, `TempFiles`, `Collector` and the digests the recordings' expected numbers are in
 (`CalibrationDigest`, `FormatsDigest`, `SeriesDigest`), the collections (`ProcessMemoryCollection`) and the observer fakes;
 the application tests' `Fixtures` (`FakeConfigurator`, `FakeRecordingPicker`, `Recordings`, `StreamsChoices`), `MainWindowFakes` (`FakeExportDialog`, `FakeProgressDialog`), `ShortRecordings` (a short PRN recording made once per class), `PlotFixtures`, `StreamFakes`, `Menus`, `Frames`, `Repo`, `PeResources`,
-`TestAppBuilder` and `NativeCoreCollection`. The app tests link `TempFiles` and `RepoPaths` from the library tests. A
+`TestAppBuilder`. The app tests link `TempFiles` and `RepoPaths` from the library tests. A
 Support file keeps its project's namespace, so a test uses it by its bare name; the test data (`Soak/`, `Templates/`)
 stays in folders of its own.
 
@@ -1280,9 +1280,10 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   `ChartPromptWindowTests` (each prompt's window: OK answers, Cancel does not), `PlotSourcesTests` (the recordings' names, the one shown, the list and the next id, and what removing some does, on their own), and `RemoveFileTests` (Remove File: a recording's series, name and CSV columns go and the others stay, what is refitted, the notice that keeps Save Template honest, the title that follows, and what the dialog starts on).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
   CSV, two exports stacked and a batch's several recordings added beside one already there), `PhasedArrayImportTests` (each layout recognised from the file with no question, a file of neither one error, an antenna's log as 90 series read H, V and C, and none of it exported),
-  `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, named apart and keeping each file's colours, Apply Template with the core missing),
+  `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, named apart and keeping each file's colours),
   `ImportedDataKeptTests` (opening a recording keeps what was imported and what was processed before, each run numbered apart, an import named for its file and added beside the run) and
-  `OpenStacksTests` (Open on a plot that shows something: the plot kept, the new recording beside it, names told apart, a failed or cancelled open changes nothing, an empty plot is where one starts).
+  `OpenStacksTests` (Open on a plot that shows something: the plot kept, the new recording beside it, names told apart, a failed or cancelled open changes nothing, an empty plot is where one starts) and
+  `MissingCoreTests` (Open and Apply Template with `tmdq_core.dll` missing say so in the status and the log; the one collection that runs alone, because it points `TMDQ_CORE_DLL` at a missing file).
 - **The shell:** `ShellTests` (title bar, menu, Recent Files, keys, drag and drop, the sidebar and its divider, themes, Help), `StatusBarTests` (the bar's place, colour and hairline, its marks, its trimming), `MenuStyleTests` (no icons, the accent row and white text, the dimmed shortcut, the row height and inset), `DialogAnatomyTests`
   (every window kind's footer band, padding, button widths and spacing, accent and cancel, in both themes; a status text following the theme), `PreferencesTests`
   (the preferences file, and v2.x's INI file left unread), `MainWindowStartupTests`, `TitleBarThemeTests` (the title bar following the theme where Avalonia does not make it: the request

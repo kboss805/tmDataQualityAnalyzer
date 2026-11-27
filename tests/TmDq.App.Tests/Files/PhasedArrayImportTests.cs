@@ -21,7 +21,6 @@ namespace TmDq.App.Tests;
 /// 30 streams shown as 90 series that read H, V and C and not as receivers; and nothing of them ever exported. The format is
 /// the core's (<c>test_phasedarraylog.cpp</c>, <c>PhasedArrayLogTests</c> in the library's tests); these hold what the application does with it.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class PhasedArrayImportTests
 {
     public PhasedArrayImportTests() => NativeCore.EnsureLoaded();

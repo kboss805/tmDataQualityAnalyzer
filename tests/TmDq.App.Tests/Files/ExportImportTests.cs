@@ -38,7 +38,6 @@ namespace TmDq.App.Tests;
 /// itself: each committed recording was processed by its pipeline into its plot and exported by it, once, and
 /// the app must write the very same bytes.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class ExportImportTests
 {
     public ExportImportTests() => NativeCore.EnsureLoaded();

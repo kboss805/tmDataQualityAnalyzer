@@ -39,7 +39,6 @@ namespace TmDq.App.Tests;
 /// colours and multi-line messages. The log says what v2.14.2's log said, in its order: the lines are the
 /// view model's and the run's, and the core's own, which the core writes the same for both.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class ProcessingTests
 {
     private static string Prn => Repo.Recording("prn_testfile, sample.ch10");

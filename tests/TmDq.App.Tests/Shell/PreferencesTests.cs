@@ -17,7 +17,6 @@ namespace TmDq.App.Tests;
 /// What is remembered between sessions (plan step 4.8): the preferences file, the recent-files rules, and the main
 /// window's view model keeping each preference.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class PreferencesTests : IDisposable
 {
     private readonly string _dir = TempFiles.NewPath("prefs");

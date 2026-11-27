@@ -15,7 +15,6 @@ namespace TmDq.App.Tests;
 /// stop OK as they arise (US7.0), OK and Cancel, and its Load and Save buttons through the core, with the folders
 /// the file dialogs start in.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class StreamSetupViewModelTests : IDisposable
 {
     private readonly string _dir = TempFiles.NewPath("setupvm");

@@ -40,7 +40,6 @@ namespace TmDq.App.Tests;
 /// (run names, comma separated) narrows the runs listed.
 /// </para>
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class SoakTests
 {
     public SoakTests() => NativeCore.EnsureLoaded();

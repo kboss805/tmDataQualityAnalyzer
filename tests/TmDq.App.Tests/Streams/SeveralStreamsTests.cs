@@ -19,7 +19,6 @@ namespace TmDq.App.Tests;
 /// stream on one time axis, each in its own primary (US4.0; the chart is plan step 4.3b's), and the build puts the
 /// shipped settings beside the application, where Configure Streams and the core look for them.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class SeveralStreamsTests
 {
     /// <summary>The commonest colours in an area, for a failure message.</summary>

@@ -17,7 +17,6 @@ namespace TmDq.App.Tests;
 /// the next CSV export, and the other recordings' stay. It is the plot's own (<see cref="PlotViewModel.RemoveSource"/>)
 /// and the right-click menu's Remove File... (<see cref="PlotCommands.RemoveFileAsync"/>), which asks which one.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class RemoveFileTests : IDisposable
 {
     private readonly string _dir = TempFiles.NewPath("removefile");

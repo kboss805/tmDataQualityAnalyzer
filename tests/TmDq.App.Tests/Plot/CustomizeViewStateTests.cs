@@ -12,7 +12,6 @@ namespace TmDq.App.Tests;
 /// <summary>
 /// Customize View's state (plan step 4.4): its rows, the order they are given in and what a choice in it does to the plot.
 /// </summary>
-[Collection(NativeCoreCollection.Name)]
 public sealed class CustomizeViewStateTests
 {
     public CustomizeViewStateTests() => NativeCore.EnsureLoaded();
