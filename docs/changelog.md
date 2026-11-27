@@ -12,6 +12,12 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Avalonia 12.1.4 to 12.2.0 (v3.5.1, PR 3)
+
+A minor release of the UI framework, taken alone so that anything it moves is its own. `AvaloniaVersion` in `Directory.Packages.props` moves every Avalonia package together (the app's, the headless test host's).
+
+**Checked:** the app suite, Release: 920 passed, 0 failed, 34 not run (the soak's explicit cases), every pixel-reading test included; the package licence check passes on the resolved packages (46 for the app, 27 for the tests), so no new licence came with it.
+
 #### The CSV export is about twice as fast: an exact tie is found from the binary value, not by printing 1100 places (v3.5.1, PR 2)
 
 **Measured first (the user's bar: change it only for about 20 % or more on a large export).** A throwaway timing of a 56-column export of 2,268,000 cells (the size of the #345 case): about 835 ms in all, of which the cell sort was about 73 ms (9 %, so the sort stays as it is) and the number formatting about 690 ms, where plain `std::format` of the same values takes about 174 ms. The difference was `textformat::isExactTie`: for about one value in ten (a 5 in the seventh place) it printed the value to 1100 decimal places to see whether the 5 was exact.
