@@ -306,6 +306,9 @@ public sealed class ManualFiguresTests : IDisposable
     /// the streams' threads log together, which race, set in one order: the reader's "Reading...", the streams' start lines,
     /// the reader's percentages, then each stream's results; a stream's own lines keep their order and the streams are
     /// taken in the order of their channels. Any other line ends such a run of lines.</summary>
+    /// <summary>The reader's progress lines a figure shows, in place of whichever this run logged.</summary>
+    internal static readonly string[] CanonicalPercents = { "21% read...", "41% read...", "61% read...", "81% read..." };
+
     internal static List<Models.Logging.LogEntry> Steady(IReadOnlyList<Models.Logging.LogEntry> entries)
     {
         List<Models.Logging.LogEntry> steady = entries.Select(e => e with { Text = SteadyText(e.Text) }).ToList();
@@ -336,19 +339,35 @@ public sealed class ManualFiguresTests : IDisposable
             if (Place(steady[i]) is null) continue;
             int j = i;
             while (j < steady.Count && Place(steady[j]) is not null) j++;
-            List<Models.Logging.LogEntry> run = steady.GetRange(i, j - i).OrderBy(e => Place(e)!.Value.Rank).ThenBy(e => Place(e)!.Value.Channel).ToList();   // stable
+            List<Models.Logging.LogEntry> run = steady.GetRange(i, j - i);
+            // Which tenths the reader logs depends on when its time-gated check fell (21, 41, 61 and 81 % one run; 21, 51 and 81 %
+            // the next): a figure shows one set, whatever this run logged.
+            if (run.FindIndex(IsPercent) is int first and >= 0)
+            {
+                Models.Logging.LogEntry like = run[first];
+                run.RemoveAll(IsPercent);
+                run.AddRange(CanonicalPercents.Select(text => like with { Text = text }));
+            }
+            run = run.OrderBy(e => Place(e)!.Value.Rank).ThenBy(e => Place(e)!.Value.Channel).ToList();   // stable
             steady.RemoveRange(i, j - i);
             steady.InsertRange(i, run);
-            i = j - 1;
+            i += run.Count - 1;
         }
         return steady;
+
+        static bool IsPercent(Models.Logging.LogEntry e) => System.Text.RegularExpressions.Regex.IsMatch(e.Text, @"^\d+% read\.\.\.$");
     }
 
     private static void SteadyLog(MainWindowViewModel vm)
     {
+        // The canonical percentages can be more lines or fewer than the run logged, so the log may change length.
         List<Models.Logging.LogEntry> steady = Steady(vm.Log.Entries);
+        while (vm.Log.Entries.Count > steady.Count) vm.Log.Entries.RemoveAt(vm.Log.Entries.Count - 1);
         for (int i = 0; i < steady.Count; i++)
-            if (steady[i] != vm.Log.Entries[i]) vm.Log.Entries[i] = steady[i];
+        {
+            if (i == vm.Log.Entries.Count) vm.Log.Entries.Add(steady[i]);
+            else if (steady[i] != vm.Log.Entries[i]) vm.Log.Entries[i] = steady[i];
+        }
     }
 
     [Theory]
@@ -379,11 +398,16 @@ public sealed class ManualFiguresTests : IDisposable
         {
             "--- Processing 3 stream(s) concurrently ---",
             "Reading Chapter 10 file...", "[CH 13 CH-01 PRN 15 5M] processing...", "[CH 15 CH-03 PRN 11 1M] processing...",
-            "[CH 16 CH-04 PRN 11 5M] processing...", "11% read...", "41% read...",
+            "[CH 16 CH-04 PRN 11 5M] processing...", "21% read...", "41% read...", "61% read...", "81% read...",
             "[CH 15 CH-03 PRN 11 1M] 5 bytes processed.", "[CH 15 CH-03 PRN 11 1M] complete — 1 samples extracted, elapsed 2.0s.",
             "  CH-03 PRN 11 1M: 109 samples, 0 channel(s)", "[CH 16 CH-04 PRN 11 5M] 0 bytes processed.",
             "Processing complete — results plotted from memory.",
         }, Steady(logged).Select(e => e.Text));
+
+        // Another run's tenths (the time-gated check fell elsewhere) give the same lines.
+        var otherRun = logged.Where(e => !e.Text.EndsWith("% read...", StringComparison.Ordinal)).ToList();
+        otherRun.InsertRange(4, new[] { L("21% read..."), L("51% read..."), L("81% read...") });
+        Assert.Equal(Steady(logged).Select(e => e.Text), Steady(otherRun).Select(e => e.Text));
     }
 
     private static SKBitmap Draw(Window window)

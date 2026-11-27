@@ -12,6 +12,16 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The manual's figures render the same twice: the run log's progress lines are set to one set (v3.5.1, PR 3)
+
+**What was unsteady.** The reader logs "NN% read..." at the first time-gated progress check past each tenth of the file, so a fast run skips tenths: one render's log read 21, 41, 61 and 81 %, the next 21, 51 and 81 %. `ManualFiguresTests` already set each line's digit to the tenth ("42%" to "41%") and the racing threads' lines in one order, but not which lines there were, so three run-log figures changed on a re-render with nothing in them changed (seen in PR 2).
+
+**What changed.** `Steady` puts the canonical four (21, 41, 61, 81 %) in place of whatever percentages a run logged, in the reader's place among the racing lines; `SteadyLog` writes back a log that may now be longer or shorter. The core's log is untouched: it says what one run did. `walk-fs-04-processing.png` and `walk-theme-01-light-plot.png` were re-rendered with the canonical set (`walk-err-01-log-error.png` already showed it).
+
+**How it was checked.** `TheLinesOfTheThreadsThatRaceAreSetInOneOrderEachStreamKeepingItsOwn` now also holds that another run's tenths (21, 51, 81) give the same lines. `enguild_manual.ps1` run twice in a row: every figure identical but `walk-cust-02-snr-tree.png`, the checkbox edge known to vary about one render in four (as does `walk-csv-03-customize.png`'s; both left as committed).
+
+**The flake hunt.** The application's suite run twelve times (eight free, four pinned to 4 logical cores as the hosted runner has): 920 passed, 0 failed, every time; none of the failures seen once before (`ChartPlotStateTests`, the CSV memory guard, `PackageLicenceTests`, the figure fixture's cleanup) came back.
+
 #### xunit stays on 3.2.2: Avalonia's headless test runner does not run on xunit 4 (v3.5.1, PR 3: tried)
 
 **What was tried.** xunit.v3 3.2.2 to 4.0.3 (the plan's PR 3). The library's suite ran on it (438 passed; the In-Process Runner v4.0.3), but in the application's suite every Avalonia test (`[AvaloniaFact]`, `[AvaloniaTheory]`) failed at discovery with `MissingMethodException: Xunit.v3.TestIntrospectionHelper.GetTestCaseDetails(...)`: `Avalonia.Headless.XUnit` 12.2.0, the latest release, is built against xunit 3.2.2's extensibility API, which 4.0 changed. No release or prerelease of it depends on xunit 4 yet (all of 12.1.4 to 12.2.0 name `xunit.v3.extensibility.core` 3.2.2).
