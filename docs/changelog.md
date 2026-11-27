@@ -12,6 +12,19 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Scripts that could report a run that did not happen (v3.5.1, PR 2)
+
+From the sweep:
+- **`eng\build_manual.ps1`** deleted the tracked figures before it checked that the core was built and the tests compiled, so a failed run left them gone; it checks first now, clears the variables it set in a `finally`, and runs the embedder from the repository's root (`eng\embed_manual_images.py` reads relative paths, so started from another folder it failed or wrote another checkout's manual; `deploy\build_package.ps1` reaches it through this script).
+- **`eng\run_soak.ps1`** called a run "same" whenever the test exited 0, even if no result was written (a renamed class, a filter that matched nothing); it deletes the last run's `result.json` first and calls a run with none "NOT RUN", a failure.
+- **`deploy\sandbox\run_sandbox_test.ps1`** could find the last run's `results.txt` (left by a delete that a Sandbox window blocked) and report it at once as this run's; it stops and says why instead.
+- **`deploy\build_msi.ps1`** read its WiX version from a literal beside a comment saying it matched `dotnet-tools.json`; it reads it from there.
+- **Comments:** `build_package.ps1` called the MSI per-machine (it is per-user or per-machine since #412); `test_dotnet.ps1` gave the library a DLL search that is the tests' (`Support\Env.cs`).
+
+**The figures:** `build_manual.ps1` (full) re-rendered `walk-batch-02-apply-dialog.png` for the batch confirmation's new note. Five other figures came out different only in run-to-run noise and were put back: the run log's time-gated "NN% read" lines in three (21/41/61/81 % one run, 21/51/81 % the next) and a checkbox edge in the two Customize View figures. The progress lines were thought steady since #296; that they are not is for PR 3's flake hunt.
+
+Checked: PSScriptAnalyzer clean; `build_manual.ps1` run in full and with `-NoCapture` after the change.
+
 #### The core's leftovers from the sweep (v3.5.1, PR 2)
 
 No behaviour changed:

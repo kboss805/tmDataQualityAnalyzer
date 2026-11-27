@@ -30,7 +30,9 @@ $Here = $PSScriptRoot
 $Root = (Resolve-Path (Join-Path $Here '..')).Path
 . (Join-Path $Here 'signing.ps1')
 
-$WixVersion = '6.0.2'   # the same as dotnet-tools.json
+# The UI extension's version is the tool's, read from where the tool is pinned, so the two cannot drift apart.
+$WixVersion = [string](Get-Content (Join-Path $Root 'dotnet-tools.json') -Raw | ConvertFrom-Json).tools.wix.version
+if ($WixVersion -notmatch '^\d+\.\d+\.\d+$') { throw "dotnet-tools.json pins no WiX version (read '$WixVersion')" }
 $AppDir     = Join-Path $Stage 'app'
 $ManualDir  = Join-Path $Stage 'manual'
 $Work       = Join-Path $Stage 'msi'
