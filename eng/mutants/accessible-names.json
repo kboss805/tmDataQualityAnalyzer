@@ -119,6 +119,33 @@
       "new": "        AutomationProperties.SetName(Choices, \"\");\n",
       "expect": "caught",
       "note": "the choice prompt's list has no name"
+    },
+    {
+      "id": "N15",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "public string AccessibleName => Group is { } g ? $\"{Label} of {g.Label}\" : Label;",
+      "new": "public string AccessibleName => Label;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AccessibleNamesTests"],
+      "expect": "caught",
+      "note": "every receiver's channel boxes are heard as L, R and C"
+    },
+    {
+      "id": "N16",
+      "file": "src/TmDq.App/Views/Plot/CustomizeViewWindow.axaml",
+      "old": " AutomationProperties.Name=\"{Binding AccessibleName}\">",
+      "new": ">",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AccessibleNamesTests"],
+      "expect": "caught",
+      "note": "the channel box is named by its text alone"
+    },
+    {
+      "id": "N17",
+      "file": "src/TmDq.App/Views/Plot/CustomizeViewWindow.axaml",
+      "old": "<Expander Classes=\"receiver\" IsExpanded",
+      "new": "<Expander IsExpanded",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AccessibleNamesTests"],
+      "expect": "caught",
+      "note": "a receiver's open/close toggle is named as its box is"
     }
   ]
 }

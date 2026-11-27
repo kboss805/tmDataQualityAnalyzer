@@ -12,6 +12,14 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Customize View's Receiver SNR tab names each channel for a screen reader (v3.5.1, PR 2)
+
+**What was wrong.** Found by the sweep: on the Receiver SNR tab each receiver's channel boxes read "L", "R" and "C", so a screen reader heard three receivers' "L" alike, and each receiver's open/close toggle took the same name as the receiver's box inside it. `AccessibleNamesTests` showed Customize View on its first tab only, so the receivers were never in the tree it read.
+
+**What changed.** A channel's box is named "L of RCVR 3" (`ChannelItem.AccessibleName`; "H of Stream 3" for an antenna's log), a receiver's box "All channels of RCVR 3", and its toggle "Open or close RCVR 3" (a style scoped to the receivers' expanders). What the boxes show is unchanged.
+
+**How it was checked.** `AccessibleNamesTests.TheRowsAndTheSetupDialogsOfARecordingAreNamed` now opens the Receiver SNR tab with every receiver expanded (nine channel boxes) and failed before the change on the duplicated names; mutants N15 to N17 of `eng/mutants/accessible-names.json` CAUGHT.
+
 #### A CSV that cannot be read says so, not that it is of the wrong layout (v3.5.1, PR 2)
 
 **What was wrong.** `PlotCsv.Parse` turns every reader error into "neither layout", so a stale Recent Files entry, or a file another program holds open, was reported as "not a recognized CSV ... Nothing was imported".
