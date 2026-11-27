@@ -109,6 +109,9 @@ themselves). Use the **PowerShell** tool.
   in its file exactly once: **re-anchor the list in the change that moved the text.** The list format and the traps it guards are in the script's header;
   `eng\mutants\example.json` is the sample. **Keep one list per area of code** (`processing-flow.json`, `plot-sources.json`, ...):
   a change extends the list that already guards what it touches, so a later move re-anchors one list, not five.
+  **Which lists a change reaches:** `powershell -ExecutionPolicy Bypass -File eng\mutants_affected.ps1 [-Base main] [-Run]
+  [-Parts <n> -Part <k>]` names the lists whose mutated files (or whose test classes) the change touches, and `-Run` runs them
+  in turn; a release runs every list (`-All`).
 
 **IntelliSense:** clangd reads a generated, gitignored `compile_flags.txt` — run `py eng/gen_compile_flags.py`
 after a fresh clone. **Run it inside each worktree too**: the paths are absolute, and a worktree otherwise silently

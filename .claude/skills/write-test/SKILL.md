@@ -109,3 +109,4 @@ code once and watch the test fail:
 - for more, with `eng\mutate.ps1` and a JSON list of exact-text mutants, run from a worktree
   (`git worktree add C:\tmp\<name>`). Its header documents the list format; `eng\mutants\example.json`
   is the sample. A survivor is a missing test, not a shrug: close it, or record why it is equivalent.
+  `eng\mutants_affected.ps1` names the kept lists a change reaches (`-Run` runs them), so a change does not re-run all 61.
