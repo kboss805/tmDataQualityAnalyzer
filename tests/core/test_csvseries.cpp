@@ -1505,6 +1505,17 @@ TEST_CASE("csvseries: the integer clock stamp reads as the floating-point one")
     }
 }
 
+TEST_CASE("csvseries: a fraction that rounds up to a whole second carries into the stamp instead of printing .1000")
+{
+    // The cursor's time label (tmdq_clock_time_format) split the fraction off after the fields, so 3600.9996 s read "01:00:00.1000".
+    CHECK(clocktime::format(5, 0.0, 3600.9996, true) == "005:01:00:01.000");
+    CHECK(clocktime::format(5, 0.0, 59.9996, true) == "005:00:01:00.000");
+    CHECK(clocktime::format(5, 0.0, 86399.9996, true) == "006:00:00:00.000");
+    CHECK(clocktime::format(5, 0.0, 0.9994, true) == "005:00:00:00.999");     // below the half: stays
+    CHECK(clocktime::format(5, 0.0, 12.3456, true) == "005:00:00:12.346");
+    CHECK(clocktime::format(5, 0.0, 3600.9996, false) == "005:01:00:00");     // no milliseconds: truncated, as it always was
+}
+
 TEST_CASE("csvseries: days and hours far apart are counted wide, not wrapped")
 {
     // The stamp's day, hour and minute are file-sourced ints, and their seconds were counted in int: 24 856 days apart,

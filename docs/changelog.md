@@ -12,6 +12,14 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The cursor's time label carries a fraction that rounds up to a whole second (v3.5.1, PR 2)
+
+**What was wrong.** `clocktime::format` (the cursor readout's label, through `tmdq_clock_time_format`) split the fraction off after the day, hour, minute and second fields, so a time of 3600.9996 s read `01:00:00.1000`: the fraction rounded up to 1000 ms and did not carry. v2.14.2 did the same. The CSV's time column uses `formatMilliseconds` and was never affected.
+
+**What changed.** The fraction is rounded first; at 1000 ms it carries into the seconds, and on into the minutes, hours and day. Every other stamp is unchanged, tie for tie: a first attempt that rounded the whole time to milliseconds first changed three of the 16,000 generated stamps of the v2.14 digest test by 1 ms (exact half-millisecond ties), and was dropped for this one, which leaves that digest as recorded.
+
+**How it was checked.** A native case for the carry into the seconds, the minutes, the hours and the day, the stamps just below the half and without milliseconds; the v2.14 digest test unchanged; mutants K1 to K3 of `eng/mutants/csv_export_grid.json` all CAUGHT (the boundary, the lost carry, the lost day).
+
 #### Zoom Back no longer lands off after Open stacks a recording that starts earlier (v3.5.1, PR 2)
 
 **What was wrong.** Found by the sweep, read from the code and then reproduced in a test: `AddStream` moves every series later by `shift` when a recording starts before what is shown, and shows the whole span, but kept the zoom history, whose views are in the old elapsed seconds; Zoom Back landed `shift` seconds off. `ShowCsv` and `AdvanceTimeBase` already moved or cleared it; `AddStream` did neither. Stacking made it reachable.

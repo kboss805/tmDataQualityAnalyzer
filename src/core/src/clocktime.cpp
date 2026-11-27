@@ -24,6 +24,25 @@ std::string format(int baseDay, double baseTimeOffset, double elapsed, bool incl
         day--;
     }
 
+    // The fraction first: one that rounds up to a whole second (.9995 or more) carries into the seconds, and on into the minutes,
+    // hours and day, and does not print as ".1000". Every other stamp is as v2.14.2's was, tie for tie.
+    int msec = 0;
+    if (includeMilliseconds)
+    {
+        // NOLINTNEXTLINE(bugprone-incorrect-roundings): the fraction is not negative, and v2.14.2 rounded it this way
+        msec = static_cast<int>((total - std::floor(total)) * 1000.0 + 0.5);
+        if (msec >= 1000)
+        {
+            msec = 0;
+            total = std::floor(total) + 1.0;
+            if (total >= static_cast<double>(TimeConstants::kSecondsPerDay))
+            {
+                total -= static_cast<double>(TimeConstants::kSecondsPerDay);
+                day++;
+            }
+        }
+    }
+
     const int hours   = static_cast<int>(total) / TimeConstants::kSecondsPerHour;
     const int minutes = (static_cast<int>(total) % TimeConstants::kSecondsPerHour) / TimeConstants::kSecondsPerMinute;
     const int seconds = static_cast<int>(total) % TimeConstants::kSecondsPerMinute;
@@ -32,11 +51,6 @@ std::string format(int baseDay, double baseTimeOffset, double elapsed, bool incl
 
     if (includeMilliseconds)
     {
-        // total's fractional part (below one second) survived the day/hour/minute/second extraction
-        // above untouched, so it can be pulled out independently without disturbing that (tested)
-        // integer-field logic.
-        // NOLINTNEXTLINE(bugprone-incorrect-roundings): the fraction is not negative, and v2.14.2 rounded it this way
-        const int msec = static_cast<int>((total - std::floor(total)) * 1000.0 + 0.5);
         result += std::format(".{:03}", msec);
     }
     return result;
