@@ -6,7 +6,6 @@
 #include "calibrationextractor.h"
 
 #include <algorithm>
-#include <cstdint>
 #include <format>
 #include <string>
 #include <utility>
@@ -448,7 +447,9 @@ void CalibrationExtractor::finish(bool success, const std::string& summary, bool
         m_params.packetQueue = nullptr;
         m_queue.reset();
     }
-    // Before the report, so a handler that starts the next run is not turned away.
+    // Before the report, so running() reads false once the end is reported. A handler that starts the next run from inside the
+    // report is still refused ("could not start"): start() joins the driver thread, which is this one. The hosts start the
+    // next run from their own thread (one runner per run, through the ABI).
     m_running = false;
     // Often on the driver thread, as the last thing it does: a sink that throws must not take the host down with it.
     containExceptions(

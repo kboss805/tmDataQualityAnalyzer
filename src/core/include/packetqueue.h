@@ -52,7 +52,7 @@ struct PacketItem
 };
 
 /**
- * @brief Bounded MPSC-style queue (single reader producer, single worker consumer).
+ * @brief Bounded single-producer, single-consumer queue (the reader thread produces, one worker consumes).
  *
  * Producer calls enqueue() (blocks while full); consumer calls dequeue() (blocks
  * while empty). close() unblocks both sides for cooperative cancellation: after

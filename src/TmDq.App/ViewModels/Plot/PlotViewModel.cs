@@ -49,6 +49,10 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     private readonly PlotTimeWindow _window;
     // Made with the first stream: the core is loaded only once a recording has been opened.
     private TimeBase? _timeBase;
+
+    /// <summary>The plot's clock was set by an imported CSV, which states a day and a time of day but no absolute time: the time
+    /// base's absolute seconds are not those of the clock. The next recording added resolves it (<see cref="AddStream"/>).</summary>
+    private bool _clockOnly;
     private int _nextId;
     private string _title = DefaultTitle;
     private double _snrMin, _snrMax = 1.0;
@@ -106,6 +110,18 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
 
     // ---- the series ---------------------------------------------------------------------------------------------
 
+    /// <summary>Makes the time base's absolute seconds those of its clock (day and time of day), in the year of
+    /// <paramref name="firstAbsSeconds"/>: what an imported CSV could not say. Leaves a base with no clock as it was.</summary>
+    private void AbsoluteFromClock(double firstAbsSeconds)
+    {
+        _clockOnly = false;
+        TimeBaseInfo clock = _timeBase!.Info;
+        if (clock.BaseDay <= 0 || !double.IsFinite(firstAbsSeconds) || Math.Abs(firstAbsSeconds) > 1.0e11) return;
+        int year = DateTimeOffset.FromUnixTimeSeconds((long)firstAbsSeconds).Year;
+        double newYear = new DateTimeOffset(year, 1, 1, 0, 0, 0, TimeSpan.Zero).ToUnixTimeSeconds();
+        _timeBase.Adopt(newYear + (clock.BaseDay - 1) * 86400.0 + clock.BaseTimeOffset, hasSeries: false);
+    }
+
     /// <summary>
     /// Adds a finished stream's series (the core's <c>buildStreamSeries</c>), as v2.x added them: a
     /// stream processed again replaces its earlier series; the shared time base moves earlier for a source that starts
@@ -121,6 +137,10 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         _series.RemoveAll(s => new StreamKey(s.SourceId, s.StreamLabel, s.StreamOrder).IsSameStream(key));
 
         bool hadSeries = _series.Count > 0;
+        // An import set the clock and left the absolute base unset: placed by it, a recording would land at its epoch seconds, a
+        // lifetime after the import. Give the base the clock's moment, in the year this recording says (an import has no year).
+        if (!hadSeries) _clockOnly = false;
+        else if (_clockOnly) AbsoluteFromClock(times[0]);
         int sourceId = result.SourceId;
         if (hadSeries && !_series.Any(s => s.SourceId == sourceId) && !_timeBase.Overlaps(times[0], times[^1], _window.XMax))
         {
@@ -133,6 +153,8 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
             foreach (double[] xs in _series.Select(s => s.X).Distinct())
                 for (int i = 0; i < xs.Length; i++) xs[i] += shift;
             foreach (PlotSeries s in _series) s.Version++;
+            // The history holds views in the old elapsed seconds, now `shift` too early: Zoom Back would land off by that much.
+            _window.ClearHistory();
         }
 
         List<PlotSeries> added;
@@ -304,6 +326,8 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
                 foreach (double[] xs in _series.Select(s => s.X).Distinct())
                     for (int i = 0; i < xs.Length; i++) xs[i] -= start;
                 foreach (PlotSeries s in _series) s.Version++;
+                // The base moves earlier by the same seconds, so a recording added next is placed against the log's clock.
+                if (!_clockOnly) _timeBase.Adopt(_timeBase.Info.BaseAbsSeconds + start, hasSeries: true);
                 _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);
                 start = 0.0;
             }
@@ -334,6 +358,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
             _lockColours.Clear();
             Sources.ForgetNames();   // the new file is the only recording; the earlier names went with it
             _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);
+            _clockOnly = true;   // the file has a clock and no absolute time
         }
         _window.ClearHistory();
         _readoutSeriesId = null;
@@ -361,6 +386,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         _lockColours.Clear();
         _window.Clear();
         _timeBase?.Reset();
+        _clockOnly = false;
         _snrMin = 0.0;
         _snrMax = 1.0;
         _lockAxisView = LockAxisView.LockPercent;
@@ -410,8 +436,9 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         foreach (PlotSeries s in _series)
         {
             if (!EffectiveVisible(s) || s.X.Length == 0) continue;
-            lo = Math.Min(lo, s.X[0]);
-            hi = Math.Max(hi, s.X[^1]);
+            (double first, double last) = Extent(s);
+            lo = Math.Min(lo, first);
+            hi = Math.Max(hi, last);
         }
         if (lo <= hi) _window.Show(lo, hi);
         ComputeSnrRange();
@@ -536,8 +563,23 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     {
         double xMax = 0.0;
         foreach (PlotSeries s in series)
-            if (s.X.Length > 0) xMax = Math.Max(xMax, s.X[^1]);
+            if (s.X.Length > 0) xMax = Math.Max(xMax, Extent(s).Last);
         return xMax;
+    }
+
+    /// <summary>A series' earliest and latest time: its ends when its times are in order, else found by a pass (an imported
+    /// CSV's rows need not be), NaN skipped. (<see cref="double.MaxValue"/>, <see cref="double.MinValue"/>) when it has none.</summary>
+    private static (double First, double Last) Extent(PlotSeries s)
+    {
+        if (s.SortedX) return (s.X[0], s.X[^1]);
+        double first = double.MaxValue, last = double.MinValue;
+        foreach (double x in s.X)
+        {
+            if (double.IsNaN(x)) continue;
+            if (x < first) first = x;
+            if (x > last) last = x;
+        }
+        return (first, last);
     }
 
     // ---- the axes -----------------------------------------------------------------------------------------------

@@ -473,6 +473,24 @@ public sealed class PlotTests
     }
 
     [AvaloniaFact]
+    public void ASeriesWhoseTimesAreOutOfOrderIsShownToItsLatestTimeAndFromItsEarliest()
+    {
+        // The span was the last sample's time (5 here), so the 100 s sample of an out-of-order import was past the view's end.
+        var plot = new PlotViewModel();
+        plot.SetSeries(new[]
+        {
+            PlotFixtures.Lock(0, "Lock A", 1, 0, new[] { 0.0, 1.0, 2.0, 100.0, 3.0, 4.0, 5.0 }, new[] { 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0 }),
+            PlotFixtures.Make(1, "Lock B", MetricType.FrameSyncLock, 2, 1, new[] { 50.0, 20.0, 40.0, double.NaN }, new[] { 1.0, 2.0, 3.0, 4.0 }, source: 1),
+        });
+        Assert.False(plot.Series[0].SortedX);
+        Assert.Equal((0.0, 100.0), (plot.XViewMin, plot.XViewMax));
+
+        // Plot File on the second recording: from its earliest time to its latest, wherever they are in the file.
+        plot.SetVisibleSource(1);
+        Assert.Equal((20.0, 50.0), (plot.XViewMin, plot.XViewMax));
+    }
+
+    [AvaloniaFact]
     public void TheReadoutOfASeriesWhoseTimesAreOutOfOrderIsStillTheNearestSample()
     {
         // An imported CSV can hold times that are not in order (a clock that stepped back, a file edited by hand). The
@@ -555,24 +573,7 @@ public sealed class PlotTests
 
     // ---- the chart --------------------------------------------------------------------------------------------
 
-    private sealed record Shown(PlotChart Chart, Window Window)
-    {
-        /// <summary>A point of the chart, in the window's coordinates (where the mouse is driven).</summary>
-        public Point At(double x, double y) => Frames.InWindow(Chart, Window).TopLeft + new Point(x, y);
-
-        public Rect Area
-        {
-            get
-            {
-                Rect c = Frames.InWindow(Chart, Window), a = Chart.PlotArea;
-                return new Rect(c.X + a.X, c.Y + a.Y, a.Width, a.Height);
-            }
-        }
-
-        public ILockedFramebuffer Frame() => Frames.Capture(Window).Lock();
-    }
-
-    private static Shown Show(PlotViewModel? plot, double width = 600, double height = 400, Avalonia.Styling.ThemeVariant? theme = null)
+    private static ShownChart Show(PlotViewModel? plot, double width = 600, double height = 400, Avalonia.Styling.ThemeVariant? theme = null)
     {
         var chart = new PlotChart { Width = width, Height = height, Plot = plot };
         var window = new Window { Content = chart, SizeToContent = SizeToContent.WidthAndHeight };
@@ -580,11 +581,11 @@ public sealed class PlotTests
         TextOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias);
         window.Show();
         Dispatcher.UIThread.RunJobs();
-        return new Shown(chart, window);
+        return new ShownChart(chart, window);
     }
 
     /// <summary>Pixels of the series' red in a part of the plot area, as fractions of its width and height.</summary>
-    private static int RedIn(Shown s, double x0, double x1, double y0, double y1)
+    private static int RedIn(ShownChart s, double x0, double x1, double y0, double y1)
     {
         Rect a = s.Area;
         var part = new Rect(a.X + a.Width * x0, a.Y + a.Height * y0, a.Width * (x1 - x0), a.Height * (y1 - y0));
@@ -601,7 +602,7 @@ public sealed class PlotTests
     }
 
     /// <summary>Red as the band's edge draws it (alpha 190), not as its fill alone does (alpha 90).</summary>
-    private static int StrongRedIn(Shown s, double x0, double x1, double y0, double y1)
+    private static int StrongRedIn(ShownChart s, double x0, double x1, double y0, double y1)
     {
         Rect a = s.Area;
         var part = new Rect(a.X + a.Width * x0, a.Y + a.Height * y0, a.Width * (x1 - x0), a.Height * (y1 - y0));
@@ -623,7 +624,7 @@ public sealed class PlotTests
         // As v2.x's was before a recording was opened: the grid and the ticks evenly across the plot area, the left
         // axis's values beside its ticks, and the time axis's marks without labels (there is no time yet).
         var plot = new PlotViewModel();
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         Rect a = s.Area;
         int nx = PlotChart.XTickCount - 1, ny = PlotChart.YTickCount - 1;
         double cellW = a.Width / nx, cellH = a.Height / ny;
@@ -692,7 +693,7 @@ public sealed class PlotTests
         double[] x = { 0, 100 }, y = { 10, 20 };
         var plot = new PlotViewModel();
         plot.SetSeries(new[] { PlotFixtures.Lock(0, "l", 1, 0, x, y) });
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         Rect lockOnly = s.Chart.PlotArea;
         Assert.Equal(600 - PlotChart.OuterMargin, lockOnly.Right, 6);      // no right axis: only the outer margin
         Assert.True(lockOnly.Left > 40, "the left axis reserves its labels and title");
@@ -722,7 +723,7 @@ public sealed class PlotTests
     public void TheWheelZoomsAboutTheCursor()
     {
         PlotViewModel plot = HundredSeconds();
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         Rect a = s.Chart.PlotArea;
         double px = a.Left + a.Width * 0.3;
         double under = s.Chart.PixelToX(px);
@@ -745,7 +746,7 @@ public sealed class PlotTests
     {
         PlotViewModel plot = HundredSeconds();
         plot.SetXViewByUser(40, 60);
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         Rect a = s.Chart.PlotArea;
         double from = a.Left + a.Width * 0.5, to = a.Left + a.Width * 0.25;
         double grabbed = s.Chart.PixelToX(from);
@@ -767,7 +768,7 @@ public sealed class PlotTests
         // drag. A band is dropped without zooming; a pan stops where it got to, and the next move with no button down
         // does not carry on panning.
         PlotViewModel plot = HundredSeconds();
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         IPointer? pointer = null;
         s.Chart.AddHandler(InputElement.PointerPressedEvent, (_, e) => pointer = e.Pointer, RoutingStrategies.Bubble, handledEventsToo: true);
         Rect a = s.Chart.PlotArea;
@@ -804,7 +805,7 @@ public sealed class PlotTests
     public void ABandDraggedWithCtrlOrTheMiddleButtonZoomsIntoIt()
     {
         PlotViewModel plot = HundredSeconds();
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         Rect a = s.Chart.PlotArea;
         double p20 = s.Chart.XToPixel(20), p60 = s.Chart.XToPixel(60);
 
@@ -844,7 +845,7 @@ public sealed class PlotTests
     {
         PlotViewModel plot = HundredSeconds();
         plot.ApplyBandZoom(20, 30);
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         Point p = s.At(s.Chart.PlotArea.Center.X, s.Chart.PlotArea.Center.Y);
         s.Window.MouseDown(p, MouseButton.Left, RawInputModifiers.None);
         s.Window.MouseUp(p, MouseButton.Left, RawInputModifiers.None);
@@ -857,7 +858,7 @@ public sealed class PlotTests
     }
 
     /// <summary>The window's pixels now, rendering it first (which is what makes the chart paint).</summary>
-    private static uint[] Pixels(Shown s)
+    private static uint[] Pixels(ShownChart s)
     {
         using ILockedFramebuffer fb = s.Frame();
         var all = new uint[fb.Size.Width * fb.Size.Height];
@@ -870,7 +871,7 @@ public sealed class PlotTests
     public void TheCrosshairAndReadoutFollowTheCursorOverTheCachedPlot()
     {
         PlotViewModel plot = HundredSeconds();
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         uint[] before = Pixels(s);
         int renders = s.Chart.DataLayerRenders;
         Rect area = s.Area;
@@ -923,7 +924,7 @@ public sealed class PlotTests
     public void AnExportOmitsTheCursorsOverlays()
     {
         PlotViewModel plot = HundredSeconds();
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         double px = s.Chart.XToPixel(70);
         s.Window.MouseMove(s.At(px, s.Chart.PlotArea.Center.Y), RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
@@ -967,7 +968,7 @@ public sealed class PlotTests
         plot.RecolorSeries(0, PlotColors.StreamHues[0]);   // pure red: the first channel of a stream is a tint of its hue
         plot.SetRightMinOverride(0);
         plot.SetRightMaxOverride(100);
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         int perColumn = 200000 / (int)s.Chart.PlotArea.Width;
         Assert.True(perColumn > 10);
         ys[100000 + perColumn / 2] = 0.0;
@@ -1037,7 +1038,7 @@ public sealed class PlotTests
             plot.Series[0].Strong = strong;
             plot.SetRightMinOverride(0);
             plot.SetRightMaxOverride(100);
-            Shown s = Show(plot);
+            ShownChart s = Show(plot);
             int n = RedIn(s, 0.05, 0.95, 0.30, 0.70);
             s.Window.Close();
             return n;
@@ -1064,7 +1065,7 @@ public sealed class PlotTests
         plot.RecolorSeries(0, yellow);
         plot.SetLeftMinOverride(0);
         plot.SetLeftMaxOverride(100);
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
 
         // The colour the line is drawn in, read back: down a column through the line its coverage adds up to the pen's width
         // wherever it falls on the pixels, so the column's pixels less the background, over the width, are the colour less it.
@@ -1112,7 +1113,7 @@ public sealed class PlotTests
         // The hand-over cases: a series on its own axis's range, a segment's both ends, a band only where the
         // series is, an unordered series in a zoomed view, and a line through a view with no sample inside.
         var plot = new PlotViewModel();
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         void Only(PlotSeries series, double? rightMax = null, (double, double)? view = null)
         {
             plot.SetSeries(new[] { series });
@@ -1177,7 +1178,7 @@ public sealed class PlotTests
         var plot = new PlotViewModel();
         plot.SetSeries(new[] { PlotFixtures.Lock(0, "flat", 1, 0, new[] { 0.0, 1.0, 2.0 }, new[] { 100.0, 100.0, 100.0 }) });
         plot.Title = "Flight 7";
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         Color first = PlotColors.StreamHues[0];
         Rect a = s.Area;
         using (ILockedFramebuffer fb = s.Frame())
@@ -1194,7 +1195,7 @@ public sealed class PlotTests
     {
         var plot = new PlotViewModel();
         plot.SetSeries(new[] { PlotFixtures.Lock(0, "flat", 1, 0, new[] { 0.0, 1.0 }, new[] { 50.0, 50.0 }) });
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         Rect a = s.Area;
         var above = new Rect(a.Left, 0, a.Width, a.Top - PlotChart.TopInset);
         int TitleInk()
@@ -1216,7 +1217,7 @@ public sealed class PlotTests
         // to 40, when it drops to a sixth of the way up (the axis then 40 to 100); Reset puts it back.
         var plot = new PlotViewModel();
         plot.SetSeries(new[] { PlotFixtures.Lock(0, "flat", 1, 0, new[] { 0.0, 1.0, 2.0 }, new[] { 50.0, 50.0, 50.0 }) });
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         Color first = PlotColors.StreamHues[0];
         Rect a = s.Area;
         int LineAt(double y)
@@ -1248,7 +1249,7 @@ public sealed class PlotTests
         double[] x = { 0, 100 }, y = { 10, 20 };
         var plot = new PlotViewModel();
         plot.SetSeries(new[] { PlotFixtures.Snr(0, "s", 1, 0, 1, 0, x, y) });
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         Rect c = Frames.InWindow(s.Chart, s.Window), a = s.Area;
         // The title is centred on the outer margin's inner edge: the strip right of the plot area's frame holds its
         // right half and nothing else.

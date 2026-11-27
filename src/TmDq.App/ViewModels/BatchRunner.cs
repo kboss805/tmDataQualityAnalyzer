@@ -12,8 +12,9 @@ using TmDq.Core;
 
 namespace TmDq.App.ViewModels;
 
-/// <summary>What a batch needs from the window it runs in: the status line (information; the batch's own end is its result), the file being run (named in the warning
-/// that a recording shares no time with the others), and a run with the progress dialog up.</summary>
+/// <summary>What a batch needs from the window it runs in: the status line (information; the batch's own end is its result), and a run
+/// with the progress dialog up (which also notes the file being run, named in the warning that a recording shares no time with the
+/// others).</summary>
 internal interface IRunHost
 {
     void SetStatus(string status);
@@ -21,8 +22,8 @@ internal interface IRunHost
     Task<RunOutcome> RunWithDialogAsync(RunRequest request);
 }
 
-/// <summary>What a batch did: the recordings it kept, and the summary for the status line.</summary>
-internal sealed record BatchResult(IReadOnlyList<ProcessedSource> Sources, string Summary, string Headline, int Skipped);
+/// <summary>What a batch did: the recordings it kept, the summary for the status line, and whether Cancel stopped it.</summary>
+internal sealed record BatchResult(IReadOnlyList<ProcessedSource> Sources, string Summary, string Headline, int Skipped, bool Cancelled);
 
 /// <summary>
 /// Apply Template's batch (US1.1), as v2.x's ran it: the template over several recordings, one after another, each
@@ -49,13 +50,15 @@ internal sealed class BatchRunner
     /// Runs <paramref name="template"/> over <paramref name="files"/> on a cleared plot: each file checked again and
     /// run with the template's rows, kept in the plot as a recording of its own, named for the Plot File selector,
     /// with the template's names and colours when asked; a file that is gone, no longer matches, or fails is skipped
-    /// and said so. Then, when a folder is given, each file's CSV and images; and the plot left on the first file.
+    /// and said so. Cancel in the progress dialog stops the batch: the files after it are skipped and the ones processed
+    /// stay. Then, when a folder is given, each processed file's CSV and images; and the plot left on the first file.
     /// </summary>
     /// <param name="outputFolder">Where each file's CSV and images go; null exports nothing.</param>
     public async Task<BatchResult> RunAsync(ProcessingTemplate template, IReadOnlyList<string> files, string? outputFolder,
                                             bool reuseAppearance)
     {
         int processed = 0, skipped = 0, nextSourceId = 0;
+        bool cancelled = false;
         var sources = new List<ProcessedSource>();
         // Each file's name in Plot File and for its CSV and images: its name up to the first dot, made different from every one
         // given before in this batch ("2024 (2)"), so two files of one base name (2024.11.05_run1 and _run2) never write one CSV.
@@ -64,6 +67,11 @@ internal sealed class BatchRunner
         _log.Success(string.Create(CultureInfo.InvariantCulture, $"Processing {files.Count} file(s)..."));
         foreach (string path in files)
         {
+            if (cancelled)
+            {
+                skipped++;
+                continue;
+            }
             if (!File.Exists(path))
             {
                 _log.Warning("Skipped missing batch file: " + path);
@@ -96,8 +104,17 @@ internal sealed class BatchRunner
                 _plot.SetSourceLabel(sourceId, label);
                 if (reuseAppearance) PlotTemplates.ApplyAppearance(template, sourceId, _plot);
             }
-            catch (Exception e) when (e is OperationCanceledException or RecordingException)
+            catch (OperationCanceledException)
             {
+                // Cancel stops the batch, as a Cancel button is expected to: this file and the ones after it are not processed.
+                skipped++;
+                cancelled = true;
+                _log.Warning("Batch cancelled at " + baseName + ": the files after it were not processed.");
+            }
+            catch (Exception e) when (e is RecordingException or TmdqException or IOException)
+            {
+                // A file the core or the disk could not finish is skipped like one that failed, so the batch, and the record of
+                // the files it did keep (for Save Template), carry on.
                 skipped++;
                 _log.Error("Batch file failed to process: " + baseName);
             }
@@ -108,9 +125,9 @@ internal sealed class BatchRunner
         // The plot opens on the first file; "All files (overlaid)" is in the Plot File selector.
         if (sources.Count > 1) _plot.SetVisibleSource(sources[0].SourceId);
         if (sources.Count > 0) _plot.Title = names[sources[0].SourceId];   // the first file's name is never changed: none came before it
-        string headline = string.Create(CultureInfo.InvariantCulture, $"Batch complete: {processed} processed, {skipped} skipped.");
+        string headline = string.Create(CultureInfo.InvariantCulture, $"Batch {(cancelled ? "cancelled" : "complete")}: {processed} processed, {skipped} skipped.");
         string summary = headline + (outputFolder is null ? "" : " Output written to " + outputFolder + ".");
-        return new BatchResult(sources, summary, headline, skipped);
+        return new BatchResult(sources, summary, headline, skipped, cancelled);
     }
 
     /// <summary>

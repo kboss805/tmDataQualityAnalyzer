@@ -35,23 +35,6 @@ public sealed class PlotDraftTests
     private const int Samples = 100_000;      // 0.01 s apart: 1000 s, about 200 samples a pixel column
     private const int DropoutAt = 61_234;     // one sample at 0 where the rest are 30 to 70
 
-    private sealed record Shown(PlotChart Chart, Window Window)
-    {
-        public Point At(double x, double y) => Frames.InWindow(Chart, Window).TopLeft + new Point(x, y);
-
-        public Rect Area
-        {
-            get
-            {
-                Rect c = Frames.InWindow(Chart, Window), a = Chart.PlotArea;
-                return new Rect(c.X + a.X, c.Y + a.Y, a.Width, a.Height);
-            }
-        }
-
-        /// <summary>Renders the window (which is what makes the chart paint) and reads it.</summary>
-        public ILockedFramebuffer Frame() => Frames.Capture(Window).Lock();
-    }
-
     /// <summary>A dense noisy lock series with a single-sample dropout, and, when asked, more series like it.</summary>
     private static PlotViewModel Dense(int series = 1)
     {
@@ -67,31 +50,31 @@ public sealed class PlotDraftTests
         return plot;
     }
 
-    private static Shown Show(PlotViewModel plot)
+    private static ShownChart Show(PlotViewModel plot)
     {
         var chart = new PlotChart { Width = 600, Height = 400, Plot = plot };
         var window = new Window { Content = chart, SizeToContent = SizeToContent.WidthAndHeight };
         TextOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias);
         window.Show();
         Dispatcher.UIThread.RunJobs();
-        using (new Shown(chart, window).Frame()) { }   // the first, full, paint
-        return new Shown(chart, window);
+        using (new ShownChart(chart, window).Frame()) { }   // the first, full, paint
+        return new ShownChart(chart, window);
     }
 
     /// <summary>Pixels of the first series' colour (blended with white, as its fill and antialiased edges are) in a
     /// rectangle given in the plot area's own pixels.</summary>
-    private static int Ink(Shown s, PlotViewModel plot, Rect inArea)
+    private static int Ink(ShownChart s, PlotViewModel plot, Rect inArea)
     {
         Rect a = s.Area;
         using ILockedFramebuffer fb = s.Frame();
         return Frames.Near(fb, new Rect(a.X + inArea.X, a.Y + inArea.Y, inArea.Width, inArea.Height), plot.Series[0].Color);
     }
 
-    private static int InkInArea(Shown s, PlotViewModel plot) => Ink(s, plot, new Rect(0, 0, s.Area.Width, s.Area.Height));
+    private static int InkInArea(ShownChart s, PlotViewModel plot) => Ink(s, plot, new Rect(0, 0, s.Area.Width, s.Area.Height));
 
     /// <summary>The first series' ink just above the bottom of the plot, in the dropout's column and away from it:
     /// only the dropout reaches down there.</summary>
-    private static (int AtDropout, int Elsewhere) DropoutInk(Shown s, PlotViewModel plot)
+    private static (int AtDropout, int Elsewhere) DropoutInk(ShownChart s, PlotViewModel plot)
     {
         double px = s.Chart.XToPixel(DropoutAt * 0.01) - s.Chart.PlotArea.X;
         double h = s.Area.Height;
@@ -106,7 +89,7 @@ public sealed class PlotDraftTests
     public void AHeavyPlotIsDraftedWhileTheWheelMovesItAndDrawnInFullWhenItSettles()
     {
         PlotViewModel plot = Dense();
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         s.Chart.DraftThresholdMs = 0;   // every plot is heavy
         int full = InkInArea(s, plot);
         Assert.False(s.Chart.DraftShown);
@@ -151,7 +134,7 @@ public sealed class PlotDraftTests
         // not after the refine delay.
         PlotViewModel plot = Dense();
         plot.SetXViewByUser(200, 600);
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         s.Chart.DraftThresholdMs = 0;
         s.Chart.RefineDelay = TimeSpan.FromHours(1);   // only the end of the drag can settle it here
         IPointer? pointer = null;
@@ -175,7 +158,7 @@ public sealed class PlotDraftTests
     {
         PlotViewModel plot = Dense();
         plot.SetXViewByUser(200, 600);
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         s.Chart.DraftThresholdMs = 0;
         s.Chart.RefineDelay = TimeSpan.FromHours(1);   // only the release can settle it here
         Point grab = s.At(s.Chart.PlotArea.Center.X, s.Chart.PlotArea.Center.Y);
@@ -202,7 +185,7 @@ public sealed class PlotDraftTests
     public void TheWheelSettlesOnItsOwnAfterTheRefineDelay()
     {
         PlotViewModel plot = Dense();
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         s.Chart.DraftThresholdMs = 0;
         s.Chart.RefineDelay = TimeSpan.FromMilliseconds(100);
         Assert.Equal(TimeSpan.FromMilliseconds(150), PlotChart.DefaultRefineDelay);
@@ -232,7 +215,7 @@ public sealed class PlotDraftTests
         // The rule: a draft only when the last full paint took longer than the threshold.
         Assert.Equal(30.0, PlotChart.DefaultDraftThresholdMs);
         PlotViewModel plot = Dense();
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         s.Chart.DraftThresholdMs = double.MaxValue;
         s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
@@ -244,7 +227,7 @@ public sealed class PlotDraftTests
         var small = new PlotViewModel();
         small.SetSeries(new[] { PlotFixtures.Lock(0, "s", 1, 0, Enumerable.Range(0, 200).Select(i => (double)i).ToArray(),
                                                   Enumerable.Range(0, 200).Select(i => 50.0 + i % 7).ToArray()) });
-        Shown t = Show(small);
+        ShownChart t = Show(small);
         Assert.True(t.Chart.LastFullPaintMs < PlotChart.DefaultDraftThresholdMs, $"a 200-sample plot took {t.Chart.LastFullPaintMs} ms");
         t.Window.MouseWheel(t.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
@@ -259,7 +242,7 @@ public sealed class PlotDraftTests
     public void AnExportDuringADraftIsTheFullPicture()
     {
         PlotViewModel plot = Dense();
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         s.Chart.DraftThresholdMs = 0;
         s.Chart.RefineDelay = TimeSpan.FromHours(1);
         s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
@@ -300,7 +283,7 @@ public sealed class PlotDraftTests
         double[] ys = xs.Select(x => (int)x % 2 == 0 ? 10.0 : 90.0).ToArray();
         var plot = new PlotViewModel();
         plot.SetSeries(new[] { PlotFixtures.Lock(0, "zigzag", 1, 0, xs, ys) });
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         s.Chart.DraftThresholdMs = 0;
         s.Chart.RefineDelay = TimeSpan.FromHours(1);
         s.Window.MouseWheel(s.At(300, 200), new Vector(0, 1), RawInputModifiers.None);
@@ -315,9 +298,9 @@ public sealed class PlotDraftTests
     }
 
     /// <summary>Shows <paramref name="plot"/> at a display scaling of <paramref name="scale"/>, painted in full once.</summary>
-    private static Shown ShowScaled(PlotViewModel plot, double scale)
+    private static ShownChart ShowScaled(PlotViewModel plot, double scale)
     {
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         s.Window.SetRenderScaling(scale);
         Dispatcher.UIThread.RunJobs();
         using (ILockedFramebuffer fb = s.Frame())
@@ -332,7 +315,7 @@ public sealed class PlotDraftTests
     /// <paramref name="yInChart"/> (the chart's own coordinates): in each device column of the plot's middle half, the
     /// pixels' worth of the colour those rows hold (one blended halfway with white counts a half), the median over the
     /// columns. Pixels of another colour, the grid's grey among them, are not counted.</summary>
-    private static double Thickness(Shown s, double scale, double yInChart, Color colour)
+    private static double Thickness(ShownChart s, double scale, double yInChart, Color colour)
     {
         Rect c = Frames.InWindow(s.Chart, s.Window), a = s.Chart.PlotArea;
         double cr = 255 - colour.R, cg = 255 - colour.G, cb = 255 - colour.B;
@@ -357,7 +340,7 @@ public sealed class PlotDraftTests
         return columns[columns.Length / 2];
     }
 
-    private static void Draft(Shown s)
+    private static void Draft(ShownChart s)
     {
         s.Chart.DraftThresholdMs = 0;
         s.Chart.RefineDelay = TimeSpan.FromHours(1);
@@ -379,7 +362,7 @@ public sealed class PlotDraftTests
         double[] xs = Enumerable.Range(0, 60).Select(i => (double)i).ToArray();
         var plot = new PlotViewModel();
         plot.SetSeries(new[] { PlotFixtures.Lock(0, "flat", 1, 0, xs, xs.Select(_ => 50.0).ToArray()) });
-        Shown s = ShowScaled(plot, scale);
+        ShownChart s = ShowScaled(plot, scale);
         Color colour = plot.Series[0].Color;
         double full = Thickness(s, scale, s.Chart.LeftToPixel(50), colour);
         Assert.True(full > PlotChart.PenWidth * scale * 0.8, $"the full picture's line is {full} device pixels thick at {scale}x");
@@ -400,7 +383,7 @@ public sealed class PlotDraftTests
         double[] xs = Enumerable.Range(0, Samples).Select(i => i * 0.01).ToArray();
         var plot = new PlotViewModel();
         plot.SetSeries(new[] { PlotFixtures.Lock(0, "band", 1, 0, xs, xs.Select((_, i) => i % 2 == 0 ? 40.0 : 60.0).ToArray()) });
-        Shown s = ShowScaled(plot, scale);
+        ShownChart s = ShowScaled(plot, scale);
         Draft(s);
         double edge = Thickness(s, scale, s.Chart.LeftToPixel(60), plot.Series[0].Color);
         double expected = PlotChart.BandEdgeAlpha / 255.0;
@@ -418,7 +401,7 @@ public sealed class PlotDraftTests
         // a plot that is right (audit Q3). The delay is a Task.Delay, which Windows' coarse timer can end up to a
         // tick (15.6 ms) early, so the end is held to 3/4 of the delay, not to the whole of it.
         PlotViewModel plot = Dense();
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         s.Chart.DraftThresholdMs = 0;
         s.Chart.RefineDelay = TimeSpan.FromMilliseconds(1000);
         var sinceFirst = Stopwatch.StartNew();
@@ -438,7 +421,7 @@ public sealed class PlotDraftTests
         Assert.True(sinceSecond.Elapsed >= TimeSpan.FromMilliseconds(750), $"settled {sinceSecond.Elapsed.TotalMilliseconds} ms after the last step");
         s.Window.Close();
 
-        static void Pump(Shown s, TimeSpan time)
+        static void Pump(ShownChart s, TimeSpan time)
         {
             var clock = Stopwatch.StartNew();
             do
@@ -460,7 +443,7 @@ public sealed class PlotDraftTests
         double[] ys = Enumerable.Repeat(95.0, Samples).ToArray();
         var plot = new PlotViewModel();
         plot.SetSeries(new[] { PlotFixtures.Lock(0, "s", 1, 0, xs, ys) });
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         Assert.Equal(1, s.Chart.IndexCount);
         var top = new Rect(5, 0, s.Area.Width - 10, s.Area.Height * 0.1);
         Assert.True(Ink(s, plot, top) > 0);
@@ -577,7 +560,7 @@ public sealed class PlotDraftTests
             PlotFixtures.Lock(6, "unordered", 7, 6, unordered, unordered.Select(_ => 60.0).ToArray()),
         }).ToList());
         Assert.Equal(4, plot.Series.Count);
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         Assert.Equal(2, s.Chart.IndexCount);
 
         // A shift of the times keeps it (it depends on the values alone); a new set of series replaces it; none, none.
@@ -597,7 +580,7 @@ public sealed class PlotDraftTests
     public void TheCachedLayerAndTheIndexesAreReleasedWhenTheChartLeavesTheWindowAndMadeAgainIfItReturns()
     {
         PlotViewModel plot = Dense(1);
-        Shown s = Show(plot);
+        ShownChart s = Show(plot);
         int inked = InkInArea(s, plot);
         Assert.True(inked > 0);
         Assert.Equal(1, s.Chart.IndexCount);

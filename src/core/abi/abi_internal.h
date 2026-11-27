@@ -15,6 +15,7 @@
 #include <string>
 
 #include "metrictype.h"
+#include "textfile.h"
 #include "tmdq_abi.h"
 
 namespace tmdq {
@@ -86,10 +87,11 @@ inline int32_t copyText(const std::string& text, char* buffer, int32_t capacity)
     return static_cast<int32_t>(text.size());
 }
 
-/// A path from UTF-8 text by the standard's UTF-8 conversion, not the process code page's.
+/// A path from UTF-8 text by the standard's UTF-8 conversion, not the process code page's: the core's own
+/// (`textfile::pathFromUtf8`), with a NULL read as empty.
 inline std::filesystem::path pathFromUtf8(const char* utf8)
 {
-    return std::filesystem::path(std::u8string(reinterpret_cast<const char8_t*>(utf8 ? utf8 : "")));
+    return textfile::pathFromUtf8(utf8 ? std::string(utf8) : std::string());
 }
 
 /// Copies a struct the host filled in. The host may have been built against an older revision, so only

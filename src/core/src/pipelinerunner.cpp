@@ -271,7 +271,9 @@ void PipelineRunner::finish()
     }
     const bool success = m_any_success && !m_cancelled && !m_failed;
     const std::shared_ptr<PipelineEvents> events = m_events;
-    // Before the report, so a handler that starts the next run is not turned away.
+    // Before the report, so running() reads false once the end is reported. A handler that starts the next run from inside the
+    // report is still refused ("could not start"): start() joins the driver thread, which is this one. The hosts start the
+    // next run from their own thread (one runner per run, through the ABI).
     m_running = false;
     // On the reader thread, the last thing it does: a sink that throws must not take the host down with it.
     containExceptions([&]() { events->processingFinished(success); }, [](const char*) {});

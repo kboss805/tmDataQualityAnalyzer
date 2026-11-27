@@ -120,6 +120,11 @@ if (-not $Payload -or $Payload.Count -eq 0) {
 }
 
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+# A results file the delete could not remove (a Sandbox window still holding the folder) would satisfy the wait below at once
+# and report the last run's results as this one's: stop instead.
+if (Test-Path (Join-Path $outDir 'results.txt')) {
+    throw "$outDir still holds the last run's results.txt, which could not be deleted: close any Sandbox window, wait for WindowsSandboxServer to exit, and run this again."
+}
 New-Item -ItemType Directory -Force -Path $inDir, $outDir | Out-Null
 Copy-Item $Setup $inDir -Force
 # Through `powershell -File`, an array parameter arrives as ONE string, so the list is split here, on SEMICOLONS:

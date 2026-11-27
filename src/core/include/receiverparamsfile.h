@@ -2,7 +2,7 @@
  * @file receiverparamsfile.h
  * @brief Reader and writer of the receiver-parameters file, and the one resolution of a Receiver SNR stream's word map.
  *
- * A receiver-parameters file carries the five scalar settings the Receiver SNR dialog shows (polarity, slope range,
+ * A receiver-parameters file carries the five scalar settings a Receiver SNR stream's setup dialog shows (polarity, slope range,
  * scale, receiver count, channels per receiver) and a word map (one `[Name]` section per parameter, with its 1-based
  * `Word`). The word map is `FrameSetup`'s to load and write (`tryLoadingFile`, `writeWordMap`); the file as a whole is
  * here, beside `framesyncfile.h`, so that its two halves are read and written in one place: a save that wrote only the
@@ -21,7 +21,7 @@
 /**
  * @brief The scalar settings a receiver-parameters TOML carries alongside its word map.
  *
- * These are the five values the Receiver SNR dialog shows above the word map.
+ * These are the five values a Receiver SNR stream's setup dialog shows above the word map.
  */
 struct ReceiverParams
 {
@@ -41,7 +41,7 @@ ReceiverParams readReceiverParams(const std::filesystem::path& path, const Recei
 /// there is no word map to write, and when the file cannot be written.
 bool writeReceiverParams(const std::filesystem::path& path, const ReceiverParams& params, const FrameSetup& setup);
 
-/// Writes a complete receiver-parameters file the way the Receiver SNR dialog needs it: the word map comes from
+/// Writes a complete receiver-parameters file the way a Receiver SNR stream's setup dialog needs it: the word map comes from
 /// @p word_map_source when that names a readable file, and otherwise is the default map for the params' receiver
 /// counts - i.e. whichever map the stream would actually process with.
 /// @return false with a reason in @p error if no usable map could be built or the file could not be written.

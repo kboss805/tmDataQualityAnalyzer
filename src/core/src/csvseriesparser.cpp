@@ -98,7 +98,8 @@ CsvParseResult CsvSeriesParser::parse(const std::filesystem::path& path)
     }
 
     // Parse data rows.
-    double first_time = -1.0;
+    bool have_first = false;
+    double first_time = 0.0;
     int first_day = 0;
     std::string line;
     std::vector<std::string_view> fields;
@@ -124,9 +125,11 @@ CsvParseResult CsvSeriesParser::parse(const std::filesystem::path& path)
             continue;
         }
 
-        // Convert DOY + time to elapsed seconds from the first sample.
-        if (first_time < 0.0)
+        // Convert DOY + time to elapsed seconds from the first sample. A flag, not a negative time, says whether there is one:
+        // a stamp can read below zero ("001:00:-1:00.000"), and as the sentinel it re-seeded the base on the next row.
+        if (!have_first)
         {
+            have_first            = true;
             first_day             = day;
             first_time            = time_seconds;
             result.baseDay        = day;
@@ -158,9 +161,13 @@ CsvParseResult CsvSeriesParser::parse(const std::filesystem::path& path)
         if (!s.xValues.empty())
         {
             has_any_data = true;
-            if (s.xValues.back() > x_max)
+            // The largest time, not the last: a file's rows need not be in time order, and the span is what the plot shows.
+            for (const double x : s.xValues)
             {
-                x_max = s.xValues.back();
+                if (x > x_max)
+                {
+                    x_max = x;
+                }
             }
         }
     }

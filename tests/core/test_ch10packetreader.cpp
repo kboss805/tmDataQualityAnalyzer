@@ -981,6 +981,37 @@ TEST_CASE("Ch10PacketReader: each packet carries its bit count and a base time t
     CHECK(items.back().baseAbsSeconds - items.front().baseAbsSeconds < 3600.0);
 }
 
+TEST_CASE("Ch10PacketReader: a reader prepared again routes only to the queues of its last prepare")
+{
+    // prepare() may be called again (it gives its earlier handle back), but it kept the earlier call's queues, so the run fed
+    // and ended them as well: queues of streams that, in a host, may already be destroyed.
+    const StepCalFixture fx = loadStepCalFixture();
+    PacketQueue first;
+    PacketQueue second;
+    ProcessingParams pa = paramsFor(fx, &first);
+    ProcessingParams pb = paramsFor(fx, &second);
+    std::vector<ProcessingParams*> before{&pa};
+    std::vector<ProcessingParams*> after{&pb};
+    Ch10PacketReader r;
+    std::string error;
+    REQUIRE_MESSAGE(r.prepare(fx.path, fx.time_id, before, error), error);
+    REQUIRE_MESSAGE(r.prepare(fx.path, fx.time_id, after, error), error);
+
+    Drain drain(second);
+    r.run();
+    drain.join();
+    REQUIRE(!drain.m_timed_out);
+    CHECK(drain.m_packets.load() == kFixturePackets);
+    CHECK(drain.m_end_markers.load() == 1);
+    // Nothing reached the first queue: a probe put in now is the first thing out of it.
+    PacketItem probe;
+    probe.packetBits = 54321;
+    REQUIRE(first.enqueue(probe));
+    const PacketItem next = first.dequeue();
+    CHECK(!next.endOfStream);
+    CHECK(next.packetBits == 54321u);
+}
+
 TEST_CASE("Ch10PacketReader: a queue shared by two streams gets each packet twice and one end marker")
 {
     // Two streams handed the same queue: the reader routes the packet to it once per stream, but the end of the stream

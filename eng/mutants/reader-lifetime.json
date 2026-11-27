@@ -38,8 +38,8 @@
     {
       "id": "T4",
       "file": "src/core/src/ch10packetreader.cpp",
-      "old": "    m_channel_info.clear();\n    m_time_channel_id = time_channel_id;",
-      "new": "    m_channel_info.clear();\n    m_tmats_info = Irig106::SuTmatsInfo{};\n    m_time_channel_id = time_channel_id;",
+      "old": "    m_all_queues.clear();\n    m_time_channel_id = time_channel_id;",
+      "new": "    m_all_queues.clear();\n    m_tmats_info = Irig106::SuTmatsInfo{};\n    m_time_channel_id = time_channel_id;",
       "args": [
         "-tc=*decoded TMATS*"
       ],
@@ -166,6 +166,24 @@
       ],
       "expect": "caught",
       "note": "any run's callback counts as this run's"
+    },
+    {
+      "id": "L90",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "    m_routing.clear();\n    m_all_queues.clear();\n",
+      "new": "    m_all_queues.clear();\n",
+      "args": ["-tc=Ch10PacketReader: a reader prepared again*"],
+      "expect": "caught",
+      "note": "a reader prepared again still feeds the earlier prepare's queues"
+    },
+    {
+      "id": "L91",
+      "file": "src/core/src/ch10packetreader.cpp",
+      "old": "    m_routing.clear();\n    m_all_queues.clear();\n",
+      "new": "    m_routing.clear();\n",
+      "args": ["-tc=Ch10PacketReader: a reader prepared again*"],
+      "expect": "caught",
+      "note": "a reader prepared again still ends the earlier prepare's queues"
     }
   ]
 }

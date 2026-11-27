@@ -61,6 +61,6 @@ public static class RecentFiles
     public static bool IsSupported(string path) =>
         path.EndsWith(".ch10", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>An exported CSV, which is imported; anything else is opened as a recording.</summary>
+    /// <summary>A CSV (an export or an antenna's log), which is imported; anything else is opened as a recording.</summary>
     public static bool IsCsv(string path) => path.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
 }

@@ -61,16 +61,16 @@
     {
       "id": "O8",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "foreach (PlotSeries s in _series) s.Version++;\n                _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);\n                start = 0.0;",
-      "new": "_timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);\n                start = 0.0;",
+      "old": "                foreach (PlotSeries s in _series) s.Version++;\n                // The base moves earlier",
+      "new": "                // The base moves earlier",
       "expect": "caught",
       "note": "the samples moved and the chart is not told, so it draws its cached geometry"
     },
     {
       "id": "O9",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "foreach (PlotSeries s in _series) s.Version++;\n                _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);\n                start = 0.0;",
-      "new": "foreach (PlotSeries s in _series) s.Version++;\n                start = 0.0;",
+      "old": "_timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);\n                start = 0.0;",
+      "new": "start = 0.0;",
       "expect": "caught",
       "note": "the clock stays at the first log's, so the axis reads the wrong time"
     },
@@ -167,6 +167,69 @@
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests", "-class", "TmDq.App.Tests.ExportImportTests"],
       "expect": "caught",
       "note": "the file's recordings keep the numbers its file gave them"
+    },
+    {
+      "id": "O21",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "else if (_clockOnly) AbsoluteFromClock(times[0]);",
+      "new": "else if (_clockOnly) _clockOnly = false;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.OpenStacksTests"],
+      "expect": "caught",
+      "note": "a recording opened after an import is placed by its epoch seconds, a lifetime after the import"
+    },
+    {
+      "id": "O22",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "_clockOnly = true;   // the file has a clock and no absolute time",
+      "new": "_clockOnly = false;   // the file has a clock and no absolute time",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.OpenStacksTests"],
+      "expect": "caught",
+      "note": "the import's clock is taken for an absolute time"
+    },
+    {
+      "id": "O23",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "newYear + (clock.BaseDay - 1) * 86400.0 + clock.BaseTimeOffset",
+      "new": "newYear + clock.BaseDay * 86400.0 + clock.BaseTimeOffset",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.OpenStacksTests"],
+      "expect": "caught",
+      "note": "the day of the year is one-based: off by a day otherwise"
+    },
+    {
+      "id": "O24",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "if (!_clockOnly) _timeBase.Adopt(_timeBase.Info.BaseAbsSeconds + start, hasSeries: true);",
+      "new": "if (!_clockOnly) { }",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.OpenStacksTests"],
+      "expect": "caught",
+      "note": "an import that starts earlier moves the clock but not the base: the next recording is placed by the old one"
+    },
+    {
+      "id": "O25",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "            _window.ClearHistory();\n        }\n\n        List<PlotSeries> added;",
+      "new": "        }\n\n        List<PlotSeries> added;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.OpenStacksTests"],
+      "expect": "caught",
+      "note": "a recording that starts earlier shifts every series and leaves Zoom Back in the old seconds"
+    },
+    {
+      "id": "O26",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "            return e.Message.TrimEnd();",
+      "new": "            return null;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests"],
+      "expect": "caught",
+      "note": "a file another program holds is reported as a CSV of the wrong layout"
+    },
+    {
+      "id": "O27",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "            return \"the file is not there.\";",
+      "new": "            return null;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PhasedArrayImportTests"],
+      "expect": "caught",
+      "note": "a stale Recent Files entry is reported as a CSV of the wrong layout"
     }
   ]
 }

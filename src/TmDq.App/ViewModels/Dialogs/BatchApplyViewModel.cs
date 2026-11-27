@@ -31,6 +31,12 @@ public sealed class BatchApplyViewModel : DialogViewModel
 {
     public const string Title = "Process Multiple Files";
 
+    /// <summary>What a batch does to the plot, and what its Cancel does: said before it starts, since it is the one action that does
+    /// not stack.</summary>
+    public const string ClearsThePlot = "The plot is cleared first: what it shows now, recordings and imports alike, is removed and " +
+                                        "these files take its place. Cancel during processing stops the batch; the files already " +
+                                        "processed stay.";
+
     private readonly ITemplateFilePicker? _files;
 
     private bool _exportPerFile;

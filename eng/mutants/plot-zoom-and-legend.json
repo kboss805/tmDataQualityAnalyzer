@@ -226,6 +226,15 @@
       "new": "Title=\"Framesync\"",
       "expect": "caught",
       "note": "the Framesync legend is not titled \"Framesync Series\""
+    },
+    {
+      "id": "Z6",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        if (s.SortedX) return (s.X[0], s.X[^1]);",
+      "new": "        if (s.SortedX || s.X.Length > 0) return (s.X[0], s.X[^1]);",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
+      "expect": "caught",
+      "note": "an out-of-order series is shown to its last sample's time, not its latest"
     }
   ]
 }

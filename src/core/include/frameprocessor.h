@@ -5,8 +5,8 @@
  * Consumes decoded PCM packets from a per-stream PacketQueue (filled by
  * Ch10PacketReader) and accumulates frame-sync lock / receiver-channel results
  * in memory. The PCM encoding type (NRZ-L or RNRZ-L) is specified by the caller
- * via ProcessingParams::isRandomized. The processor no longer opens the Ch10
- * file or parses TMATS — that is done once by the reader.
+ * via ProcessingParams::isRandomized. The processor does not open the Ch10
+ * file or parse TMATS: the reader does that once, for every stream.
  */
 
 #ifndef FRAMEPROCESSOR_H

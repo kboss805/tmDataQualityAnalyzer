@@ -497,8 +497,8 @@ Three layers, each tested on its own:
    what a control must (focus, pointer gestures, popups), and view models reach no control. A view model reports
   state (a colour, a match, a status) and the view paints it (`StatusPaint`, in Fluent's status colours); `LayerTests` holds the layers apart.
 
-**Multi-source plots:** the plot can hold several recordings' series at once, and only the Apply Template batch puts
-them there. Every recording is a source with its own id, so two recordings that reuse a PCM channel id never mix, and
+**Multi-source plots:** the plot can hold several recordings' series at once: Open and Import from CSV add beside what is
+shown, and Process Multiple Files puts a batch's there. Every recording is a source with its own id, so two recordings that reuse a PCM channel id never mix, and
 all share one elapsed-seconds X axis based at the earliest sample of any of them (the core's `seriesbuilder`). There is
 one processing run at a time: a batch is N runs into one accumulating plot. The plot's **Plot File** selector shows one
 recording or all (`PlotViewModel.SetVisibleSource`), orthogonal to per-series visibility and the View Mode.
@@ -507,7 +507,9 @@ recording or all (`PlotViewModel.SetVisibleSource`), orthogonal to per-series vi
 recording's rows of Configure Streams, its time channel's place and byte order, and each series' name and colour
 (`TemplateFile`, the same JSON v2.x wrote); **File > Process Multiple Files…** checks each chosen file's PCM channel ids
 against the template's (the core's `TemplateMatcher`, exact-set match), then runs every match in turn (`BatchRunner`),
-optionally exporting a CSV and the plot images per file. A template stores only a calibration's inputs, never its
+optionally exporting a CSV and the plot images per file. It is the one action that clears the plot first, and the
+confirmation says so (`BatchApplyViewModel.ClearsThePlot`); Cancel in the progress dialog stops the batch, the files after it
+skipped and the ones processed kept, and a file the core or the disk cannot finish is skipped like one that fails. A template stores only a calibration's inputs, never its
 profile, so a batch processes with the linear calibration.
 
 ### Core Components
@@ -574,8 +576,9 @@ profile, so a batch processes with the linear calibration.
   `Models/Logging/SessionLog` and `Views/Controls/LogView`): the core's run on its own threads, the modal progress dialog whose
   Cancel stops every stream, and the log. A run's outcome (`RunOutcome`) holds the core's own result of each stream that
   completed, which the plot builds its series from, and a `StreamSummary` of each (job index, label, sample and channel
-  counts: what the log line and the status line say); no stream's arrays are copied to managed memory (`ToProcessed` is the
-  binding's, for tests, and `LayerTests` fails if the app calls it).
+  counts: what the log line and the status line say). The plot copies each series' samples into arrays of its own when it adds
+  a stream (`PlotViewModel.AddStream`, a few milliseconds for millions of samples), and the result is converted no further
+  (`ToProcessed` is the binding's, for tests, and `LayerTests` fails if the app calls it).
 - **Startup and the smoke report** (`Startup`, `Models/Processing/FirstChannelRun`): a recording path on the command
   line opens that recording, as a file association does, and an exported CSV is imported (`Startup.OpenAsync`, through
   `OpenPathAsync` as Recent Files and a drop). With `TMDQ_SMOKE_REPORT=<file>` set as well, the application skips
@@ -814,7 +817,9 @@ User opens .ch10 ─► MainWindowViewModel ─► Ch10File (TmDq.Core) ─► C
 ### Naming Conventions
 
 - **C++ (the core)**:
-  - Types, enums, type aliases and namespaces are PascalCase (`Chapter10Reader`, `FrameProcessor`, `PCMConstants`);
+  - Types, enums, type aliases and namespaces are PascalCase (`Chapter10Reader`, `FrameProcessor`, `PCMConstants`), except
+    the small lower-case namespaces of free functions, each named for its file, that `.clang-tidy` lists (`textfile`,
+    `clocktime`, `csvlines`, `tmatswalk`, ...): a new one goes in that list;
     constants are `kPascalCase` in a namespace (`PCMConstants::kCommonWordLen`); functions and methods are camelCase;
     private and protected members are `m_` with snake_case (`m_frame_setup`); value types (`ProcessingParams`,
     `StreamJob`, `ProcessedStreamData`, `CalibrationProfile`) have camelCase fields.
@@ -1133,7 +1138,7 @@ In the library tests the test classes (`*Tests.cs`) are at the project's root; i
 folders by area (`Plot/`, `Streams/`, `Files/`, `Shell/`, `Build/`, `Soak/`; see the catalog below). In both, what they share is in `Support/`: the
 library tests' `Env`, `RepoPaths`, `TempFiles`, `Collector` and the digests the recordings' expected numbers are in
 (`CalibrationDigest`, `FormatsDigest`, `SeriesDigest`), the collections (`ProcessMemoryCollection`) and the observer fakes;
-the application tests' `Fixtures` (`FakeConfigurator`, `FakeRecordingPicker`, `Recordings`, `StreamsChoices`), `MainWindowFakes` (`FakeExportDialog`, `FakeProgressDialog`), `ShortRecordings` (a short PRN recording made once per class), `PlotFixtures`, `StreamFakes`, `Menus`, `Frames`, `Repo`, `PeResources`,
+the application tests' `Fixtures` (`FakeConfigurator`, `FakeRecordingPicker`, `Recordings`, `StreamsChoices`), `MainWindowFakes` (`FakeExportDialog`, `FakeProgressDialog`), `ShortRecordings` (a short PRN recording made once per class), `PlotFixtures`, `StreamFakes`, `Menus`, `Frames`, `ShownChart` (a chart in a window of its own, for the chart tests), `Repo`, `PeResources`,
 `TestAppBuilder` and `NativeCoreCollection`. The app tests link `TempFiles` and `RepoPaths` from the library tests. A
 Support file keeps its project's namespace, so a test uses it by its bare name; the test data (`Soak/`, `Templates/`)
 stays in folders of its own.
@@ -1278,7 +1283,7 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   `CustomizeViewStateTests` (Customize View's rows and what a choice in it does, each recording's streams on their own), `ChartViewTests` (the legends and what
   rebuilds them, the zoom rule, chips, menu, keys, read from the controls and from rendered frames) and
   `ChartPromptWindowTests` (each prompt's window: OK answers, Cancel does not), `PlotSourcesTests` (the recordings' names, the one shown, the list and the next id, and what removing some does, on their own), and `RemoveFileTests` (Remove File: a recording's series, name and CSV columns go and the others stay, what is refitted, the notice that keeps Save Template honest, the title that follows, and what the dialog starts on).
-- **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against v2.14.2's, the image pixel by pixel, Import
+- **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against recorded exports, v2.14.2's cells on the sample grid, the image pixel by pixel, Import
   CSV, two exports stacked and a batch's several recordings added beside one already there), `PhasedArrayImportTests` (each layout recognised from the file with no question, a file of neither one error, an antenna's log as 90 series read H, V and C, and none of it exported),
   `TemplateTests` and `TemplateBatchTests` (v2.x's templates byte for byte, the batch and its exports, named apart and keeping each file's colours, Apply Template with the core missing),
   `ImportedDataKeptTests` (opening a recording keeps what was imported and what was processed before, each run numbered apart, an import named for its file and added beside the run) and

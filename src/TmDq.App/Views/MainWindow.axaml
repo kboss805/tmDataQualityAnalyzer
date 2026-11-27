@@ -97,12 +97,12 @@
               <MenuItem Header="Recent Files" ItemsSource="{Binding RecentMenu}" ItemContainerTheme="{StaticResource MenuChoice}" />
               <Separator />
               <MenuItem Header="Process Multiple Files..." Command="{Binding ApplyTemplateCommand}"
-                        ToolTip.Tip="Process several recordings with a saved template" />
+                        ToolTip.Tip="Process several recordings with a saved template; the plot is cleared first" />
               <MenuItem Header="Save Template..." Command="{Binding SaveTemplateCommand}"
                         ToolTip.Tip="Save the processed recording's stream settings, names and colors as a template" />
             </MenuItem>
             <MenuItem Header="Import/Export">
-              <MenuItem Header="Import from CSV..." Command="{Binding ImportCsvCommand}" ToolTip.Tip="Import a previously exported CSV file" />
+              <MenuItem Header="Import from CSV..." Command="{Binding ImportCsvCommand}" ToolTip.Tip="Import a CSV this application exported, or an antenna log, and add it to the plot" />
               <MenuItem Header="Export..." Command="{Binding ExportCommand}" ToolTip.Tip="Export plot data and images" />
             </MenuItem>
             <MenuItem Header="Settings">

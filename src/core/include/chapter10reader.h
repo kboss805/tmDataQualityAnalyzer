@@ -89,15 +89,16 @@ public:
     int getCurrentTimeChannelID() const; ///< @return Currently selected time channel ID.
     int getFirstPCMChannelID() const;    ///< @return Channel ID of the first PCM channel, or -1 if none.
 
-    /// Updates the selected time channel from a combo box index (0 is the placeholder).
+    /// Updates the selected time channel from an index into v2.x's channel list, whose 0 was its "Select a Time Stream"
+    /// placeholder. No UI uses these lists now; they are kept for the tests that pin v2.x's lists (cleanup decision D3).
     void timeChannelChanged(int combobox_index);
-    /// Updates the selected PCM channel from a combo box index (0 is the placeholder).
+    /// As timeChannelChanged(), for the PCM channel list ("Select a PCM Stream" at 0).
     void pcmChannelChanged(int combobox_index);
 
 private:
     /// Closes the Chapter 10 file a load opened, if it is still open. The caller holds the setup lock (irig106lock.h).
     void closeFile();
-    /// Builds combo box display strings for the channels whose ids are in @p channel_ids.
+    /// Builds v2.x's channel-list display strings (its combo boxes') for the channels whose ids are in @p channel_ids.
     std::vector<std::string> buildChannelComboBoxList(const std::vector<int>& channel_ids) const;
     void applyTmatsNames();
     void categorizeChannels();

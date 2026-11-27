@@ -64,7 +64,7 @@ class CalibrationExtractor
     friend struct CalibrationExtractorTestAccess;   ///< Reaches the reader and the queue to act at a chosen moment.
 
 public:
-    /// @brief Inputs for one extraction run, gathered from the Receiver SNR dialog.
+    /// @brief Inputs for one extraction run, gathered from the Extract Calibration dialog.
     struct Request
     {
         std::filesystem::path calFilename;   ///< Calibration .ch10 file.

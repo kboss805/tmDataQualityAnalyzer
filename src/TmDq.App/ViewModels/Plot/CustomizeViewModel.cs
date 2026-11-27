@@ -331,6 +331,10 @@ public sealed class ChannelItem : ObservableObject
 
     public string Label { get; }
 
+    /// <summary>What a screen reader says for the channel's box: its label and its receiver's ("L of RCVR 3"), since every
+    /// receiver has an "L".</summary>
+    public string AccessibleName => Group is { } g ? $"{Label} of {g.Label}" : Label;
+
     public string? PendingName { get; private set; }
 
     public Color? PendingColor { get; private set; }

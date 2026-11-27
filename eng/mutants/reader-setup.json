@@ -119,8 +119,8 @@
     {
       "id": "S15",
       "file": "src/core/src/ch10packetreader.cpp",
-      "old": "    m_channel_info.clear();\n    m_time_channel_id = time_channel_id;",
-      "new": "    m_time_channel_id = time_channel_id;",
+      "old": "    m_channel_info.clear();\n    // And the earlier prepare()'s queues",
+      "new": "    // And the earlier prepare()'s queues",
       "expect": "survived",
       "note": "the table that points into the tree is not freed before a second decode replaces the tree: it is stale, and nothing here reads it through a use-after-free detector (the debug heap leaves the freed tree readable), so no test can tell"
     },

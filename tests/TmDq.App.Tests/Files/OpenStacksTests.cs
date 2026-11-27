@@ -14,7 +14,7 @@ namespace TmDq.App.Tests;
 /// <summary>
 /// Open stacks: a recording opened with something on the plot is processed and added beside it (the recordings processed before and
 /// what was imported), each recording its own entry in Plot File and Remove File, and nothing on the plot is replaced. An empty plot is
-/// where a recording starts. (File > Add Recording was this, before Open did it too.)
+/// where a recording starts.
 /// </summary>
 [Collection(NativeCoreCollection.Name)]
 public sealed class OpenStacksTests : IClassFixture<ShortRecordings>
@@ -134,6 +134,118 @@ public sealed class OpenStacksTests : IClassFixture<ShortRecordings>
         Assert.Equal(90, vm.Plot.Series.Count(s => s.IsPhasedArray));
         Assert.Equal(3, vm.Plot.SourceList().Count);                    // the log and the two recordings
         Assert.Equal(2, vm.Sources.Count);
+    }
+
+    /// <summary>The first sample of each source on the plot, in the order the sources were added.</summary>
+    private static double[] StartsBySource(MainWindowViewModel vm) =>
+        vm.Plot.Series.GroupBy(s => s.SourceId).OrderBy(g => g.Key).Select(g => g.Min(s => s.X[0])).ToArray();
+
+    [AvaloniaFact]
+    public async Task ARecordingOpenedAfterALogIsPlacedByTheClockAsAnImportAfterItWouldBe()
+    {
+        // An import states a day and a time of day and no absolute time, so the recording was placed by its epoch seconds, a
+        // lifetime after the log (found reading v3.5.0: the log at 0 to 2478 s, the recording at 1.78e9 s, a 56-year axis).
+        var after = new MainWindowViewModel();
+        await after.LoadAsync(Prn);
+        await after.ImportCsvAsync(AntennaLog);
+        double[] expected = StartsBySource(after);      // the recording at 0, the log by its clock
+
+        var before = new MainWindowViewModel();
+        await before.ImportCsvAsync(AntennaLog);
+        await before.LoadAsync(Prn);
+        double[] starts = StartsBySource(before);       // the log first (source 0), the recording second
+
+        Assert.Equal(2, starts.Length);
+        Assert.Equal(expected[0], starts[1], 1);        // the recording
+        Assert.Equal(expected[1], starts[0], 1);        // the log
+        Assert.True(before.Plot.XViewMax < 1.0e8, $"the axis spans {before.Plot.XViewMax} s");
+    }
+
+    [AvaloniaFact]
+    public async Task ARecordingOpenedAfterAnImportThatStartsEarlierIsPlacedByTheSameClock()
+    {
+        // Importing a file that starts before everything shown moves the clock earlier; the base must move with it, or the
+        // next recording is placed by the old one.
+        string csv = TempFiles.NewPath("earlier-export", ".csv");
+        try
+        {
+            var maker = new MainWindowViewModel();
+            await maker.LoadAsync(Prn);
+            Assert.True(maker.Plot.ExportCsv(csv));
+            string text = File.ReadAllText(csv);
+            string earlier = System.Text.RegularExpressions.Regex.Replace(text, @"^(\d{3}):(\d\d:\d\d:\d\d\.\d{3})",
+                m => $"{int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) - 1:D3}:{m.Groups[2].Value}",
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+            File.WriteAllText(csv, earlier);
+
+            var vm = new MainWindowViewModel();
+            await vm.LoadAsync(Prn);
+            await vm.ImportCsvAsync(csv);
+            await vm.LoadAsync(Second);
+
+            double[] starts = StartsBySource(vm);       // the first recording, the import, the second recording
+            Assert.Equal(3, starts.Length);
+            Assert.Equal(86400.0, starts[0], 0);        // a day after the file (the export snaps to its sample grid: within a second)
+            Assert.Equal(0.0, starts[1], 1);
+            Assert.Equal(starts[0], starts[2], 1);      // the same recording again, at the same clock time
+        }
+        finally
+        {
+            TempFiles.Delete(csv);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task ARecordingThatStartsEarlierThanWhatIsShownLeavesNoZoomHistoryInTheOldSeconds()
+    {
+        // Opening one that starts before everything shown moves every series later, so each remembered view is `shift` seconds
+        // early and Zoom Back would land there. An export a day later than the recording stands for the earlier-starting one.
+        string csv = TempFiles.NewPath("later-export", ".csv");
+        try
+        {
+            var maker = new MainWindowViewModel();
+            await maker.LoadAsync(Prn);
+            Assert.True(maker.Plot.ExportCsv(csv));
+            string later = System.Text.RegularExpressions.Regex.Replace(File.ReadAllText(csv), @"^(\d{3}):(\d\d:\d\d:\d\d\.\d{3})",
+                m => $"{int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) + 1:D3}:{m.Groups[2].Value}",
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+            File.WriteAllText(csv, later);
+
+            var vm = new MainWindowViewModel();
+            await vm.ImportCsvAsync(csv);
+            vm.Plot.ZoomWindow(2.0);
+            Assert.True(vm.Plot.CanZoomBack);
+
+            await vm.LoadAsync(Prn);
+
+            Assert.False(vm.Plot.CanZoomBack);
+            Assert.Equal(0.0, vm.Plot.XViewMin);
+        }
+        finally
+        {
+            TempFiles.Delete(csv);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task APlotClearedWhileConfigureStreamsIsUpIsWhereTheRecordingStarts()
+    {
+        // The plot's menu stays live while a recording opens, so Clear Plot can empty the plot under it: the run then starts
+        // the plot (titled and named for the recording), not one added beside what is no longer there.
+        MainWindowViewModel? vm = null;
+        int asked = 0;
+        var configurator = FakeConfigurator.Choosing((path, file) =>
+        {
+            if (asked++ == 1) vm!.Plot.RemoveSources(vm.Plot.SourceList().Select(s => s.Id).ToList());   // Clear Plot, meanwhile
+            return new StreamsChoice(FirstChannelRun.Request(path, file), System.Array.Empty<TmDq.App.Models.Streams.StreamSetup>(), 0);
+        });
+        vm = new MainWindowViewModel(new MainWindowServices { Configurator = configurator });
+        await vm.LoadAsync(Prn);
+        await vm.LoadAsync(Second);
+
+        Assert.Equal(NameOf(Second), vm.Plot.Title);
+        Assert.Equal(NameOf(Second), Assert.Single(vm.Plot.SourceList()).Label);
+        Assert.Single(vm.Sources);
     }
 
     [AvaloniaFact]

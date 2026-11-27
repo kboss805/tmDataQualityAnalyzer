@@ -1,6 +1,6 @@
 /**
  * @file processingparams.h
- * @brief Validated parameters bundle for a single AGC processing run.
+ * @brief Validated parameters bundle for one stream's processing run (frame sync, or receiver AGC/SNR).
  */
 
 #ifndef PROCESSINGPARAMS_H

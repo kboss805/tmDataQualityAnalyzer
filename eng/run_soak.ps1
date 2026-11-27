@@ -54,16 +54,21 @@ $failed = @()
 $ErrorActionPreference = 'Continue'   # 5.1 turns native stderr into a terminating error
 foreach ($name in $names) {
     $env:TMDQ_SOAK_ONLY = $name
+    # The run writes result.json before it compares: one left by an earlier run must not stand in for this one.
+    $result = Join-Path (Join-Path $Out $name) 'result.json'
+    Remove-Item $result -Force -ErrorAction SilentlyContinue
     $output = & $exe -explicit only -class TmDq.App.Tests.SoakTests 2>&1
     $code = $LASTEXITCODE
-    $result = Join-Path (Join-Path $Out $name) 'result.json'
     $seconds = ''; $peak = ''
-    if (Test-Path $result) {
+    $ran = Test-Path $result
+    if ($ran) {
         $r = Get-Content $result -Raw | ConvertFrom-Json
         $seconds = '{0,7:F1} s' -f [double]$r.seconds
         $peak = '{0,7:F0} MB' -f [double]$r.peakWorkingSetMb
     }
-    $verdict = if ($code -eq 0) { 'same' } else { 'DIFFERENT' }
+    # Exit 0 with no result is a run that did not happen (a renamed class, a filter that matched nothing), not a pass.
+    if ($code -eq 0 -and -not $ran) { $code = 1 }
+    $verdict = if ($code -eq 0) { 'same' } elseif (-not $ran) { 'NOT RUN' } else { 'DIFFERENT' }
     Write-Host ('{0,-32} {1,-9} {2} {3}' -f $name, $verdict, $seconds, $peak)
     if ($code -ne 0) {
         $failed += $name

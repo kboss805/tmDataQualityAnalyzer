@@ -111,6 +111,32 @@ public sealed class PhasedArrayImportTests
         }
     }
 
+    [Fact]
+    public async Task AFileThatIsNotThereOrIsHeldElsewhereIsSaidToBeUnreadableNotOfTheWrongLayout()
+    {
+        // A stale Recent Files entry, or a file another program holds, was reported as "not a recognized CSV".
+        var vm = new MainWindowViewModel();
+        string gone = TempFiles.NewPath("gone", ".csv");
+        await vm.ImportCsvAsync(gone);
+        Assert.Equal($"ERROR: '{Path.GetFileName(gone)}' could not be read: the file is not there. Nothing was imported.", vm.Status);
+        Assert.Equal(LogLevel.Error, vm.StatusLevel);
+        Assert.False(vm.Plot.HasData);
+
+        string held = WriteNeither();
+        try
+        {
+            using var lockIt = new FileStream(held, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            await vm.ImportCsvAsync(held);
+            Assert.StartsWith($"ERROR: '{Path.GetFileName(held)}' could not be read: ", vm.Status);
+            Assert.DoesNotContain("not a recognized", vm.Status);
+            Assert.EndsWith(" Nothing was imported.", vm.Status);
+            Assert.False(vm.Plot.HasData);
+        }
+        finally
+        {
+            TempFiles.Delete(held);
+        }
+    }
 
     [Fact]
     public async Task CustomizeViewReadsTheAntennasStreamsWithHVAndCAndNotAsReceivers()

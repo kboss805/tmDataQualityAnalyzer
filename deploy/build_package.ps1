@@ -5,7 +5,7 @@
 #
 # Produces, beside this script:
 #   tmDataQualityAnalyzer-vX.Y.Z_portable.zip
-#   tmDataQualityAnalyzer-vX.Y.Z_setup.msi   (per-machine Windows Installer package: tmDataQualityAnalyzer.wxs, built by build_msi.ps1)
+#   tmDataQualityAnalyzer-vX.Y.Z_setup.msi   (per-user or per-machine Windows Installer package: tmDataQualityAnalyzer.wxs, built by build_msi.ps1)
 #   tmDataQualityAnalyzer-vX.Y.Z_symbols.zip  (the debug symbols of the application's binaries. NOT shipped to users: kept with
 #                                              the release, so a crash dump or stack trace of that version can be read)
 #

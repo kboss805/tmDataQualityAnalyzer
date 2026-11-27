@@ -10,7 +10,6 @@
 #include <cstddef>
 #include <vector>
 
-#include "constants.h"
 #include "containerutil.h"
 
 namespace stepplateaus {

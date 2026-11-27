@@ -15,7 +15,6 @@
 #define CH10PACKETREADER_H
 
 #include <atomic>
-#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <map>

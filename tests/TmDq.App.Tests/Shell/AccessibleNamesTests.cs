@@ -112,6 +112,25 @@ public sealed class AccessibleNamesTests
         Assert.NotEmpty(customize.LockRows);
         problems.AddRange(ProblemsOfShown("CustomizeViewWindow with rows", new CustomizeViewWindow { DataContext = customize }));
 
+        // Its Receiver SNR tab, every receiver open: each receiver's channels are "L", "R" and "C" on screen, so their boxes need
+        // names that say whose they are (the tab was never shown here, and three receivers' "L" went unheard as one).
+        var snr = new CustomizeViewModel(Mixed(), new FakePrompts());
+        Assert.NotNull(snr.SelectedSnrStream);
+        foreach (ReceiverGroup g in snr.SelectedSnrStream!.Receivers) g.IsExpanded = true;
+        var snrWindow = new CustomizeViewWindow { DataContext = snr };
+        snrWindow.Show();
+        try
+        {
+            snrWindow.FindControl<TabControl>("Tabs")!.SelectedIndex = 1;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(9, snrWindow.GetVisualDescendants().OfType<CheckBox>().Count(c => c.DataContext is ChannelItem));
+            problems.AddRange(Problems("CustomizeViewWindow, Receiver SNR tab", snrWindow));
+        }
+        finally
+        {
+            snrWindow.Close();
+        }
+
         // The stream setup dialog of a frame sync stream, and of a receiver one (which shows the receiver half too).
         Ch10File file = StreamsRun.Open(prn);
         Ch10File step = StreamsRun.Open(Repo.Recording("step_cal, example.ch10"));

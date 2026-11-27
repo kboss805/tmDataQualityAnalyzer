@@ -10,7 +10,6 @@
 #include "tmdq_abi.h"
 
 #include <cstdint>
-#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -30,10 +29,6 @@ constexpr std::size_t kStreamConfigMinimum = sizeof(tmdq_stream_config);
 constexpr std::size_t kRunRequestMinimum   = sizeof(tmdq_run_request);
 constexpr std::size_t kStreamInfoMinimum   = sizeof(tmdq_stream_info);
 constexpr std::size_t kSeriesMinimum       = sizeof(tmdq_channel_series);
-
-} // namespace
-
-namespace {
 
 using tmdq::CallbackEvents;
 

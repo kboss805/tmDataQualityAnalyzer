@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <format>
@@ -189,6 +188,10 @@ bool Ch10PacketReader::prepare(const std::filesystem::path& filename,
     // The decoder frees whatever tree an earlier prepare() left (the member starts zeroed; zeroing it would orphan that
     // tree), so the table that points into that tree goes first.
     m_channel_info.clear();
+    // And the earlier prepare()'s queues: a run would route packets to them too, and post their end markers, though they belong to
+    // streams that may be gone.
+    m_routing.clear();
+    m_all_queues.clear();
     m_time_channel_id = time_channel_id;
     // 64-bit, so a recording over 2 GB is sized correctly; 0 (no progress) if it cannot be sized.
     std::error_code size_error;

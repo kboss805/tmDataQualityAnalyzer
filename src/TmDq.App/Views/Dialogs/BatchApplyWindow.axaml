@@ -17,6 +17,7 @@
     </c:DialogFooter>
   <StackPanel Margin="{DynamicResource ContentDialogPadding}" Spacing="12">
     <TextBlock x:Name="Summary" Text="{Binding Summary}" TextWrapping="Wrap" />
+    <TextBlock x:Name="ClearsNote" Text="{x:Static vm:BatchApplyViewModel.ClearsThePlot}" TextWrapping="Wrap" />
     <Border BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="{DynamicResource ControlCornerRadius}" MinHeight="120" MaxHeight="260">
       <ScrollViewer>
         <ItemsControl x:Name="Files" ItemsSource="{Binding Rows}" Margin="6,4">

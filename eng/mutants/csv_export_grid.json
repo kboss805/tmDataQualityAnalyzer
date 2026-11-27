@@ -131,6 +131,78 @@
       "new": "static_cast<std::int64_t>(periods + 0.5 - kTieTolerance)",
       "expect": "caught",
       "note": "the tolerance the wrong way: halfway rounds down by a hair and the noise still splits it"
+    },
+    {
+      "id": "K1",
+      "file": "src/core/src/clocktime.cpp",
+      "old": "        if (msec >= 1000)\n        {\n            msec = 0;",
+      "new": "        if (msec > 1000)\n        {\n            msec = 0;",
+      "args": ["-tc=csvseries: a fraction that rounds up*"],
+      "expect": "caught",
+      "note": "a fraction that rounds up to a whole second printed .1000 (the boundary: exactly 1000)"
+    },
+    {
+      "id": "K2",
+      "file": "src/core/src/clocktime.cpp",
+      "old": "            total = std::floor(total) + 1.0;\n            if (total >=",
+      "new": "            total = std::floor(total);\n            if (total >=",
+      "args": ["-tc=csvseries: a fraction that rounds up*"],
+      "expect": "caught",
+      "note": "the carry into the seconds is lost: the stamp reads a second early"
+    },
+    {
+      "id": "K3",
+      "file": "src/core/src/clocktime.cpp",
+      "old": "                total -= static_cast<double>(TimeConstants::kSecondsPerDay);\n                day++;",
+      "new": "                total -= static_cast<double>(TimeConstants::kSecondsPerDay);",
+      "args": ["-tc=csvseries: a fraction that rounds up*"],
+      "expect": "caught",
+      "note": "the carry past midnight keeps the day"
+    },
+    {
+      "id": "K4",
+      "file": "src/core/src/csvseriesparser.cpp",
+      "old": "            have_first            = true;\n",
+      "new": "",
+      "args": ["-tc=csvseries*"],
+      "expect": "caught",
+      "note": "a first stamp below zero is taken for 'no first row yet': the base is seeded again on the next row"
+    },
+    {
+      "id": "K5",
+      "file": "src/core/src/csvseriesparser.cpp",
+      "old": "            for (const double x : s.xValues)\n",
+      "new": "            for (const double x : {s.xValues.back()})\n",
+      "args": ["-tc=csvseries*"],
+      "expect": "caught",
+      "note": "the span is the last row's time, so an out-of-order file is cut short"
+    },
+    {
+      "id": "K6",
+      "file": "src/core/include/textformat.h",
+      "old": "    return power == -(decimals + 1);",
+      "new": "    return power == -decimals;",
+      "args": ["-tc=textformat*"],
+      "expect": "caught",
+      "note": "a tie one place off: 0.5 read as a tie at one decimal, 0.25 at none"
+    },
+    {
+      "id": "K7",
+      "file": "src/core/include/textformat.h",
+      "old": "    power += trailing;   // magnitude = mantissa * 2^power, mantissa odd",
+      "new": "    power += 0;   // magnitude = mantissa * 2^power, mantissa odd",
+      "args": ["-tc=textformat*"],
+      "expect": "caught",
+      "note": "the mantissa's trailing zeros not counted: only values with a full 53-bit odd mantissa are ever ties"
+    },
+    {
+      "id": "K8",
+      "file": "src/core/include/textformat.h",
+      "old": "static_cast<std::uint64_t>(std::ldexp(fraction, 53))",
+      "new": "static_cast<std::uint64_t>(std::ldexp(fraction, 52))",
+      "args": ["-tc=textformat*"],
+      "expect": "caught",
+      "note": "the mantissa read one bit short: its last bit is lost and a tie's odd part with it"
     }
   ]
 }

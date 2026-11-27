@@ -48,16 +48,22 @@ $MaxWidth   = 1200
 
 if (-not $NoCapture) {
     Write-Host "Rendering the figures from the application (ManualFiguresTests)..."
-    Get-ChildItem $SrcDir -Filter *.png | Remove-Item -Force
+    # What the render needs is checked before the figures go: a failed build or a missing core used to leave the tracked
+    # figures deleted (git checkout -- docs/manual_images put them back).
+    $core = Join-Path $ProjectDir 'out\Release\tmdq_core.dll'
+    if (-not (Test-Path $core)) { throw "build the native core first: eng\build_core_dll.ps1 -Configuration Release" }
     $tests = Join-Path $ProjectDir 'tests\TmDq.App.Tests'
     & dotnet build $tests -c Release -nologo -v q
     if ($LASTEXITCODE -ne 0) { throw "the tests did not build ($LASTEXITCODE)" }
-    $env:TMDQ_CORE_DLL = Join-Path $ProjectDir 'out\Release\tmdq_core.dll'
-    if (-not (Test-Path $env:TMDQ_CORE_DLL)) { throw "build the native core first: eng\build_core_dll.ps1 -Configuration Release" }
+    Get-ChildItem $SrcDir -Filter *.png | Remove-Item -Force
+    $env:TMDQ_CORE_DLL = $core
     $env:TMDQ_MANUAL_FIGURES = $SrcDir
-    & (Get-TestExePath $ProjectDir 'TmDq.App.Tests' 'Release') -class TmDq.App.Tests.ManualFiguresTests
-    if ($LASTEXITCODE -ne 0) { throw "a figure's scene failed ($LASTEXITCODE): its caption no longer holds, or it could not be rendered" }
-    Remove-Item Env:TMDQ_MANUAL_FIGURES
+    try {
+        & (Get-TestExePath $ProjectDir 'TmDq.App.Tests' 'Release') -class TmDq.App.Tests.ManualFiguresTests
+        if ($LASTEXITCODE -ne 0) { throw "a figure's scene failed ($LASTEXITCODE): its caption no longer holds, or it could not be rendered" }
+    } finally {
+        Remove-Item Env:TMDQ_MANUAL_FIGURES, Env:TMDQ_CORE_DLL -ErrorAction SilentlyContinue
+    }
 }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
@@ -84,8 +90,14 @@ foreach ($png in Get-ChildItem $SrcDir -Filter *.png | Sort-Object Name) {
 }
 
 Write-Host "`nEmbedding into the manual (via eng\embed_manual_images.py)..."
-& py (Join-Path $ProjectDir 'eng\embed_manual_images.py')
-if ($LASTEXITCODE -ne 0) { throw "embed step failed ($LASTEXITCODE)" }
+# The embedder's paths are relative to the repository's root: run it from there, whatever folder this was started in.
+Push-Location $ProjectDir
+try {
+    & py (Join-Path $ProjectDir 'eng\embed_manual_images.py')
+    if ($LASTEXITCODE -ne 0) { throw "embed step failed ($LASTEXITCODE)" }
+} finally {
+    Pop-Location
+}
 
 Write-Host "`nDone. Two manuals were written (sizes listed above):"
 Write-Host "  base - assets\usermanual.html, compiled into the application. Rebuild it to pick"

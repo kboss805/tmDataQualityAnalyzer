@@ -25,7 +25,8 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw 'dotnet not found (install the .NET 10 SDK)' }
 
-# The suite runs against the DLL of ITS configuration. The library's own search prefers Release, then Debug, so a
+# The suite runs against the DLL of ITS configuration. The tests' own search (tests\TmDq.Core.Tests\Support\Env.cs) prefers
+# Release, then Debug, so a
 # Debug run with only a Release DLL built (or with both) would pass against the other configuration's core: refuse,
 # as test_app.ps1 does, and hand the test exe the DLL it was asked for.
 $setDllVariable = $false

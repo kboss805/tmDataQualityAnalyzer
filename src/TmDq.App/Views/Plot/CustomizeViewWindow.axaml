@@ -15,19 +15,25 @@
       <Setter Property="FontSize" Value="{DynamicResource BodyTextBlockFontSize}" />
       <Setter Property="MinHeight" Value="32" />
     </Style>
+    <!-- A receiver's open/close toggle would be named for what it holds, the receiver's box: give it a name of its own. -->
+    <Style Selector="Expander.receiver /template/ ToggleButton#ExpanderHeader" x:DataType="plot:ReceiverGroup">
+      <Setter Property="AutomationProperties.Name" Value="{Binding Label, StringFormat=Open or close {0}}" />
+    </Style>
   </Window.Styles>
   <Window.Resources>
     <!-- A receiver's group: its box, then its channels, each in its series' colour, with a menu to rename or recolour. -->
     <DataTemplate x:Key="ReceiverTemplate" x:DataType="plot:ReceiverGroup">
-      <Expander IsExpanded="{Binding IsExpanded}" HorizontalAlignment="Stretch" Padding="24,2,4,4">
+      <Expander Classes="receiver" IsExpanded="{Binding IsExpanded}" HorizontalAlignment="Stretch" Padding="24,2,4,4">
         <Expander.Header>
-          <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" IsThreeState="False" Foreground="{Binding Color, Converter={x:Static cv:StatusBrushes.FromColor}}" />
+          <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" IsThreeState="False" Foreground="{Binding Color, Converter={x:Static cv:StatusBrushes.FromColor}}"
+                    AutomationProperties.Name="{Binding Label, StringFormat=All channels of {0}}" />
         </Expander.Header>
         <ItemsControl ItemsSource="{Binding Channels}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="plot:ChannelItem">
+              <!-- On screen a channel is "L", "R" or "C" under its receiver; aloud it says whose (a screen reader hears no tree). -->
               <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" Foreground="{Binding Color, Converter={x:Static cv:StatusBrushes.FromColor}}"
-                        ToolTip.Tip="{Binding ToolTip}">
+                        ToolTip.Tip="{Binding ToolTip}" AutomationProperties.Name="{Binding AccessibleName}">
                 <CheckBox.ContextMenu>
                   <ContextMenu>
                     <MenuItem Header="Rename series…" Command="{Binding RenameCommand}" />

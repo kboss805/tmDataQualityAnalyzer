@@ -12,6 +12,125 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The CSV export is about twice as fast: an exact tie is found from the binary value, not by printing 1100 places (v3.5.1, PR 2)
+
+**Measured first (the user's bar: change it only for about 20 % or more on a large export).** A throwaway timing of a 56-column export of 2,268,000 cells (the size of the #345 case): about 835 ms in all, of which the cell sort was about 73 ms (9 %, so the sort stays as it is) and the number formatting about 690 ms, where plain `std::format` of the same values takes about 174 ms. The difference was `textformat::isExactTie`: for about one value in ten (a 5 in the seventh place) it printed the value to 1100 decimal places to see whether the 5 was exact.
+
+**What changed.** `isExactTie` decides from the binary value: written as m * 2^f with m odd, a value is a tie at d places exactly when f = -(d+1) (then 2 * 10^d * value = m * 5^d is an odd integer). No text is made; the output is the same by construction. A suggestion to parse the shorter text back and compare was not taken: it calls the double nearest a tie a tie, which changes the output.
+
+**After:** the same export about 397 ms, 52 % less.
+
+**How it was checked.** The old 1100-place test is kept in `test_textformat.cpp` as the oracle, and a new case holds the two equal over 40,080 values: ties (odd multiples of 2^-(d+1)) at ten precisions, one step either side of each, the same ties one precision finer, even multiples, arbitrary values from 2^-60 to 2^60, subnormals and the largest doubles. The v2.14 sweep digests and every CSV byte-for-byte test pass unchanged (native 579 cases). Mutants K6 to K8 of `eng/mutants/csv_export_grid.json` CAUGHT (the power one place off, the trailing zeros not counted, the mantissa a bit short).
+
+#### Scripts that could report a run that did not happen (v3.5.1, PR 2)
+
+From the sweep:
+- **`eng\build_manual.ps1`** deleted the tracked figures before it checked that the core was built and the tests compiled, so a failed run left them gone; it checks first now, clears the variables it set in a `finally`, and runs the embedder from the repository's root (`eng\embed_manual_images.py` reads relative paths, so started from another folder it failed or wrote another checkout's manual; `deploy\build_package.ps1` reaches it through this script).
+- **`eng\run_soak.ps1`** called a run "same" whenever the test exited 0, even if no result was written (a renamed class, a filter that matched nothing); it deletes the last run's `result.json` first and calls a run with none "NOT RUN", a failure.
+- **`deploy\sandbox\run_sandbox_test.ps1`** could find the last run's `results.txt` (left by a delete that a Sandbox window blocked) and report it at once as this run's; it stops and says why instead.
+- **`deploy\build_msi.ps1`** read its WiX version from a literal beside a comment saying it matched `dotnet-tools.json`; it reads it from there.
+- **Comments:** `build_package.ps1` called the MSI per-machine (it is per-user or per-machine since #412); `test_dotnet.ps1` gave the library a DLL search that is the tests' (`Support\Env.cs`).
+
+**The figures:** `build_manual.ps1` (full) re-rendered `walk-batch-02-apply-dialog.png` for the batch confirmation's new note. Five other figures came out different only in run-to-run noise and were put back: the run log's time-gated "NN% read" lines in three (21/41/61/81 % one run, 21/51/81 % the next) and a checkbox edge in the two Customize View figures. The progress lines were thought steady since #296; that they are not is for PR 3's flake hunt.
+
+Checked: PSScriptAnalyzer clean; `build_manual.ps1` run in full and with `-NoCapture` after the change.
+
+#### The core's leftovers from the sweep (v3.5.1, PR 2)
+
+No behaviour changed:
+- **Six unused includes** gone (`<limits>` in `abi_run.cpp`, `<mutex>` in `abi_calibration.cpp`, `<cstdint>` in `calibrationextractor.cpp`, `<cstdlib>` in `ch10packetreader.cpp`, `<cstddef>` in `ch10packetreader.h`, `constants.h` in `stepplateaus.cpp`), each checked for a use first; the two adjacent anonymous namespaces of `abi_run.cpp` are one.
+- **One UTF-8 path conversion:** the ABI's `tmdq::pathFromUtf8` calls the core's `textfile::pathFromUtf8` instead of repeating it.
+- **Comments that described old behaviour:** `PacketQueue` called itself MPSC (it is single-producer, single-consumer); `Chapter10Reader`'s channel-list members spoke of a combo box no UI has (they stay, for the tests that pin v2.x's lists: decision D3); the runner and the extractor said a handler starting the next run from the end report is not turned away, but `start()` joins the driver thread, which is the one reporting, so such a start is refused (latent: one runner per run through the ABI); "the Receiver SNR dialog" (now a Receiver SNR stream's setup dialog, or Extract Calibration); `frameprocessor.h`'s "no longer opens" and `processingparams.h`'s "AGC run".
+- **The naming rule's exceptions are listed:** six lower-case namespaces of free functions (`ch10setup`, `csvlines`, `receivernames`, `stepplateaus`, `stepsaturated`, `tmatswalk`) were in neither `.clang-tidy`'s ignore list nor the guide; both list them now.
+- **Checked and left:** `tmdq_file_time_channel` and `tmdq_file_pcm_channel` set an error without clearing one first, but `setError` replaces the last message, so nothing stale is reported.
+
+Checked: the native suite, Release, 578 cases (575 plus this PR's three), 0 warnings, imports on the allow-list.
+
+#### The app's words and tests read against v3.5.0 (v3.5.1, PR 2)
+
+From the sweep, no behaviour changed beyond the words a user reads:
+- **Picker titles and tips say what the menu says and what the action does:** Import from CSV's picker is "Import from CSV" with the filter "CSV Files" (it reads antenna logs too, not only exports); the template pickers are "Process Multiple Files" and "Save Template", as is the source chooser; the Import tip says it reads an export or an antenna log and adds it, and Process Multiple Files' tip says the plot is cleared first.
+- **Comments and docs:** the old names (Save as Template, Apply Template, Import CSV) in `MainWindowServices`, `MainWindowViewModel` and the batch tests; Plot File "which batch runs bring" (`PlotCommands.CanChoosePlotFile`, `PlotView.axaml`) and the guide's "only the Apply Template batch puts them there" (Open and imports bring several recordings too); `IRunHost`'s doc naming a member it no longer has; the right-click menu's comment without Clear Plot; `ImportedDataKeptTests`' doc saying recordings are "replaced"; the guide's "no stream's arrays are copied" (the plot copies each series' samples when it adds a stream) and `ExportImportTests`' "byte for byte against v2.14.2's" (recorded exports, v2.14.2's cells on the sample grid).
+- **Dead code:** `ShellPreferences.Current` (no caller in the product or the tests).
+- **Tests that could not fail on what they claim:** `ShellTests` checked only that three tooltips exist (now every tip word for word); `ChartPromptWindowTests` rebuilt its expected problem text from the rule it tests (now each case states its words).
+- **One harness, not two:** the chart-in-a-window record `PlotTests` and `PlotDraftTests` each wrote out is `Support/ShownChart.cs`.
+
+Checked by the app suite's classes these touch (`ShellTests`, `ChartPromptWindowTests`, `TemplateBatchTests`, `LayerTests`, `PreferencesTests`, `PlotTests`, `PlotDraftTests`): all pass; the full suites run at the end of this PR.
+
+#### Open reads the plot again after Configure Streams, and reports a core error instead of crashing (v3.5.1, PR 2)
+
+**What was wrong.** Found by the sweep. `LoadAsync` decided whether the recording is added beside what is shown (`keep`) before it opened the file, but the plot's menu stays live meanwhile: a plot emptied by Clear Plot or Remove File while Configure Streams was up was still treated as one to add to (no title, a "(2)" name). And a `TmdqException` from building a stream's series escaped the command to the crash report (a dropped file goes through it too).
+
+**What changed.** `keep` is read again once Configure Streams has answered; a `TmdqException` is reported in the status and the log ("ERROR: <file> could not be shown: ..."). The drop handler stays `async void`, as an event handler must be: with this catch, what it awaits reports its own errors. The same window in Import CSV (the parse is short and has no dialog) is left.
+
+**How it was checked.** `OpenStacksTests.APlotClearedWhileConfigureStreamsIsUpIsWhereTheRecordingStarts`; mutant A14 of `eng/mutants/processing-flow.json` CAUGHT. The `TmdqException` catch has no test: no input makes the core refuse a stream's series it has just built.
+
+#### A packet reader prepared again forgets the earlier prepare's queues (v3.5.1, PR 2)
+
+**What was wrong.** Found by the sweep (latent: the application makes one reader per run). `Ch10PacketReader::prepare` may be called again (it gives its earlier handle back and clears its channel table) but kept `m_routing` and `m_all_queues`, so a run fed and ended the earlier call's queues too: queues of streams that, in a host, may already be destroyed.
+
+**What changed.** `prepare` clears both with the channel table.
+
+**How it was checked.** `Ch10PacketReader: a reader prepared again routes only to the queues of its last prepare` (the last prepare's queue gets every packet and one end marker; the first gets nothing). Mutants L90 (routing kept) and L91 (queues kept) of `eng/mutants/reader-lifetime.json` CAUGHT, L90 by a hang: the earlier queue fills, nothing drains it, and the reader blocks, which the harness counts as caught.
+
+#### An imported CSV whose rows are out of time order is shown to its latest time; a first stamp below zero is a first row (v3.5.1, PR 2)
+
+**What was wrong.** Found by the sweep. The CSV reader took the span (`xMax`) from each column's last row, and the plot took a series' end from its last sample (`SpanOf`, `SetVisibleSource`), so a file whose rows are not in time order (a clock that stepped back, a file edited by hand) was cut short at the view's end. And the reader used a negative first time as its "no first row yet" mark, so a first stamp that reads below zero (`001:00:-1:00.000`) re-seeded the base on the next row and both rows read 0.
+
+**What changed.** `CsvSeriesParser` takes the largest time for the span and a flag for the first row. `PlotViewModel` finds an out-of-order series' earliest and latest time by a pass (`Extent`; a series in order still reads its two ends). Rows before the first row's time still read below zero and stay outside the view, as before; that part is unchanged.
+
+**One departure from v2.14.2, on purpose:** the v2.14.2 import digest (`csvseries: the core reads every generated file as the code it replaced did`) is re-pinned. Of its 400 generated files, the 76 with rows out of time order now have a larger `xMax`; recomputed with `xMax` taken the old way, the digest is exactly the recorded one, so nothing else moved (checked with a throwaway comparison, not kept).
+
+**How it was checked.** A native case for both (an out-of-order file spans to its largest time; a first stamp of -60 s is the base and the next row is at 60 s), `PlotTests.ASeriesWhoseTimesAreOutOfOrderIsShownToItsLatestTimeAndFromItsEarliest`; mutants K4 and K5 of `eng/mutants/csv_export_grid.json` and Z6 of `eng/mutants/plot-zoom-and-legend.json` CAUGHT.
+
+#### Process Multiple Files says it clears the plot, and its Cancel stops the batch (v3.5.1, PR 2)
+
+**The user's decisions (2026-11-27):** the batch keeps clearing the plot (it is the one action that does not stack) but says so, and Cancel in the progress dialog stops the whole batch instead of skipping one file.
+
+**What changed.** The confirmation window states that the plot is cleared first and what Cancel does (`BatchApplyViewModel.ClearsThePlot`, the `ClearsNote` text). `BatchRunner`: Cancel skips this file and every one after it ("Batch cancelled at <file>: the files after it were not processed."), keeps the files processed (they stay on the plot and are what Save Template captures), still exports those when a folder was chosen, and ends "Batch cancelled: N processed, M skipped.", logged as a warning (`BatchResult.Cancelled`). A `TmdqException` or `IOException` from a file's run is now skipped like a failed file instead of escaping the batch, which left its kept files unrecorded; no test provokes one (the core gives no way to), so that part is unchecked. The manual, the walkthrough and the guide say both.
+
+**How it was checked.** `TemplateBatchTests`: Cancel at the second of three files stops the batch (the progress dialog is shown twice, not three times), the first file stays with the template's names and colours, the status and the log; the confirmation window's note, word for word. Mutants B8 to B11 of `eng/mutants/apply-template-busy.json` CAUGHT (Cancel no longer stopping, the headline, the log level, the note). The confirmation's manual figure changes with the note: re-rendered at the end of this PR.
+
+#### Customize View's Receiver SNR tab names each channel for a screen reader (v3.5.1, PR 2)
+
+**What was wrong.** Found by the sweep: on the Receiver SNR tab each receiver's channel boxes read "L", "R" and "C", so a screen reader heard three receivers' "L" alike, and each receiver's open/close toggle took the same name as the receiver's box inside it. `AccessibleNamesTests` showed Customize View on its first tab only, so the receivers were never in the tree it read.
+
+**What changed.** A channel's box is named "L of RCVR 3" (`ChannelItem.AccessibleName`; "H of Stream 3" for an antenna's log), a receiver's box "All channels of RCVR 3", and its toggle "Open or close RCVR 3" (a style scoped to the receivers' expanders). What the boxes show is unchanged.
+
+**How it was checked.** `AccessibleNamesTests.TheRowsAndTheSetupDialogsOfARecordingAreNamed` now opens the Receiver SNR tab with every receiver expanded (nine channel boxes) and failed before the change on the duplicated names; mutants N15 to N17 of `eng/mutants/accessible-names.json` CAUGHT.
+
+#### A CSV that cannot be read says so, not that it is of the wrong layout (v3.5.1, PR 2)
+
+**What was wrong.** `PlotCsv.Parse` turns every reader error into "neither layout", so a stale Recent Files entry, or a file another program holds open, was reported as "not a recognized CSV ... Nothing was imported".
+
+**What changed.** Import CSV first opens the file for reading (sharing it, as the readers do); a file that is not there reads "could not be read: the file is not there.", one that is held gives the system's reason, and only a file that opens and fits neither layout gets the layout message.
+
+**How it was checked.** `PhasedArrayImportTests.AFileThatIsNotThereOrIsHeldElsewhereIsSaidToBeUnreadableNotOfTheWrongLayout`; mutants O26 and O27 of `eng/mutants/antenna-overlay.json` CAUGHT.
+
+#### The cursor's time label carries a fraction that rounds up to a whole second (v3.5.1, PR 2)
+
+**What was wrong.** `clocktime::format` (the cursor readout's label, through `tmdq_clock_time_format`) split the fraction off after the day, hour, minute and second fields, so a time of 3600.9996 s read `01:00:00.1000`: the fraction rounded up to 1000 ms and did not carry. v2.14.2 did the same. The CSV's time column uses `formatMilliseconds` and was never affected.
+
+**What changed.** The fraction is rounded first; at 1000 ms it carries into the seconds, and on into the minutes, hours and day. Every other stamp is unchanged, tie for tie: a first attempt that rounded the whole time to milliseconds first changed three of the 16,000 generated stamps of the v2.14 digest test by 1 ms (exact half-millisecond ties), and was dropped for this one, which leaves that digest as recorded.
+
+**How it was checked.** A native case for the carry into the seconds, the minutes, the hours and the day, the stamps just below the half and without milliseconds; the v2.14 digest test unchanged; the managed `FormatsDigest` held one recorded stamp of exactly this case (`rounding-up`, 0.9996 s, recorded as `007:00:00:00.1000`), changed by hand to the carried `007:00:00:01.000` and said so in its header; mutants K1 to K3 of `eng/mutants/csv_export_grid.json` all CAUGHT (the boundary, the lost carry, the lost day).
+
+#### Zoom Back no longer lands off after Open stacks a recording that starts earlier (v3.5.1, PR 2)
+
+**What was wrong.** Found by the sweep, read from the code and then reproduced in a test: `AddStream` moves every series later by `shift` when a recording starts before what is shown, and shows the whole span, but kept the zoom history, whose views are in the old elapsed seconds; Zoom Back landed `shift` seconds off. `ShowCsv` and `AdvanceTimeBase` already moved or cleared it; `AddStream` did neither. Stacking made it reachable.
+
+**What changed.** `AddStream` clears the history when it shifts the series (the view is the whole span then anyway).
+
+**How it was checked.** `OpenStacksTests.ARecordingThatStartsEarlierThanWhatIsShownLeavesNoZoomHistoryInTheOldSeconds` (an export a day later than the recording stands for the earlier-starting one); mutant O25 of `eng/mutants/antenna-overlay.json` (the clear removed) CAUGHT.
+
+#### A recording opened after an imported log or CSV is placed by the clock (v3.5.1, PR 2)
+
+**What was wrong.** Found by the code sweep for v3.5.1 and reproduced: import an antenna log (or an exported CSV), then Open a recording, and the recording sat at its epoch seconds, about 1.78e9 s, a lifetime after the log (the log at 0 to 2,478 s; the axis spanned 56 years). An import states a day and a time of day but no absolute time, so the time base's clock was set and its absolute seconds were not, and `AddStream` placed the recording against an absolute base of 0. Stacking made it reachable in v3.5.0; the other order (a recording, then a log) was right, because an import is placed by the clock. A second form: a file that starts before everything shown moves the clock earlier (`ShowCsv`) but left the absolute base where it was, so the next recording was placed by the old one.
+
+**What changed.** `PlotViewModel` remembers that the clock came from an import (`_clockOnly`). The next recording added gives the base the clock's moment, in the year the recording says (an import has no year), through the existing `TimeBase.Adopt`, so no ABI changed (`AbsoluteFromClock`); an import that starts earlier moves the absolute base with the clock. `Clear` forgets the flag.
+
+**How it was checked.** `OpenStacksTests`: a recording opened after a log lands where it lands when the log is imported after it (both orders compare equal, and the axis is under 1e8 s), and a recording opened after an import that starts a day earlier lands at the same clock time as the first. Mutants O21 to O24 of `eng/mutants/antenna-overlay.json`: all four CAUGHT (the import's clock taken for an absolute time; the call removed; the one-based day of the year; the base not moving with the clock).
+
 #### The shared native-core test collection stays (v3.5.1, PR 1: tried and reverted)
 
 **What was tried.** 35 of the app suite's 58 test files share `NativeCoreCollection`, so xunit runs their 726 tests one at a time, because two tests point `TMDQ_CORE_DLL` at a missing file for a moment. Moving those two into a collection of their own that runs alone, and dropping the shared one, took the suite from 53 s to 38 s on the development machine (28 cores), 0 failures in nine runs there, including four on 4 threads and three pinned to 4 logical cores.

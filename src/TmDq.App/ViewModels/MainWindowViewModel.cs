@@ -232,7 +232,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     /// <summary>Save as Template: one processed recording's rows and its series' looks, to a file (US1.1).</summary>
     public IAsyncRelayCommand SaveTemplateCommand { get; }
 
-    /// <summary>Apply Template to Files: a template run over recordings chosen together, one after another (US1.1).</summary>
+    /// <summary>Process Multiple Files: a template run over recordings chosen together, one after another (US1.1).</summary>
     public IAsyncRelayCommand ApplyTemplateCommand { get; }
 
     // Only ever while busy: Save as Template is told when the work ends.
@@ -270,6 +270,28 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         "ERROR: '{0}' is not a recognized CSV: neither an export of this application (a 'Time (DOY:HH:MM:SS.mmm)' column) nor an " +
         "AV Phased Array Antenna log (the header 'Time, Name, Polarity, Stream 1, ...'), with data rows. Nothing was imported.");
 
+    private static readonly CompositeFormat CsvNotReadable = CompositeFormat.Parse(
+        "ERROR: '{0}' could not be read: {1} Nothing was imported.");
+
+    /// <summary>Why a file cannot be read (it is not there, or another program holds it), or null if it can: so that a stale Recent
+    /// Files entry or a file open elsewhere is not reported as a CSV of the wrong layout.</summary>
+    private static string? UnreadableBecause(string path)
+    {
+        try
+        {
+            using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return null;
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return "the file is not there.";
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return e.Message.TrimEnd();
+        }
+    }
+
     private async Task OpenAsync()
     {
         string? path = await _picker!.PickRecordingAsync();
@@ -298,6 +320,13 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         try
         {
             Log.Add("Importing CSV: " + name);
+            if (UnreadableBecause(path) is { } why)
+            {
+                string unreadable = string.Format(CultureInfo.InvariantCulture, CsvNotReadable, name, why);
+                Report(unreadable, LogLevel.Error);
+                Log.Error(unreadable);
+                return;
+            }
             // Whatever is imported joins what the plot shows, so that imports stack and can be compared (US6.3, US10.0); an
             // empty plot is where one starts.
             bool joins = Plot.HasData;
@@ -405,7 +434,7 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     }
 
     /// <summary>
-    /// Apply Template to Files (US1.1): a template, read with its errors in
+    /// Process Multiple Files (US1.1): a template, read with its errors in
     /// the log; then the recordings; each checked against the template; the confirmation; then the batch.
     /// </summary>
     private async Task ApplyTemplateAsync()
@@ -501,7 +530,8 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
             SetSources(result.Sources);
             // The bar says how many; the log also says where the output went.
             Report(result.Headline, result.Skipped > 0 ? LogLevel.Warning : LogLevel.Success);
-            Log.Success(result.Summary);
+            if (result.Cancelled) Log.Warning(result.Summary);
+            else Log.Success(result.Summary);
         }
         catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
         {
@@ -554,6 +584,9 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
                 Report($"Cancelled. {name} was not processed.");
                 return;
             }
+            // Read again: the plot's menu stays live while the recording opens and Configure Streams is up, so Clear Plot or Remove
+            // File may have emptied it, and the run is then a recording's first, titled with its name.
+            keep = Plot.HasData;
             ClearUnlessAdding();
             // The run is numbered after what the plot keeps, so that a CSV imported before it never shares its source id.
             RunRequest request = choice.Request with { SourceId = Plot.NextSourceId };
@@ -580,6 +613,13 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
             Report(e.Message, LogLevel.Error);
             // A run with nothing processed has logged the core's own reasons already.
             if (e is not NothingProcessedException) Log.Error(e.Message);
+        }
+        catch (TmdqException e)
+        {
+            // The core refused the results (building a stream's series): said, not thrown out of the command to the crash report.
+            string error = $"ERROR: {name} could not be shown: {e.Message}";
+            Report(error, LogLevel.Error);
+            Log.Error(error);
         }
         catch (Exception e) when (e is FileNotFoundException or InvalidOperationException)
         {

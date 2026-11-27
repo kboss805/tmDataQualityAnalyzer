@@ -21,7 +21,7 @@ public sealed class StorageTemplateFilePicker : ITemplateFilePicker
     {
         var files = await _owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Apply Template to Files",
+            Title = "Process Multiple Files",
             AllowMultiple = false,
             FileTypeFilter = new[] { Templates },
             SuggestedStartLocation = await StorageDialogs.StartFolderAsync(_owner.StorageProvider, folder),
@@ -33,7 +33,7 @@ public sealed class StorageTemplateFilePicker : ITemplateFilePicker
     {
         IStorageFile? file = await _owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = "Save as Template",
+            Title = "Save Template",
             FileTypeChoices = new[] { Templates },
             DefaultExtension = "json",
             SuggestedStartLocation = await StorageDialogs.StartFolderAsync(_owner.StorageProvider, folder),
