@@ -12,6 +12,16 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The CSV export is about twice as fast: an exact tie is found from the binary value, not by printing 1100 places (v3.5.1, PR 2)
+
+**Measured first (the user's bar: change it only for about 20 % or more on a large export).** A throwaway timing of a 56-column export of 2,268,000 cells (the size of the #345 case): about 835 ms in all, of which the cell sort was about 73 ms (9 %, so the sort stays as it is) and the number formatting about 690 ms, where plain `std::format` of the same values takes about 174 ms. The difference was `textformat::isExactTie`: for about one value in ten (a 5 in the seventh place) it printed the value to 1100 decimal places to see whether the 5 was exact.
+
+**What changed.** `isExactTie` decides from the binary value: written as m * 2^f with m odd, a value is a tie at d places exactly when f = -(d+1) (then 2 * 10^d * value = m * 5^d is an odd integer). No text is made; the output is the same by construction. A suggestion to parse the shorter text back and compare was not taken: it calls the double nearest a tie a tie, which changes the output.
+
+**After:** the same export about 397 ms, 52 % less.
+
+**How it was checked.** The old 1100-place test is kept in `test_textformat.cpp` as the oracle, and a new case holds the two equal over 40,080 values: ties (odd multiples of 2^-(d+1)) at ten precisions, one step either side of each, the same ties one precision finer, even multiples, arbitrary values from 2^-60 to 2^60, subnormals and the largest doubles. The v2.14 sweep digests and every CSV byte-for-byte test pass unchanged (native 579 cases). Mutants K6 to K8 of `eng/mutants/csv_export_grid.json` CAUGHT (the power one place off, the trailing zeros not counted, the mantissa a bit short).
+
 #### Scripts that could report a run that did not happen (v3.5.1, PR 2)
 
 From the sweep:

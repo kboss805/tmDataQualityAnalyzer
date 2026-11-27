@@ -176,6 +176,33 @@
       "args": ["-tc=csvseries*"],
       "expect": "caught",
       "note": "the span is the last row's time, so an out-of-order file is cut short"
+    },
+    {
+      "id": "K6",
+      "file": "src/core/include/textformat.h",
+      "old": "    return power == -(decimals + 1);",
+      "new": "    return power == -decimals;",
+      "args": ["-tc=textformat*"],
+      "expect": "caught",
+      "note": "a tie one place off: 0.5 read as a tie at one decimal, 0.25 at none"
+    },
+    {
+      "id": "K7",
+      "file": "src/core/include/textformat.h",
+      "old": "    power += trailing;   // magnitude = mantissa * 2^power, mantissa odd",
+      "new": "    power += 0;   // magnitude = mantissa * 2^power, mantissa odd",
+      "args": ["-tc=textformat*"],
+      "expect": "caught",
+      "note": "the mantissa's trailing zeros not counted: only values with a full 53-bit odd mantissa are ever ties"
+    },
+    {
+      "id": "K8",
+      "file": "src/core/include/textformat.h",
+      "old": "static_cast<std::uint64_t>(std::ldexp(fraction, 53))",
+      "new": "static_cast<std::uint64_t>(std::ldexp(fraction, 52))",
+      "args": ["-tc=textformat*"],
+      "expect": "caught",
+      "note": "the mantissa read one bit short: its last bit is lost and a tie's odd part with it"
     }
   ]
 }

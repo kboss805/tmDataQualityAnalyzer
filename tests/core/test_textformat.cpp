@@ -425,3 +425,73 @@ TEST_CASE("textformat: isExactTie sees only real ties")
         CHECK(!isExactTie(std::nextafter(tie, 0.0), d));
     }
 }
+
+namespace {
+
+/// isExactTie as it was until v3.5.1, the oracle the exact test is held to: a double's decimal expansion is at most 1074
+/// places, so printed to 1100 it is exact, and a tie is a 5 in the next place followed by nothing but zeros.
+bool printedTie(double magnitude, int decimals)
+{
+    const std::string next_place = std::format("{:.{}f}", magnitude, decimals + 1);
+    if (next_place.back() != '5')
+    {
+        return false;
+    }
+    constexpr int kExactPlaces = 1100;
+    const std::string exact = std::format("{:.{}f}", magnitude, decimals + 1 + kExactPlaces);
+    const std::size_t tail = exact.size() - kExactPlaces;
+    return exact[tail - 1] == '5' && exact.find_first_not_of('0', tail) == std::string::npos;
+}
+
+} // namespace
+
+TEST_CASE("textformat: the exact tie test answers as printing the value to 1100 places did")
+{
+    // The binary test replaced the 1100-place print (about 60 % of a large CSV export). Held to it over the ties themselves
+    // (odd multiples of 2^-(d+1), every precision the code uses and more), one step either side of each, arbitrary values
+    // of every magnitude, subnormals, the largest doubles, and what is not a tie at all.
+    using textformat::isExactTie;
+    int ties = 0, checked = 0;
+    auto both = [&](double v, int d) {
+        INFO(std::format("{:.17g} at {} decimals", v, d));
+        const bool expected = printedTie(v, d);
+        CHECK(isExactTie(v, d) == expected);
+        ties += expected;
+        ++checked;
+    };
+    uint64_t state = 0x2545F4914F6CDD1Dull;
+    auto next = [&]() {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        return state;
+    };
+    for (int d = 0; d <= 9; ++d)
+    {
+        for (int i = 0; i < 400; ++i)
+        {
+            // An odd multiple of 2^-(d+1): a tie at d places.
+            const double odd = static_cast<double>((next() % 2000001) * 2 + 1);
+            const double tie = std::ldexp(odd, -(d + 1));
+            both(tie, d);
+            both(std::nextafter(tie, std::numeric_limits<double>::infinity()), d);
+            both(std::nextafter(tie, 0.0), d);
+            both(tie, d + 1);        // a tie at one precision, not at the next
+            both(tie * 2.0, d);      // an even multiple: not a tie
+        }
+        for (int i = 0; i < 2000; ++i)
+        {
+            const double unit = static_cast<double>(next() >> 11) / static_cast<double>(1ull << 53);
+            both(std::ldexp(unit, static_cast<int>(next() % 120) - 60), d);
+        }
+    }
+    for (const double v : {std::numeric_limits<double>::denorm_min(), std::numeric_limits<double>::min(),
+                           std::numeric_limits<double>::max(), 0.0, 1.0, 0.5, 9007199254740993.0, 4503599627370496.5})
+    {
+        for (int d = 0; d <= 9; ++d) both(v, d);
+    }
+    CHECK(!isExactTie(std::numeric_limits<double>::infinity(), 2));
+    CHECK(!isExactTie(std::numeric_limits<double>::quiet_NaN(), 2));
+    CHECK(ties >= 4000);         // the ties were reached (each precision's 400, and the next-precision ones that are)
+    CHECK(checked == 40080);   // 10 precisions x (400 ties x 5 + 2000 arbitrary) + 8 extremes x 10
+}

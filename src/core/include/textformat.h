@@ -15,8 +15,9 @@
 #ifndef TEXTFORMAT_H
 #define TEXTFORMAT_H
 
+#include <bit>
 #include <cmath>
-#include <cstddef>
+#include <cstdint>
 #include <format>
 #include <limits>
 #include <string>
@@ -24,21 +25,28 @@
 namespace textformat {
 
 /// True when @p magnitude (non-negative, finite) lies exactly halfway between two decimals of
-/// @p decimals places - the one case where the rounding rules differ.
+/// @p decimals places - the one case where the rounding rules differ. False for zero, a negative value,
+/// an infinity and a not-a-number.
+///
+/// Exact, from the binary value: write @p magnitude as m * 2^f with m an odd integer. It is a tie at d places
+/// exactly when 2 * 10^d * magnitude is an odd integer, and 2 * 10^d * m * 2^f = m * 5^d * 2^(f + d + 1), whose
+/// odd part m * 5^d is odd: so it is an odd integer exactly when f + d + 1 == 0. (Until v3.5.1 this printed the
+/// value to 1100 places to look, which was about 60 % of a large CSV export's time; test_textformat.cpp holds the
+/// two answers equal.)
 inline bool isExactTie(double magnitude, int decimals)
 {
-    // A tie needs a 5 in the next place; the cheap check rules out almost every value.
-    const std::string next_place = std::format("{:.{}f}", magnitude, decimals + 1);
-    if (next_place.back() != '5')
+    if (!std::isfinite(magnitude) || magnitude <= 0.0 || decimals < 0)
     {
         return false;
     }
-    // A double's exact decimal expansion is at most 1074 places long, so printing 1100 is exact.
-    // It is a tie only if that 5 is followed by nothing but zeros.
-    constexpr int kExactPlaces = 1100;
-    const std::string exact = std::format("{:.{}f}", magnitude, decimals + 1 + kExactPlaces);
-    const std::size_t tail = exact.size() - kExactPlaces;   // first place after the 5
-    return exact[tail - 1] == '5' && exact.find_first_not_of('0', tail) == std::string::npos;
+    int exponent = 0;
+    const double fraction = std::frexp(magnitude, &exponent);   // magnitude = fraction * 2^exponent, fraction in [0.5, 1)
+    std::uint64_t mantissa = static_cast<std::uint64_t>(std::ldexp(fraction, 53));   // exact: a double holds 53 bits
+    int power = exponent - 53;
+    const int trailing = std::countr_zero(mantissa);
+    mantissa >>= trailing;
+    power += trailing;   // magnitude = mantissa * 2^power, mantissa odd
+    return power == -(decimals + 1);
 }
 
 /// @p value in fixed notation with @p decimals places: ties rounded away from zero, and the
