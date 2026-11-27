@@ -17,9 +17,9 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 
 - **Chapter 10 File Support**: Read, parse, and process IRIG 106 Chapter 10 telemetry files
 - **Channel Selection**: Choose the time channel and one or more PCM channels for processing
-- **Drag-and-Drop**: Drop `.ch10` or exported `.csv` files directly onto the application window, or open them from the ☰ menu (**File > Open…** for recordings, each added beside what is already plotted, **Import/Export > Import from CSV…** for exports)
+- **Drag-and-Drop**: Drop `.ch10` files, exported `.csv` files or antenna logs directly onto the application window, or open them from the ☰ menu (**File > Open…** for recordings, each added beside what is already plotted, **Import/Export > Import from CSV…** for exports and antenna logs)
 - **Recent Files**: Up to 5 entries under the ☰ menu (File > Recent Files), persisted across sessions
-- **CSV Import**: Re-open a CSV this application previously exported straight into the plot — no re-processing of the source `.ch10` file; imports stack, each added beside what the plot already shows as a recording of its own that **Remove File** takes out again (☰ menu > Import/Export > **Import from CSV…**, or drag-and-drop a `.csv`)
+- **CSV Import**: Re-open a CSV this application previously exported straight into the plot — no re-processing of the source `.ch10` file — or import an AV Phased Array Antenna log to compare with a recording (the kind is recognised from the file, with no question); imports stack, each added beside what the plot already shows as a recording of its own that **Remove File** takes out again (☰ menu > Import/Export > **Import from CSV…**, or drag-and-drop a `.csv`)
 
 ### Frame Sync Lock
 
@@ -48,7 +48,7 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 ### Batch Processing & Templates
 
 - **Processing Templates**: Save one configured file's complete per-stream setup — modes, frame-sync/SNR parameters, calibration references, plus each series' custom name and color — as a file-path-independent template (☰ menu > File > **Save Template…**)
-- **Apply Template to Many Files**: Run a saved template against any number of `.ch10` files in one action (☰ menu > File > **Process Multiple Files…**). Each file's PCM channel-ID set must exactly match the template's; non-matching files are flagged (with the missing/extra channels) and skipped
+- **Apply Template to Many Files**: Run a saved template against any number of `.ch10` files in one action (☰ menu > File > **Process Multiple Files…**). The plot is cleared first: a batch is the one action that does not stack. Each file's PCM channel-ID set must exactly match the template's; non-matching files are flagged (with the missing/extra channels) and skipped
 - **Retain-All + Plot File Selector**: Every processed file stays in memory; the plot's **Plot File** selector switches between any single file's results and an "All files (overlaid)" comparison view
 - **Optional Per-File Export**: A batch run can auto-write, per file, a CSV plus Frame Sync Lock and Missed Frames plot images to a chosen folder
 
@@ -66,12 +66,12 @@ Results are plotted in an interactive chart. The UI allows the user to configure
 - **On-Chart Chip Bar**: A compact overlay at the chart's top-left holding a one-click **View Mode** chip (labelled with the view it switches to) and a **Reset view** chip that appears only once the view is zoomed or an axis limit is set - so nothing sits there unused
 - **Quick Plot Gestures**: Ctrl+drag or middle-drag rubber-bands a time range to zoom into it, double-click restores the full span, and a dashed crosshair follows the cursor for comparing series at the same instant
 - **View Mode**: The context menu switches the left axis between Frame Sync Lock (%) and Accumulated Missed Frames; the per-stream visibility selection is preserved across the switch
-- **Plot File Selector**: After a batch run, the context menu's **Plot File** submenu selects which processed file to view, or overlays them all (disabled when only one file is loaded)
+- **Plot File Selector**: Whenever the plot holds more than one recording (a batch run, a second Open or import), the context menu's **Plot File** submenu selects which processed file to view, or overlays them all (disabled when only one file is loaded)
 - **Remove File**: The context menu's **Remove File...** asks which recording, batch file or imported CSV to drop and removes every series of it from the plot and from the next CSV export, keeping the others; process the recording again to bring it back
 - **Opening Stacks**: **File > Open…** (and a dropped `.ch10`, or a Recent Files entry) processes a recording and adds it beside everything already on the plot (the recordings processed before and any imported CSV data), each recording its own entry in **Plot File** and **Remove File**; nothing replaces the plot, so **Clear Plot…** on the right-click menu is how it is emptied, after asking
 - **Movable On-Plot Legends**: Two translucent legends float inside the chart, **Framesync Series** at the top left and **SNR Series** at the top right of the plot area (reset each session), and can be dragged clear of the data; each scrolls for dense plots (e.g. 48+ SNR channels) and both are composited into exported images at their placed positions. **Show Legend** on the right-click menu (or **L**) shows or hides both, and the choice persists between sessions
 - **X-Axis Time Display**: Actual file time (DDD:HH:MM:SS) on the X axis instead of elapsed seconds
-- **Export**: Export the current plot and its data from the ☰ menu (**Export…**) — choose any combination of CSV data (every series), a plot image (PNG/SVG/PDF, exactly what the chart shows, legends included), and the log window contents (text)
+- **Export**: Export the current plot and its data from the ☰ menu (**Export…**) — choose any combination of CSV data (every series), a plot image (PNG/SVG/PDF, exactly what the chart shows, with the legends that are shown), and the log window contents (text)
 - **Hover Tooltip**: Shows series name, time (DDD:HH:MM:SS), and value (lock % or dB) on mouse hover
 
 ### Logging & Feedback

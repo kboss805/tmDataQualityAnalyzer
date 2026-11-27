@@ -42,7 +42,7 @@
       "old": "bool keep = Plot.HasData;",
       "new": "bool keep = false;",
       "expect": "caught",
-      "note": "Open replaces the plot, as it did before it stacked"
+      "note": "Open stops stacking: it clears the plot first, as it did before v3.5.0"
     },
     {
       "id": "A2",

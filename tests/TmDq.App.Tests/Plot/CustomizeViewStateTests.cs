@@ -234,7 +234,7 @@ public sealed class CustomizeViewStateTests
         Assert.Null(other.PendingColor);
     }
 
-    /// <summary>Two recordings of the same streams, as Add Recording or a batch leaves them: each has CH 5 (its lock series shown,
+    /// <summary>Two recordings of the same streams, as Open on a plot that shows something, or a batch, leaves them: each has CH 5 (its lock series shown,
     /// its missed frames hidden) and CH 40's receiver 1 (L, R and C).</summary>
     private static PlotViewModel TwoRecordings()
     {
