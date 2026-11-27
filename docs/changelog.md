@@ -12,13 +12,19 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Every kept mutant run again on Avalonia 12.2: every verdict as recorded (v3.5.1, PR 3)
+
+`eng\mutants_affected.ps1 -All -Run`, in two parts in two worktrees: the 61 lists in `eng\mutants\`, 734 mutants. 699 CAUGHT, 32 SURVIVED, 3 COMPILE, none without a verdict, and each SURVIVED and COMPILE carries that `expect` (an equivalent mutant or one the compiler refuses, as recorded when it was kept), so both parts exit 0 and no list needed re-anchoring or a new test.
+
+Also here: seven `\b` sequences in this changelog (`eng\build_manual.ps1`, `deploy\build_package.ps1`, `eng\build_core_dll.ps1`), lost to a backspace character by an earlier edit, are written back; nothing else in the tree had one.
+
 #### The manual's figures render the same twice: the run log's progress lines are set to one set (v3.5.1, PR 3)
 
 **What was unsteady.** The reader logs "NN% read..." at the first time-gated progress check past each tenth of the file, so a fast run skips tenths: one render's log read 21, 41, 61 and 81 %, the next 21, 51 and 81 %. `ManualFiguresTests` already set each line's digit to the tenth ("42%" to "41%") and the racing threads' lines in one order, but not which lines there were, so three run-log figures changed on a re-render with nothing in them changed (seen in PR 2).
 
 **What changed.** `Steady` puts the canonical four (21, 41, 61, 81 %) in place of whatever percentages a run logged, in the reader's place among the racing lines; `SteadyLog` writes back a log that may now be longer or shorter. The core's log is untouched: it says what one run did. `walk-fs-04-processing.png` and `walk-theme-01-light-plot.png` were re-rendered with the canonical set (`walk-err-01-log-error.png` already showed it).
 
-**How it was checked.** `TheLinesOfTheThreadsThatRaceAreSetInOneOrderEachStreamKeepingItsOwn` now also holds that another run's tenths (21, 51, 81) give the same lines. `enguild_manual.ps1` run twice in a row: every figure identical but `walk-cust-02-snr-tree.png`, the checkbox edge known to vary about one render in four (as does `walk-csv-03-customize.png`'s; both left as committed).
+**How it was checked.** `TheLinesOfTheThreadsThatRaceAreSetInOneOrderEachStreamKeepingItsOwn` now also holds that another run's tenths (21, 51, 81) give the same lines. `eng\build_manual.ps1` run twice in a row: every figure identical but `walk-cust-02-snr-tree.png`, the checkbox edge known to vary about one render in four (as does `walk-csv-03-customize.png`'s; both left as committed).
 
 **The flake hunt.** The application's suite run twelve times (eight free, four pinned to 4 logical cores as the hosted runner has): 920 passed, 0 failed, every time; none of the failures seen once before (`ChartPlotStateTests`, the CSV memory guard, `PackageLicenceTests`, the figure fixture's cleanup) came back.
 
@@ -576,9 +582,9 @@ No product code; no baseline moved.
 
 #### The full manual is generated at packaging and no longer kept in the repository
 
-`UserManual.html` (3.7 MB, the base manual with the walkthroughs and 37 figures embedded) was tracked at the root and had 55 commits, each change to a figure or a version bump adding another ~4 MB version of it to the history (the pack is about 235 MB). It is derived output: `eng\embed_manual_images.py` writes it, every run, from `assets/usermanual.html` and `docs/manual/walkthroughs.html`. It is now untracked and in `.gitignore` (history is not rewritten), and `deployuild_package.ps1` generates it first thing (`enguild_manual.ps1 -NoCapture`: the figures are the committed ones, which the consistency check already holds to this version), then runs `check_release_consistency.ps1 -ReleaseMode -FullManual`, whose new `-FullManual` switch checks the generated file's subtitle and footer (without it a fresh clone and CI have no such file, and the check no longer asks for one). The same step re-embeds the tracked base manual, which the application compiles in, so the package script compares it before and after (as text, not bytes: a `core.autocrlf` checkout holds CR LF and the script writes LF, which a first version of the guard would have refused on every developer machine) and stops with "out of date" if generating changed it, instead of building the application with a stale manual. The base manual stays tracked: it cannot be generated without the build depending on a render step, so the manual's churn in history falls from about 6.5 MB a change to about 2.8 MB, not to nothing. `README.md`, `docs/guide.md`, `.claude/CLAUDE.md`, the `cut-release` skill and the comments of `build_manual.ps1`, `check_release_consistency.ps1` and `.gitignore` say so.
+`UserManual.html` (3.7 MB, the base manual with the walkthroughs and 37 figures embedded) was tracked at the root and had 55 commits, each change to a figure or a version bump adding another ~4 MB version of it to the history (the pack is about 235 MB). It is derived output: `eng\embed_manual_images.py` writes it, every run, from `assets/usermanual.html` and `docs/manual/walkthroughs.html`. It is now untracked and in `.gitignore` (history is not rewritten), and `deploy\build_package.ps1` generates it first thing (`eng\build_manual.ps1 -NoCapture`: the figures are the committed ones, which the consistency check already holds to this version), then runs `check_release_consistency.ps1 -ReleaseMode -FullManual`, whose new `-FullManual` switch checks the generated file's subtitle and footer (without it a fresh clone and CI have no such file, and the check no longer asks for one). The same step re-embeds the tracked base manual, which the application compiles in, so the package script compares it before and after (as text, not bytes: a `core.autocrlf` checkout holds CR LF and the script writes LF, which a first version of the guard would have refused on every developer machine) and stops with "out of date" if generating changed it, instead of building the application with a stale manual. The base manual stays tracked: it cannot be generated without the build depending on a render step, so the manual's churn in history falls from about 6.5 MB a change to about 2.8 MB, not to nothing. `README.md`, `docs/guide.md`, `.claude/CLAUDE.md`, the `cut-release` skill and the comments of `build_manual.ps1`, `check_release_consistency.ps1` and `.gitignore` say so.
 
-**Checked:** regenerating from the committed figures gives a `UserManual.html` byte-identical to the one that was tracked; with the file deleted the plain consistency check passes and `-FullManual` fails ("FILE MISSING", twice); the guard passes on a clean tree and stops when the base's subtitle is made stale; `check_scripts.ps1` is clean; an unsigned `deployuild_package.ps1` run completed ("Generating the full manual", both `full manual` checks OK, the portable ZIP holds a 3,755,549-byte `UserManual.html`), with `### Unreleased` renamed for the run only, as a release-mode check requires. Not checked: a signed build. No product code; no baseline moved.
+**Checked:** regenerating from the committed figures gives a `UserManual.html` byte-identical to the one that was tracked; with the file deleted the plain consistency check passes and `-FullManual` fails ("FILE MISSING", twice); the guard passes on a clean tree and stops when the base's subtitle is made stale; `check_scripts.ps1` is clean; an unsigned `deploy\build_package.ps1` run completed ("Generating the full manual", both `full manual` checks OK, the portable ZIP holds a 3,755,549-byte `UserManual.html`), with `### Unreleased` renamed for the run only, as a release-mode check requires. Not checked: a signed build. No product code; no baseline moved.
 
 #### CI runs the native tests in Debug, and keeps the build logs of a failed run
 
@@ -1889,7 +1895,7 @@ Prose only; no product source changed. The follow-up audit read both against the
 - **Settings between sessions.** The manual said the first run takes the theme, the sidebar and the rest "from TM Data
   Quality Analyzer 2.x's settings". It has not since v3.1.0 (the import was dropped); it now says the first run starts
   from the defaults.
-- **The full manual's figures** were re-embedded (`enguild_manual.ps1 -NoCapture`). Nine of its figures were the 14 px
+- **The full manual's figures** were re-embedded (`eng\build_manual.ps1 -NoCapture`). Nine of its figures were the 14 px
   ones: the manuals had been regenerated before #288's rebase and then reverted to main's copy, while
   `docs/manual_images` held the 13 px renders. No figure was re-rendered.
 - **Four smaller statements** the audit listed. `docs/claude.md` named `StreamJobBuilder` as a type in two places; it is
@@ -2539,7 +2545,7 @@ standards work (A2 and A3, the `.editorconfig` and the .NET analyzers; the `.cla
 
 #### The manual's figures the same in every render
 
-Re-rendering the figures (`enguild_manual.ps1`) changed four of them nearly every time. It looked like the run log's
+Re-rendering the figures (`eng\build_manual.ps1`) changed four of them nearly every time. It looked like the run log's
 clock, but that is already fixed (`FigureClock`). What varied, found by rendering the figures repeatedly and comparing them
 pixel by pixel:
 
@@ -3108,7 +3114,7 @@ read from the code rather than taken from the finding's wording.
 **Checked:** a comment-stripping diff of every changed source, script and project file against `origin/main` is empty (C++ and C#
 `//`, `///`, `/* */` with string and character literals, interpolated, verbatim and raw strings honoured; PowerShell `#` and `<# #>`;
 XML `<!-- -->`; a planted one-token code change in each of two files was reported). The script is a scratch file, not in the
-repository. `enguild_core_dll.ps1 -Rebuild` (Release): 0 warnings; native 495 passed / 0 failed / 1 skipped; managed 364 passed / 0 failed / 1 skipped; app 619 passed / 0 failed / 0 skipped (34 not run); all at their baselines, Release. No mutation check (comments only).
+repository. `eng\build_core_dll.ps1 -Rebuild` (Release): 0 warnings; native 495 passed / 0 failed / 1 skipped; managed 364 passed / 0 failed / 1 skipped; app 619 passed / 0 failed / 0 skipped (34 not run); all at their baselines, Release. No mutation check (comments only).
 #### The guide's statements about the present, corrected
 
 Docs only (no code, test or project file changed), from the whole-tree cleanup audit's findings M1, M2, M3, M5 and M6, each

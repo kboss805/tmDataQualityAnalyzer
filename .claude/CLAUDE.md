@@ -29,7 +29,7 @@ themselves). Use the **PowerShell** tool.
 - **Native core tests (doctest):** `powershell -ExecutionPolicy Bypass -File eng\test_native.ps1
   [-Configuration Debug|Release] [-Rebuild] [-NoBuild] [<doctest args>]` builds `tests/core`
   (MSBuild; the framework is the single header in `third_party/doctest`) with **zero warnings and imports only the allow-list**, then runs it.
-  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **575 test cases** (1 skipped: the
+  Run it **filtered** while iterating: `-tc="TomlDocument*"`. Green baseline **579 test cases** (1 skipped: the
   benchmark below). The suites read `tests/data/test files` (committed recordings) and `tests/fixtures`; in a
   worktree, junction `tests/data` to the main checkout's or the full-recording tests have nothing to read.
   **The throughput guard:** the heavy PRN benchmark ("PipelineRunner throughput", `test_pipelinerunner.cpp`) is
@@ -62,7 +62,7 @@ themselves). Use the **PowerShell** tool.
   `ManualFiguresTests` into `docs\manual_images`: after a change to what a figure shows, and after every version bump (four figures show the log's version line;
   `docs\manual_images\rendered-version.txt` names the version that rendered them and the consistency check refuses another), rebuild with
   `powershell -ExecutionPolicy Bypass -File eng\build_manual.ps1` (`-NoCapture` reuses the figures: prose changes only). CI runs the
-  app suite. Green baseline **914 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases (xunit's `Total: 948` counts them, so
+  app suite. Green baseline **920 passed / 0 failed / 0 skipped**, and **34 not run**: the soak's explicit cases (xunit's `Total: 954` counts them, so
   passed is the total less 34).
   **The side-by-side soak:** `powershell -ExecutionPolicy Bypass -File eng\run_soak.ps1 [-NoBuild]
   [-Only <run>,...]` runs every run in `tests\TmDq.App.Tests\Soak\soak.json` (`SoakTests`, explicit, one process a
