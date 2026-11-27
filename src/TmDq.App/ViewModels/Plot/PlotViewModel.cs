@@ -153,6 +153,8 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
             foreach (double[] xs in _series.Select(s => s.X).Distinct())
                 for (int i = 0; i < xs.Length; i++) xs[i] += shift;
             foreach (PlotSeries s in _series) s.Version++;
+            // The history holds views in the old elapsed seconds, now `shift` too early: Zoom Back would land off by that much.
+            _window.ClearHistory();
         }
 
         List<PlotSeries> added;

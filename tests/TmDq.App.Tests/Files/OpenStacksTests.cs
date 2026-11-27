@@ -196,6 +196,38 @@ public sealed class OpenStacksTests : IClassFixture<ShortRecordings>
     }
 
     [AvaloniaFact]
+    public async Task ARecordingThatStartsEarlierThanWhatIsShownLeavesNoZoomHistoryInTheOldSeconds()
+    {
+        // Opening one that starts before everything shown moves every series later, so each remembered view is `shift` seconds
+        // early and Zoom Back would land there. An export a day later than the recording stands for the earlier-starting one.
+        string csv = TempFiles.NewPath("later-export", ".csv");
+        try
+        {
+            var maker = new MainWindowViewModel();
+            await maker.LoadAsync(Prn);
+            Assert.True(maker.Plot.ExportCsv(csv));
+            string later = System.Text.RegularExpressions.Regex.Replace(File.ReadAllText(csv), @"^(\d{3}):(\d\d:\d\d:\d\d\.\d{3})",
+                m => $"{int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) + 1:D3}:{m.Groups[2].Value}",
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+            File.WriteAllText(csv, later);
+
+            var vm = new MainWindowViewModel();
+            await vm.ImportCsvAsync(csv);
+            vm.Plot.ZoomWindow(2.0);
+            Assert.True(vm.Plot.CanZoomBack);
+
+            await vm.LoadAsync(Prn);
+
+            Assert.False(vm.Plot.CanZoomBack);
+            Assert.Equal(0.0, vm.Plot.XViewMin);
+        }
+        finally
+        {
+            TempFiles.Delete(csv);
+        }
+    }
+
+    [AvaloniaFact]
     public async Task ARecordingThatFailsToOpenOrIsCancelledLeavesTheWholePlotAsItWas()
     {
         string junk = TempFiles.NewPath("add-junk", ".ch10");

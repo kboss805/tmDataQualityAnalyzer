@@ -12,6 +12,14 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Zoom Back no longer lands off after Open stacks a recording that starts earlier (v3.5.1, PR 2)
+
+**What was wrong.** Found by the sweep, read from the code and then reproduced in a test: `AddStream` moves every series later by `shift` when a recording starts before what is shown, and shows the whole span, but kept the zoom history, whose views are in the old elapsed seconds; Zoom Back landed `shift` seconds off. `ShowCsv` and `AdvanceTimeBase` already moved or cleared it; `AddStream` did neither. Stacking made it reachable.
+
+**What changed.** `AddStream` clears the history when it shifts the series (the view is the whole span then anyway).
+
+**How it was checked.** `OpenStacksTests.ARecordingThatStartsEarlierThanWhatIsShownLeavesNoZoomHistoryInTheOldSeconds` (an export a day later than the recording stands for the earlier-starting one); mutant O25 of `eng/mutants/antenna-overlay.json` (the clear removed) CAUGHT.
+
 #### A recording opened after an imported log or CSV is placed by the clock (v3.5.1, PR 2)
 
 **What was wrong.** Found by the code sweep for v3.5.1 and reproduced: import an antenna log (or an exported CSV), then Open a recording, and the recording sat at its epoch seconds, about 1.78e9 s, a lifetime after the log (the log at 0 to 2,478 s; the axis spanned 56 years). An import states a day and a time of day but no absolute time, so the time base's clock was set and its absolute seconds were not, and `AddStream` placed the recording against an absolute base of 0. Stacking made it reachable in v3.5.0; the other order (a recording, then a log) was right, because an import is placed by the clock. A second form: a file that starts before everything shown moves the clock earlier (`ShowCsv`) but left the absolute base where it was, so the next recording was placed by the old one.

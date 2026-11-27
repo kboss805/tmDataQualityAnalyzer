@@ -203,6 +203,15 @@
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.OpenStacksTests"],
       "expect": "caught",
       "note": "an import that starts earlier moves the clock but not the base: the next recording is placed by the old one"
+    },
+    {
+      "id": "O25",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "            _window.ClearHistory();\n        }\n\n        List<PlotSeries> added;",
+      "new": "        }\n\n        List<PlotSeries> added;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.OpenStacksTests"],
+      "expect": "caught",
+      "note": "a recording that starts earlier shifts every series and leaves Zoom Back in the old seconds"
     }
   ]
 }
