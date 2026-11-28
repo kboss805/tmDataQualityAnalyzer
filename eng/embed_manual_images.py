@@ -115,7 +115,7 @@ after('<p>Right-click anywhere on the chart. Entries stay disabled until somethi
           'The plot’s right-click menu — every plot control lives here. Entries that need more than '
           'one loaded file, such as Plot File, stay disabled until they apply.',
           'The plot right-click menu open over a chart, showing Set Plot Title, Plot File, Remove File, Clear Plot, '
-          'View Mode (V), Customize View, Show Legend, Readout, X Axis, Y Axes and Reset View')
+          'View Mode (V), Customize View, Auto-Color Visible Series, Reset Colors, Show Legend, Readout, X Axis, Y Axes and Reset View')
     + fig('Y Axes Submenu.png',
           'Y Axes, opened. Either end of either axis can be pinned, and a limit left alone still '
           'scales to the data — so setting only the left minimum to 98 spreads a set of streams '

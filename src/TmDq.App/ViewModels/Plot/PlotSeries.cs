@@ -56,7 +56,8 @@ public sealed class PlotSeries
     public double YMax { get; init; }
     public Color Color { get; set; }
 
-    /// <summary>Whether the line is drawn dotted: the second 15 of a run of streams (see <see cref="PlotColors.Assign(System.Collections.Generic.IEnumerable{PlotSeries})"/>).</summary>
+    /// <summary>Whether the line is drawn dotted: every Receiver SNR series is, so it never reads as a Frame Sync Lock curve of
+    /// the same hue (see <see cref="PlotColors.Assign(System.Collections.Generic.IEnumerable{PlotSeries})"/>).</summary>
     public bool Dotted { get; set; }
 
     /// <summary>Whether the line is drawn a little thicker, the strongest of a stream's polarizations: the combined one.</summary>

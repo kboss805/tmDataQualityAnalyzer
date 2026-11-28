@@ -145,6 +145,168 @@
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
       "expect": "caught",
       "note": "the dotted lines are drawn with the loose gap of before v3.5.0 (a dot, then twice as long a gap)"
+    },
+    {
+      "id": "A1",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": ".Where(h => h != AutoColorExcluded)",
+      "new": ".Where(h => h != AutoColorExcluded || true)",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "Auto-Color gives out the gold, which does not read on the light theme's white"
+    },
+    {
+      "id": "A2",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "if (nearest[i] > nearest[best]) best = i;",
+      "new": "if (nearest[i] < nearest[best]) best = i;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "each next hue is the NEAREST to those taken, not the farthest"
+    },
+    {
+      "id": "A3",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "nearest[i] = Math.Min(nearest[i], OkDistance(rest[i], taken));",
+      "new": "nearest[i] = OkDistance(rest[i], taken);",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "each next hue is the farthest from the last one taken only, not from all of them"
+    },
+    {
+      "id": "A4",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "+ (b1 - b2) * (b1 - b2));",
+      "new": "+ 0);",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "the distance ignores OKLab's blue-yellow axis"
+    },
+    {
+      "id": "A5",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotColors.cs",
+      "old": "AutoColorHues[unit % AutoColorHues.Count]",
+      "new": "AutoColorHues[unit % (AutoColorHues.Count - 1)]",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "the 14th unit takes the first hue again, one early"
+    },
+    {
+      "id": "A6",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "if (!unit.Any(EffectiveVisible)) continue;",
+      "new": "if (!unit.Any(s => s.Visible)) continue;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "a unit of a recording Plot File does not show is coloured as if drawn"
+    },
+    {
+      "id": "A7",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "if (!unit.Any(EffectiveVisible)) continue;",
+      "new": "",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "units with nothing drawn are recoloured too, and take hues from those shown"
+    },
+    {
+      "id": "A8",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "s.Color = s.IsLeftAxis ? hue : PlotColors.Shade(hue, PlotColors.Weakness(s.ChannelIndex));",
+      "new": "s.Color = hue;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "a receiver's L and R take its full hue instead of its tints"
+    },
+    {
+      "id": "A9",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "? (true, s.SourceId, s.StreamOrder, s.StreamLabel, 0)",
+      "new": "? (true, 0, s.StreamOrder, s.StreamLabel, 0)",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "two recordings' lock streams of one number are one unit, one colour"
+    },
+    {
+      "id": "A10",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": ": (false, s.SourceId, s.StreamOrder, string.Empty, s.ReceiverIndex);",
+      "new": ": (false, s.SourceId, s.StreamOrder, string.Empty, 0);",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "a stream's receivers are one unit, one colour"
+    },
+    {
+      "id": "A11",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "if (next > 0) CommitAppearance();",
+      "new": "CommitAppearance();",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "Auto-Color with nothing drawn still refreshes the chart"
+    },
+    {
+      "id": "A12",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "public bool CanAutoColor => _series.Any(EffectiveVisible);",
+      "new": "public bool CanAutoColor => _series.Count > 0;",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "Auto-Color is offered with every series hidden"
+    },
+    {
+      "id": "A13",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        PlotColors.Assign(_series, _lockColours);\n        CommitAppearance();\n",
+      "new": "        PlotColors.Assign(_series, _lockColours);\n",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "Reset Colors does not refresh the chart and the legend"
+    },
+    {
+      "id": "A14",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
+      "old": "if (chosen is 0) _plot.ResetColors();",
+      "new": "_plot.ResetColors();",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "Reset Colors resets on Cancel too"
+    },
+    {
+      "id": "A15",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
+      "old": "ResetColorsChoices, 0);",
+      "new": "ResetColorsChoices, -1);",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "Reset Colors opens with nothing chosen, so Enter does not confirm"
+    },
+    {
+      "id": "A16",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
+      "old": "new RelayCommand(_plot.AutoColorVisible, () => _plot.CanAutoColor);",
+      "new": "new RelayCommand(_plot.AutoColorVisible, hasData);",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "the menu offers Auto-Color with every series hidden"
+    },
+    {
+      "id": "A17",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCommands.cs",
+      "old": "ClearPlotCommand, AutoColorCommand, ResetColorsCommand,",
+      "new": "ClearPlotCommand, ResetColorsCommand,",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
+      "expect": "caught",
+      "note": "the menu's Auto-Color is never told when it can run or no longer can"
+    },
+    {
+      "id": "A18",
+      "file": "src/TmDq.App/Views/Plot/PlotView.axaml",
+      "old": "Command=\"{Binding AutoColorCommand}\"",
+      "new": "Command=\"{Binding ResetColorsCommand}\"",
+      "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ChartViewTests"],
+      "expect": "caught",
+      "note": "the menu's Auto-Color item runs Reset Colors"
     }
   ]
 }

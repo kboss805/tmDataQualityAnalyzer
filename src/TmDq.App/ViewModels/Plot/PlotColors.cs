@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Media;
 
 namespace TmDq.App.ViewModels.Plot;
@@ -43,6 +44,70 @@ public static class PlotColors
 
     /// <summary>The channel index of the combined polarization (a receiver's C, an antenna's C): the strongest.</summary>
     public const int CombinedChannelIndex = 2;
+
+    /// <summary>
+    /// The hue <see cref="StreamHues"/> holds that Auto-Color never gives out: the gold, 1.8 to 1 on the light theme's white,
+    /// below the 2.0 the chart draws a series at there (<c>ChartPalette.MinSeriesContrast</c>), so the chart would draw it
+    /// darker than the gold it was given. Every other hue is at least 2.0 on both themes' backgrounds (<c>PlotTests</c>).
+    /// </summary>
+    public static readonly Color AutoColorExcluded = Color.FromRgb(230, 190, 0);
+
+    /// <summary>
+    /// The hues Auto-Color gives out (<see cref="AutoHue"/>), in the order it gives them: <see cref="StreamHues"/> less
+    /// <see cref="AutoColorExcluded"/>, the red first, then each time the hue farthest from all those already taken (its
+    /// least distance to them the greatest, in OKLab, where a distance reads as the same difference anywhere on the wheel; a
+    /// tie to the hue earlier in the palette). However many units it colours, they are the first that many of these, so a
+    /// plot of few streams gets the most different hues of the palette.
+    /// </summary>
+    public static readonly IReadOnlyList<Color> AutoColorHues = FarthestFirst(StreamHues.Where(h => h != AutoColorExcluded).ToList());
+
+    /// <summary>The hue Auto-Color gives its <paramref name="unit"/>-th unit (counted from 0): <see cref="AutoColorHues"/> in
+    /// order, the 15th unit the first's again, so two units of one hue are as far apart in the list as the palette allows.</summary>
+    public static Color AutoHue(int unit) => AutoColorHues[unit % AutoColorHues.Count];
+
+    /// <summary><paramref name="pool"/> reordered: its first, then each time the one whose least OKLab distance to those
+    /// already taken is the greatest (the first in <paramref name="pool"/> of equals).</summary>
+    private static List<Color> FarthestFirst(List<Color> pool)
+    {
+        var order = new List<Color>(pool.Count);
+        if (pool.Count == 0) return order;
+        var rest = pool.Skip(1).ToList();
+        order.Add(pool[0]);
+        var nearest = rest.Select(c => OkDistance(c, pool[0])).ToList();
+        while (rest.Count > 0)
+        {
+            int best = 0;
+            for (int i = 1; i < rest.Count; i++)
+                if (nearest[i] > nearest[best]) best = i;
+            Color taken = rest[best];
+            order.Add(taken);
+            rest.RemoveAt(best);
+            nearest.RemoveAt(best);
+            for (int i = 0; i < rest.Count; i++) nearest[i] = Math.Min(nearest[i], OkDistance(rest[i], taken));
+        }
+        return order;
+    }
+
+    /// <summary>The distance of two colours in OKLab (Björn Ottosson's): 0 for one colour, about 0.1 for two that read as
+    /// clearly different.</summary>
+    public static double OkDistance(Color a, Color b)
+    {
+        (double l1, double a1, double b1) = OkLab(a);
+        (double l2, double a2, double b2) = OkLab(b);
+        return Math.Sqrt((l1 - l2) * (l1 - l2) + (a1 - a2) * (a1 - a2) + (b1 - b2) * (b1 - b2));
+    }
+
+    private static (double L, double A, double B) OkLab(Color c)
+    {
+        static double Linear(byte v) { double s = v / 255.0; return s <= 0.04045 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4); }
+        double r = Linear(c.R), g = Linear(c.G), b = Linear(c.B);
+        double l = Math.Cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+        double m = Math.Cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+        double s = Math.Cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+        return (0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+                1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+                0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s);
+    }
 
     /// <summary>
     /// Colours every series, in order: the left-axis metrics share one colour per stream (by its stream order, the
