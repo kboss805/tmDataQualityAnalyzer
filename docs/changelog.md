@@ -10,6 +10,53 @@ the paths, class names and baselines in an entry are the ones of its day. Two mo
 (`docs/dotnet-migration/avalonia-plan.md`, which the "plan step" numbers below refer to) was deleted in 6.5, its steps
 recorded here; and the parity review and soak records moved from `docs/dotnet-migration/` to `docs/records/`.
 
+### Unreleased
+
+#### Export remembers its folder; a Receiver SNR receiver is recoloured as one, and a stream can be renamed
+
+**Export's folder.** Export proposed the folder a recording, CSV or template was last opened from, so after exporting to
+another folder the next Export went back to the recording's. It now proposes the folder it last wrote a file to in the
+session (the first file written: the data, else the image, else the log; an export that wrote nothing leaves it), then the
+last folder opened from, then the application's root as before. It is not a preference: a new session starts as before.
+`SessionExport.WriteAsync` returns the first file written; `MainWindowViewModel.LastExportFolder` holds its folder.
+
+**A receiver's colour.** Customize View's Receiver SNR tab recoloured each channel (L, R, C) on its own, from a menu on its
+box, which broke the receiver's family of shades. A swatch beside each receiver now sets the receiver's colour: C takes
+it, and L and R the lighter shades a receiver is first drawn with (`PlotColors.Shade`, `Weakness`). The channels' menu
+(Rename series…, Change color…) is gone; the receiver's text and swatch are in its full colour (C's), where the text was
+L's.
+
+**A stream's name.** A Receiver SNR rename set the series' name, but the legend never showed it (its rows are built from
+numbers, `CH<id> <L|R|C>_RCVR<n>`), and it was one channel at a time. The tab now has **Stream name** under the stream
+list: OK replaces only the stream's part of each of its series' names, `<channel id> - <stream name> <channel name>`
+(`PlotViewModel.RenameSnrStream`, split as the core's CSV import splits a header: the channel name after the last space),
+so an exported CSV's columns carry the name, as a Frame Sync Lock rename's always did, and still read back as SNR of their
+receivers; the legend shows the name in place of `CH<id>`. A series keeps the name it was made with (`PlotSeries.OriginalName`),
+which is how a renamed stream is told (`IsSnrStreamRenamed`), so a template, which puts each series' name back, renames the
+stream too. Nothing is reordered: the plot, the legend and the CSV keep the recording's order. An empty name renames
+nothing; an antenna's stream (US10.0) keeps its unit's name. The soak's exports are untouched: it renames nothing.
+
+**How it was checked.** New tests: `ExportProposesTheFolderItLastWroteToForTheRestOfTheSession`,
+`RenamedSnrStreamsAreExportedInTheirPlacesAndReadBackAsSnrOfTheirReceivers` (names that sort the other way round, one with
+" - " and digits; the read-back's metric, stream, receiver, channel and samples, and a byte-for-byte second export),
+`ARenamedStreamIsShownByItsNameAndKeepsItsPlace`, `AStreamNamedByATemplateIsShownByThatName`,
+`AStreamLeftAloneOrGivenAnEmptyNameIsNotRenamed`; the Customize View tests that used the channels' menu now drive the
+receiver's swatch and the name box, and `CustomizeViewReadsTheAntennasStreamsWithHVAndCAndNotAsReceivers` holds that an
+antenna's stream is not renamed. Mutation check: 13 new mutants, SA1 to SA6 in `csv-export-async.json` (the folder
+proposed, the first file written, a failed file, the trim, the split at the last space, the CSV's columns sorted by name),
+SA7 to SA10 in `hand-written-properties.json` (the shades, an emptied name, the stream renamed, an antenna's rename) and
+SA11 to SA13 in `plot-zoom-and-legend.json` (the legend's name, how a rename is told, the legend sorted by name): all 13
+CAUGHT. SA10 first SURVIVED (nothing held an antenna's stream unrenamed: the test above now does) and SA5 first failed to
+compile (CA1307 on `IndexOf(char)`: written with `StringComparison.Ordinal`). Re-anchored for moved text and run again,
+all CAUGHT: `calibration-observer.json` S1, `csv-export-async.json` C3 and C4, `accessible-names.json` N16;
+`hand-written-properties.json` C3 now mutates the receiver's swatch (the channel's Change color is gone). The 18 kept
+lists the change reaches (`eng\mutants_affected.ps1 -Base main -Run`, 283 mutants) gave every verdict as recorded but
+`accessible-names.json` N17, which SURVIVED: with the receiver's header a panel (its box and its swatch), a receiver's
+open/close toggle left without its style is read as "RCVR 1", a name unique and speakable, so the general rules passed it.
+`AccessibleNamesTests` now holds the toggles' names ("Open or close RCVR n"), and N17 is CAUGHT. Baselines: the
+application's suite **925 passed** / 0 failed / 0 skipped, 34 not run (`Total: 959`; was 920 and 954); the library's
+unchanged.
+
 ### v3.5.1 — The deep dive after v3.5.0: placement after an import, the batch's Cancel, a faster export
 
 A patch release (2026-11-27), the v3.5.1 plan's four PRs (`docs/future_plans/v3.5.1.md`). What the user sees: a recording opened after an imported antenna log or CSV is placed by its clock instead of decades later, Zoom Back is right after a recording that starts earlier is stacked, an out-of-order CSV is shown to its end, an unreadable CSV says so, the cursor's label carries a rounded-up fraction, Process Multiple Files says it clears the plot and its Cancel stops the batch (#415), the CSV export is about twice as fast (#415), the Receiver SNR tab is named for a screen reader (#415), and the manuals read against v3.5.0 (#414). Underneath: Avalonia 12.2.0 (xunit stays on 3.2.2), figures that render the same twice, the kept-mutant run in reach of every change (`eng\mutants_affected.ps1`) and all 734 run again (#416). The release PR itself carries the version, the notes and the re-rendered figures alone.

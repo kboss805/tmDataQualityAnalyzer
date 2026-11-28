@@ -24,16 +24,16 @@
     {
       "id": "C3",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "        if (IsBusy) return;\n        IsBusy = true;\n        try\n        {\n            await _export.WriteAsync(choice);",
-      "new": "        if (IsBusy) return;\n        try\n        {\n            await _export.WriteAsync(choice);",
+      "old": "        if (IsBusy) return;\n        IsBusy = true;\n        try\n        {\n            string? written = await _export.WriteAsync(choice);",
+      "new": "        if (IsBusy) return;\n        try\n        {\n            string? written = await _export.WriteAsync(choice);",
       "expect": "caught",
       "note": "the window is not busy while the data is written, so a second export or an open can start"
     },
     {
       "id": "C4",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "        if (IsBusy) return;\n        IsBusy = true;\n        try\n        {\n            await _export.WriteAsync(choice);",
-      "new": "        IsBusy = true;\n        try\n        {\n            await _export.WriteAsync(choice);",
+      "old": "        if (IsBusy) return;\n        IsBusy = true;\n        try\n        {\n            string? written = await _export.WriteAsync(choice);",
+      "new": "        IsBusy = true;\n        try\n        {\n            string? written = await _export.WriteAsync(choice);",
       "expect": "caught",
       "note": "a second export while one is writing is taken, and writes the same file at the same time"
     },
@@ -64,6 +64,55 @@
         "-class",
         "TmDq.App.Tests.TemplateBatchTests"
       ]
+    },
+    {
+      "id": "SA1",
+      "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
+      "old": "ExportViewModel.DefaultPaths(_lastExportFolder ?? LastFolder ?? _appRoot, Plot.Title);",
+      "new": "ExportViewModel.DefaultPaths(LastFolder ?? _appRoot, Plot.Title);",
+      "expect": "caught",
+      "note": "Export forgets the folder it last wrote to and opens in the folder last opened from"
+    },
+    {
+      "id": "SA2",
+      "file": "src/TmDq.App/ViewModels/SessionExport.cs",
+      "old": "            if (ok) first ??= path;",
+      "new": "            if (ok) first = path;",
+      "expect": "caught",
+      "note": "the last file written, not the first, names the next Export's folder"
+    },
+    {
+      "id": "SA3",
+      "file": "src/TmDq.App/ViewModels/SessionExport.cs",
+      "old": "            if (ok) first ??= path;",
+      "new": "            first ??= path;",
+      "expect": "caught",
+      "note": "a file that failed to be written still moves the next Export's folder"
+    },
+    {
+      "id": "SA4",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        string trimmed = name.Trim();",
+      "new": "        string trimmed = name;",
+      "expect": "caught",
+      "note": "a stream's new name keeps the spaces around it, in its CSV columns",
+      "args": ["-class", "TmDq.App.Tests.ExportImportTests", "-class", "TmDq.App.Tests.CustomizeViewStateTests"]
+    },
+    {
+      "id": "SA5",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        int space = rest.LastIndexOf(' ');",
+      "new": "        int space = rest.IndexOf(' ', StringComparison.Ordinal);",
+      "expect": "caught",
+      "note": "a stream name with a space is split at its first space, unlike the core's import"
+    },
+    {
+      "id": "SA6",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotCsv.cs",
+      "old": "        foreach (PlotSeries s in series)\n        {\n            if (sourceId >= 0 && s.SourceId != sourceId) continue;",
+      "new": "        foreach (PlotSeries s in series.OrderBy(x => x.Name, System.StringComparer.Ordinal))\n        {\n            if (sourceId >= 0 && s.SourceId != sourceId) continue;",
+      "expect": "caught",
+      "note": "the CSV's columns are put in name order: a renamed stream moves from its recording's place"
     }
   ]
 }

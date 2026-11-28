@@ -1006,6 +1006,94 @@ public sealed class ExportImportTests
     }
 
     [Fact]
+    public async Task ExportProposesTheFolderItLastWroteToForTheRestOfTheSession()
+    {
+        string csv = WriteCsv(TwoStreams), folder = TempPath(""), other = TempPath("");
+        Directory.CreateDirectory(folder);
+        Directory.CreateDirectory(other);
+        try
+        {
+            var dialog = new FakeExportDialog();
+            var vm = new MainWindowViewModel(new MainWindowServices { ExportDialog = dialog, ImageExporter = new FakeImages() });
+            await vm.ImportCsvAsync(csv);
+            Assert.Null(vm.LastExportFolder);
+
+            // The log alone, written into another folder than the CSV's: the next Export starts there, not in the CSV's folder.
+            (string image, string data, string log) = ExportViewModel.DefaultPaths(folder, vm.Plot.Title);
+            await vm.ExportAsync(new ExportViewModel(image, data, log) { ExportImage = false, ExportLog = true });
+            Assert.Equal(Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar), vm.LastExportFolder);
+            await vm.ExportCommand.ExecuteAsync(null);   // cancelled
+            Assert.Equal((image, data, log), (dialog.Shown!.ImagePath, dialog.Shown.DataPath, dialog.Shown.LogPath));
+
+            // The first file written names the folder: here the data, in another folder than the log.
+            (_, string otherData, _) = ExportViewModel.DefaultPaths(other, vm.Plot.Title);
+            await vm.ExportAsync(new ExportViewModel(image, otherData, log) { ExportImage = false, ExportData = true, ExportLog = true });
+            Assert.Equal(Path.GetFullPath(other).TrimEnd(Path.DirectorySeparatorChar), vm.LastExportFolder);
+
+            // An export that wrote nothing leaves it where it was.
+            string missing = Path.Combine(TempPath(""), "no-such-folder", "x.csv");
+            await vm.ExportAsync(new ExportViewModel(image, missing, log) { ExportImage = false, ExportData = true });
+            Assert.Equal(Path.GetFullPath(other).TrimEnd(Path.DirectorySeparatorChar), vm.LastExportFolder);
+
+            // Another session starts in the folder it last opened from, as before: the export folder is not kept.
+            var fresh = new MainWindowViewModel(new MainWindowServices { ExportDialog = dialog });
+            await fresh.ImportCsvAsync(csv);
+            await fresh.ExportCommand.ExecuteAsync(null);
+            Assert.Equal(ExportViewModel.DefaultPaths(Path.GetDirectoryName(csv)!, fresh.Plot.Title).Image, dialog.Shown!.ImagePath);
+        }
+        finally
+        {
+            TempFiles.Delete(csv);
+            foreach (string dir in new[] { folder, other })
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    private const string ThreeSnrStreams =
+        "Time (DOY:HH:MM:SS.mmm),A Lock (%),40 - X L_RCVR1,40 - X R_RCVR1,41 - Y L_RCVR2,42 - Z L_RCVR1\r\n" +
+        "001:00:00:00.000,90.000000,10.000000,20.000000,30.000000,40.000000\r\n" +
+        "001:00:00:01.000,95.000000,11.000000,21.000000,31.000000,41.000000\r\n";
+
+    [Fact]
+    public void RenamedSnrStreamsAreExportedInTheirPlacesAndReadBackAsSnrOfTheirReceivers()
+    {
+        string path = WriteCsv(ThreeSnrStreams), renamed = TempPath(".csv"), again = TempPath(".csv");
+        try
+        {
+            var plot = new PlotViewModel();
+            Assert.True(plot.LoadCsv(path));
+            var before = plot.Series.Select(s => (s.Metric, s.StreamOrder, s.ReceiverIndex, s.ChannelIndex, Y: string.Join(",", s.Y))).ToList();
+
+            // Names that sort the other way round, one with the " - " the header's own id ends with and digits.
+            plot.RenameSnrStream(0, 40, "Zulu");
+            plot.RenameSnrStream(0, 41, " Pod 2 - left ");
+            plot.RenameSnrStream(0, 42, "Alpha");
+            plot.RenameSnrStream(0, 42, "  ");      // an empty name renames nothing
+            plot.RenameSnrStream(0, 5, "Lock");     // nor a stream that is not SNR
+            Assert.True(plot.ExportCsv(renamed));
+            Assert.Equal("Time (DOY:HH:MM:SS.mmm),A Lock (%),40 - Zulu L_RCVR1,40 - Zulu R_RCVR1,41 - Pod 2 - left L_RCVR2,42 - Alpha L_RCVR1",
+                         HeaderOf(renamed));
+
+            // Read back: each column is SNR again, of its stream and receiver, in its place, with its samples; and it exports again
+            // as it was written.
+            var imported = new PlotViewModel();
+            Assert.True(imported.LoadCsv(renamed));
+            Assert.Equal(new[] { "A", "40 - Zulu L_RCVR1", "40 - Zulu R_RCVR1", "41 - Pod 2 - left L_RCVR2", "42 - Alpha L_RCVR1" },
+                         imported.Series.Select(s => s.Name));
+            Assert.Equal(before, imported.Series.Select(s => (s.Metric, s.StreamOrder, s.ReceiverIndex, s.ChannelIndex, Y: string.Join(",", s.Y))));
+            Assert.Equal("Pod 2 - left", PlotViewModel.SnrStreamName(imported.Series[3]));
+            Assert.True(imported.ExportCsv(again));
+            Assert.Equal(TempFiles.ReadAllBytes(renamed), TempFiles.ReadAllBytes(again));
+        }
+        finally
+        {
+            TempFiles.Delete(path);
+            TempFiles.Delete(renamed);
+            TempFiles.Delete(again);
+        }
+    }
+
+    [Fact]
     public async Task ExportWritesTheDataThenTheImageThenTheLogAndTheLogSaysWhere()
     {
         string csv = WriteCsv(TwoStreams), folder = TempPath("");

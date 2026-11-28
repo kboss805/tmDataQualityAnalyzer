@@ -235,6 +235,30 @@
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.PlotTests"],
       "expect": "caught",
       "note": "an out-of-order series is shown to its last sample's time, not its latest"
+    },
+    {
+      "id": "SA11",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        string lead = IsSnrStreamRenamed(s) ? SnrStreamName(s) :",
+      "new": "        string lead = false ? SnrStreamName(s) :",
+      "expect": "caught",
+      "note": "a renamed stream's legend rows still say CH<id>"
+    },
+    {
+      "id": "SA12",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        SplitSnrName(s.Name) is { } now && SplitSnrName(s.OriginalName) is { } made && now.Stream != made.Stream;",
+      "new": "        SplitSnrName(s.Name) is { } now && now.Stream != s.StreamLabel;",
+      "expect": "caught",
+      "note": "renamed is told by the TMATS label, which a series made otherwise (a test's, an import's) need not carry alone"
+    },
+    {
+      "id": "SA13",
+      "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
+      "old": "        foreach (PlotSeries s in _series)\n        {\n            if (!EffectiveVisible(s)) continue;\n            if (s.Metric == MetricType.FrameSyncLock && _lockAxisView != LockAxisView.LockPercent) continue;",
+      "new": "        foreach (PlotSeries s in _series.OrderBy(x => LegendLabel(x), StringComparer.Ordinal))\n        {\n            if (!EffectiveVisible(s)) continue;\n            if (s.Metric == MetricType.FrameSyncLock && _lockAxisView != LockAxisView.LockPercent) continue;",
+      "expect": "caught",
+      "note": "the legend is put in name order: a renamed stream moves from its recording's place"
     }
   ]
 }

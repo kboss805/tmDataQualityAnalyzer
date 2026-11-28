@@ -212,11 +212,26 @@ public sealed class ChartPromptWindowTests
         Assert.Equal(2, left.Length);
         Assert.Single(right);
         Assert.Equal("Expand All", w.FindControl<Button>("SnrExpand")!.Content);
-        CheckBox header = (CheckBox)left[0].Header!;
+        // The stream's name box: its TMATS title, which can be changed.
+        TextBox name = w.FindControl<TextBox>("SnrStreamName")!;
+        Assert.Equal("CH-01 2250.5MHZ AGC", name.Text);
+        Assert.True(name.IsEnabled);
+        name.Text = "Aircraft A";
+        Assert.Equal("Aircraft A", c.SnrStreams[0].Name);
+        // A receiver's header: its box and its colour's swatch.
+        var headerPanel = (StackPanel)left[0].Header!;
+        CheckBox header = headerPanel.Children.OfType<CheckBox>().Single();
+        Button swatch = headerPanel.Children.OfType<Button>().Single(b => b.Classes.Contains("swatch"));   // a CheckBox is a Button too
         Assert.Equal("RCVR 1", header.Content);
-        // Each receiver's name, and each channel's, written in its series' colour.
+        Assert.Same(c.SnrStreams[0].LeftReceivers[0].PickColorCommand, swatch.Command);
+        Assert.Equal(c.SnrStreams[0].LeftReceivers[0].Color, ((ISolidColorBrush)swatch.Background!).Color);
+        // Each receiver's name, and each channel's, written in its series' colour; a receiver's is its full colour.
         Assert.Equal(c.SnrStreams[0].LeftReceivers[0].Color, ((ISolidColorBrush)header.Foreground!).Color);
-        Assert.Equal(c.SnrStreams[0].LeftReceivers[1].Channels[0].Color, ((ISolidColorBrush)((CheckBox)left[1].Header!).Foreground!).Color);
+        Assert.Equal(c.SnrStreams[0].LeftReceivers[1].Color,
+                     ((ISolidColorBrush)((StackPanel)left[1].Header!).Children.OfType<CheckBox>().Single().Foreground!).Color);
+        c.SnrStreams[0].LeftReceivers[0].SetColor(Colors.Olive);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(Colors.Olive, ((ISolidColorBrush)swatch.Background!).Color);   // the swatch repaints
         header.IsChecked = false;
         Assert.All(c.SnrStreams[0].LeftReceivers[0].Channels, ch => Assert.False(ch.IsChecked));
         Press(w.FindControl<Button>("SnrExpand")!);
@@ -224,14 +239,10 @@ public sealed class ChartPromptWindowTests
         Assert.Equal("Collapse All", w.FindControl<Button>("SnrExpand")!.Content);
         CheckBox[] channels = left[0].GetLogicalDescendants().OfType<CheckBox>().Skip(1).ToArray();
         Assert.Equal(new[] { "L", "R", "C" }, channels.Select(b => (string)b.Content!));
-        MenuItem[] items = channels[0].ContextMenu!.Items.OfType<MenuItem>().ToArray();
-        Assert.Equal(new[] { "Rename series…", "Change color…" }, items.Select(i => (string)i.Header!));
-        channels[0].ContextMenu!.Open(channels[0]);
-        Dispatcher.UIThread.RunJobs();
-        var channel = (ChannelItem)channels[0].DataContext!;
-        Assert.Same(channel.RenameCommand, items[0].Command);
-        Assert.Same(channel.RecolorCommand, items[1].Command);
-        channels[0].ContextMenu!.Close();
+        // A channel follows its receiver's colour (L and R lighter) and has no menu of its own.
+        Assert.Equal(PlotColors.Shade(Colors.Olive, 1), ((ISolidColorBrush)channels[0].Foreground!).Color);
+        Assert.Equal(Colors.Olive, ((ISolidColorBrush)channels[2].Foreground!).Color);
+        Assert.All(channels, b => Assert.Null(b.ContextMenu));
 
         stream.SelectedIndex = 1;
         Dispatcher.UIThread.RunJobs();

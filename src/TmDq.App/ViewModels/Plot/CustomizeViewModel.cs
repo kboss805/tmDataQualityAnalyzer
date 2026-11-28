@@ -68,11 +68,17 @@ public sealed class CustomizeViewModel : ObservableObject
                 .ToList();
             // The receivers in two columns, the first taking the odd one.
             int split = (receivers.Count + 1) / 2;
-            string label = labels.GetValueOrDefault(stream.Key, "");
+            // A recording's stream by its TMATS title, or the name it was given; an antenna's by its unit.
+            PlotSeries first = stream.First();
+            string label = !phasedArray && PlotViewModel.IsSnrStreamRenamed(first)
+                ? PlotViewModel.SnrStreamName(first)
+                : labels.GetValueOrDefault(stream.Key, "");
             string streamLabel = Recording(stream.Key.Source) + (phasedArray
                 ? label is { Length: > 0 } unit ? unit : "Phased array antenna"
                 : string.Create(CultureInfo.InvariantCulture, $"CH {stream.Key.Stream} — {label}"));
-            SnrStreams.Add(new SnrStreamGroup(streamLabel, receivers.Take(split).ToList(), receivers.Skip(split).ToList()));
+            SnrStreams.Add(new SnrStreamGroup(streamLabel, receivers.Take(split).ToList(), receivers.Skip(split).ToList(),
+                                              stream.Key.Source, stream.Key.Stream, phasedArray ? label : PlotViewModel.SnrStreamName(first),
+                                              canRename: !phasedArray));
         }
         _selectedSnrStream = SnrStreams.FirstOrDefault();
     }
@@ -141,12 +147,11 @@ public sealed class CustomizeViewModel : ObservableObject
 
     internal Task<Color?> PickColorAsync(Color initial) => _prompts.PickColorAsync(initial);
 
-    internal Task<string?> AskNameAsync(string initial) => _prompts.AskTextAsync("Rename Series", "Series name:", initial);
-
     /// <summary>
     /// OK: each Frame Sync Lock stream's box shows or hides its series, but only the metric of the view in use is made
-    /// visible (the other is on another scale); each SNR channel's box its series; then each stream's name and colour
-    /// and each channel's pending name and colour; then one refresh. Series gone since the dialog opened are skipped.
+    /// visible (the other is on another scale); each SNR channel's box its series; then each Frame Sync Lock stream's name and
+    /// colour, each SNR stream's new name and each receiver's new colour (its channels' shades of it); then one refresh. Series
+    /// gone since the dialog opened are skipped.
     /// </summary>
     public void Apply()
     {
@@ -169,17 +174,17 @@ public sealed class CustomizeViewModel : ObservableObject
                 _plot.RenameSeries(id, row.Name);
                 _plot.RecolorSeries(id, row.Color);
             }
-        foreach (ChannelItem ch in AllChannels())
+        foreach (SnrStreamGroup stream in SnrStreams)
+            if (stream.IsRenamed) _plot.RenameSnrStream(stream.SourceId, stream.StreamOrder, stream.Name);
+        foreach (ReceiverGroup receiver in SnrStreams.SelectMany(s => s.Receivers))
         {
-            if (ch.PendingName is not null) _plot.RenameSeries(ch.SeriesId, ch.PendingName);
-            if (ch.PendingColor is Color c) _plot.RecolorSeries(ch.SeriesId, c);
+            if (receiver.PendingColor is null) continue;
+            foreach (ChannelItem ch in receiver.Channels) _plot.RecolorSeries(ch.SeriesId, ch.Color);
         }
         _plot.CommitAppearance();
     }
 
     private IEnumerable<ChannelItem> AllChannels() => SnrStreams.SelectMany(s => s.Receivers).SelectMany(r => r.Channels);
-
-    internal PlotSeries? SeriesById(int id) => _plot.SeriesById(id);
 }
 
 /// <summary>A Frame Sync Lock stream's row: its box (both metrics), its colour and its name.</summary>
@@ -226,24 +231,49 @@ public sealed class LockStreamRow : ObservableObject
     }
 }
 
-/// <summary>One Receiver SNR stream in the SNR tab: its receivers in two columns.</summary>
-public sealed class SnrStreamGroup
+/// <summary>One Receiver SNR stream in the SNR tab: its name, which a recording's stream may be given, and its receivers in two
+/// columns.</summary>
+public sealed class SnrStreamGroup : ObservableObject
 {
-    public SnrStreamGroup(string label, IReadOnlyList<ReceiverGroup> left, IReadOnlyList<ReceiverGroup> right)
+    private readonly string _originalName;
+    private string _name;
+
+    public SnrStreamGroup(string label, IReadOnlyList<ReceiverGroup> left, IReadOnlyList<ReceiverGroup> right,
+                          int sourceId = 0, int streamOrder = 0, string name = "", bool canRename = false)
     {
         Label = label;
         LeftReceivers = left;
         RightReceivers = right;
+        SourceId = sourceId;
+        StreamOrder = streamOrder;
+        _originalName = name;
+        _name = name;
+        CanRename = canRename;
     }
 
     public string Label { get; }
+
+    public int SourceId { get; }
+
+    /// <summary>The stream's PCM channel id: which of its recording's streams it is.</summary>
+    public int StreamOrder { get; }
+
+    /// <summary>Whether the stream can be renamed: a recording's can; an antenna's (US10.0) is named for its unit.</summary>
+    public bool CanRename { get; }
+
+    /// <summary>The stream's name: the TMATS title, or the name it was given; what OK gives it when changed.</summary>
+    public string Name { get => _name; set => SetProperty(ref _name, value); }
+
+    /// <summary>Whether OK renames the stream: it can be, and its name, trimmed, is another and not empty.</summary>
+    public bool IsRenamed => CanRename && Name.Trim() is { Length: > 0 } n && n != _originalName;
     public IReadOnlyList<ReceiverGroup> LeftReceivers { get; }
     public IReadOnlyList<ReceiverGroup> RightReceivers { get; }
     public IEnumerable<ReceiverGroup> Receivers => LeftReceivers.Concat(RightReceivers);
     public override string ToString() => Label;
 }
 
-/// <summary>A receiver's group: a box for all its channels (partly checked when only some are), collapsed at first.</summary>
+/// <summary>A receiver's group: a box for all its channels (partly checked when only some are), collapsed at first, and its
+/// colour, which its channels follow.</summary>
 public sealed class ReceiverGroup : ObservableObject
 {
     private bool _isExpanded;
@@ -256,6 +286,7 @@ public sealed class ReceiverGroup : ObservableObject
         Channels = channels;
         _phasedArray = phasedArray;
         foreach (ChannelItem ch in channels) ch.Group = this;
+        PickColorCommand = new AsyncRelayCommand(PickColorAsync, () => Channels.Count > 0);
     }
 
     public int Index { get; }
@@ -265,8 +296,32 @@ public sealed class ReceiverGroup : ObservableObject
 
     public IReadOnlyList<ChannelItem> Channels { get; }
 
-    /// <summary>The group's text is in its first channel's colour.</summary>
-    public Color Color => Channels.Count > 0 ? Channels[0].Color : Colors.Gray;
+    /// <summary>The receiver's colour: its combined channel's (C), the full colour its other channels are lighter shades of;
+    /// without a combined channel, its first channel's. The group's text and its swatch are in it.</summary>
+    public Color Color =>
+        Channels.FirstOrDefault(c => c.ChannelIndex == PlotColors.CombinedChannelIndex) is { } combined ? combined.Color
+        : Channels.Count > 0 ? Channels[0].Color : Colors.Gray;
+
+    /// <summary>The colour chosen for the receiver, given on OK; null until one is.</summary>
+    public Color? PendingColor { get; private set; }
+
+    /// <summary>Asks for the receiver's colour, starting from the one it has.</summary>
+    public IAsyncRelayCommand PickColorCommand { get; }
+
+    /// <summary>Makes <paramref name="color"/> the receiver's: its combined channel takes it, and each other channel the
+    /// lighter shade its place gives (<see cref="PlotColors.Shade"/>, <see cref="PlotColors.Weakness"/>), as a receiver's
+    /// colours are made when it is first drawn. Given to the series on OK.</summary>
+    public void SetColor(Color color)
+    {
+        PendingColor = color;
+        foreach (ChannelItem ch in Channels) ch.SetColor(PlotColors.Shade(color, PlotColors.Weakness(ch.ChannelIndex)));
+        OnPropertyChanged(nameof(Color));
+    }
+
+    private async Task PickColorAsync()
+    {
+        if (await Channels[0].Owner.PickColorAsync(Color) is Color picked) SetColor(picked);
+    }
 
     /// <summary>True when every channel is checked, false when none is, null when some are. Setting it checks or clears
     /// them all; a click on a partly checked box checks them all, as v2.x's did (AroundTheChartTests).</summary>
@@ -306,7 +361,7 @@ public sealed class ReceiverGroup : ObservableObject
     internal void ChildChanged() => OnPropertyChanged(nameof(IsChecked));
 }
 
-/// <summary>One SNR channel: its box, in its colour, with a rename and a recolour kept until OK.</summary>
+/// <summary>One SNR channel: its box, in its colour, which follows its receiver's (<see cref="ReceiverGroup.SetColor"/>).</summary>
 public sealed class ChannelItem : ObservableObject
 {
     private bool _isChecked;
@@ -316,11 +371,10 @@ public sealed class ChannelItem : ObservableObject
     {
         Owner = owner;
         SeriesId = s.Id;
+        ChannelIndex = s.ChannelIndex;
         Label = s.IsPhasedArray ? PlotViewModel.PolarizationLabel(s.ChannelIndex) : PlotViewModel.ChannelLabel(s.ChannelIndex);
         _isChecked = s.Visible;
         _color = s.Color;
-        RenameCommand = new AsyncRelayCommand(RenameAsync);
-        RecolorCommand = new AsyncRelayCommand(RecolorAsync);
     }
 
     internal CustomizeViewModel Owner { get; }
@@ -329,21 +383,23 @@ public sealed class ChannelItem : ObservableObject
 
     public int SeriesId { get; }
 
+    /// <summary>The channel's place in its receiver: 0 (L or H), 1 (R or V), 2 (C, the combined one).</summary>
+    public int ChannelIndex { get; }
+
     public string Label { get; }
 
     /// <summary>What a screen reader says for the channel's box: its label and its receiver's ("L of RCVR 3"), since every
     /// receiver has an "L".</summary>
     public string AccessibleName => Group is { } g ? $"{Label} of {g.Label}" : Label;
 
-    public string? PendingName { get; private set; }
-
-    public Color? PendingColor { get; private set; }
-
-    /// <summary>The name to be given on OK, as the channel's tooltip once one is chosen.</summary>
-    public string? ToolTip => PendingName;
-
-    /// <summary>The channel's colour, the recolour chosen once there is one.</summary>
+    /// <summary>The channel's colour: its series', or its shade of the colour chosen for its receiver.</summary>
     public Color Color => _color;
+
+    internal void SetColor(Color color)
+    {
+        _color = color;
+        OnPropertyChanged(nameof(Color));
+    }
 
     public bool IsChecked
     {
@@ -355,31 +411,4 @@ public sealed class ChannelItem : ObservableObject
     }
 
     internal bool SetChecked(bool value) => SetProperty(ref _isChecked, value, nameof(IsChecked));
-
-    public IAsyncRelayCommand RenameCommand { get; }
-
-    public IAsyncRelayCommand RecolorCommand { get; }
-
-    private async Task RenameAsync()
-    {
-        PlotSeries? s = Owner.SeriesById(SeriesId);
-        if (s is null) return;   // gone since the dialog opened
-        if (await Owner.AskNameAsync(PendingName ?? s.Name) is string name)
-        {
-            PendingName = name;
-            OnPropertyChanged(nameof(ToolTip));
-        }
-    }
-
-    private async Task RecolorAsync()
-    {
-        PlotSeries? s = Owner.SeriesById(SeriesId);
-        if (s is null) return;
-        if (await Owner.PickColorAsync(PendingColor ?? s.Color) is Color picked)
-        {
-            PendingColor = picked;
-            _color = picked;
-            OnPropertyChanged(nameof(Color));
-        }
-    }
 }

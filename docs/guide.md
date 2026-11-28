@@ -189,7 +189,9 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Each legend's height is capped with a vertical scrollbar for dense plots, such as a Receiver SNR file with 48+ channels; its title stays in place while the rows scroll.
 - [x] Receiver SNR legend rows show a short label (channel id plus receiver/channel code) instead of the full TMATS-derived stream title, though the full name remains available via tooltip and in CSV export headers.
 - [x] The legends are composited into exported PNG, SVG and PDF plot images at their placed positions.
-- [x] The user can rename or recolor an individual series from the Customize View dialog.
+- [x] The user can rename or recolor a Frame Sync Lock stream from the Customize View dialog (its lock and missed-frames series together).
+- [x] The user can recolor a Receiver SNR receiver from the Customize View dialog: its swatch sets the combined channel's (C) colour, and its other channels take the lighter shades of it that a receiver is first drawn with (`PlotColors.Shade`, `Weakness`); a channel has no colour of its own to set (`CustomizeViewStateTests`, `ChartPromptWindowTests`).
+- [x] The user can rename a recording's Receiver SNR stream from the Customize View dialog (**Stream name**, under the stream list). The name replaces only the stream's part of each of its series' names, `<channel id> - <stream name> <channel name>`, so the CSV columns carry it and still read back as SNR of their receivers; the legend shows it in place of `CH<id>`; nothing is reordered by it (the plot, the legend and the CSV keep the recording's order); an empty name renames nothing; an antenna's stream (US10.0) keeps its unit's name (`ExportImportTests`, `CustomizeViewStateTests`).
 - [x] Frame Sync Lock curves (and a stream's missed frames, in the same colour) are drawn as solid lines, one of 15 hues per stream, assigned automatically in stream order; the 16th stream takes the first hue again.
 - [x] Receiver SNR curves are drawn as dotted lines in the same 15 hues, one per stream (a receiver of a processed recording, or a channel of a phased array antenna, US10.0), taken from the last hue back to the first, where Frame Sync Lock takes them from the first, so stream 1 of the two is two colours, and a lock curve and an SNR curve of the same hue are told apart by their line; the 16th stream takes the hue of the 1st again.
 - [x] Within a stream the combined channel (C) is the strongest: the stream's full hue and a little thicker; its other two channels (L and R, or H and V) are two lighter tints of that hue, so the three read as one stream. The legend's swatch is dotted and as thick as its line.
@@ -520,7 +522,8 @@ profile, so a batch processes with the linear calibration.
   maximize button), the hamburger menu (four submenus: File, Import/Export, Settings, Help; no Exit), Recent Files, drag and drop, the
   log sidebar (Ctrl+B), the themes, and the commands behind them: Open, Import from CSV, Export, Save Template, Process
   Multiple Files. Three jobs are types of their own: `ShellPreferences` (Recent Files, the theme, the sidebar, the last
-  folder, the legend's choice), `SessionExport` (the data, the image and the log written out) and `BatchRunner` (Apply
+  folder, the legend's choice), `SessionExport` (the data, the image and the log written out; Export proposes the folder it
+  last wrote to in the session, `LastExportFolder`, before the last folder opened from, which alone is a preference) and `BatchRunner` (Apply
   Template's batch and each file's export). Opening a recording (`LoadAsync`) stacks: with something on the plot it removes
   nothing, appends to `Sources`, numbers the run `Plot.NextSourceId` so it never shares a source id with an import, names the recording apart from the plot's others
   (`UniqueSourceLabel`, through `UniqueName`: "name (2)"), colours its series without recolouring what is shown, and leaves the plot's title; failing or cancelling it changes nothing.

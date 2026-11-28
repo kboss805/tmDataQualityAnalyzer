@@ -40,7 +40,7 @@ public sealed class CustomizeViewStateTests
         Assert.Equal(new[] { "RCVR 3" }, s40.RightReceivers.Select(r => r.Label));
         Assert.Equal(new[] { "L", "R", "C" }, s40.LeftReceivers[0].Channels.Select(ch => ch.Label));
         Assert.All(s40.Receivers, r => Assert.False(r.IsExpanded));
-        Assert.Equal(plot.SeriesById(11)!.Color, s40.LeftReceivers[0].Color);   // channel L of RCVR 1
+        Assert.Equal(plot.SeriesById(10)!.Color, s40.LeftReceivers[0].Color);   // channel C of RCVR 1: the receiver's full colour
         Assert.Equal(true, s40.LeftReceivers[0].IsChecked);
         Assert.Equal("CH 40 — 40 - CH-01 2250.5MHZ AGC C_RCVR1", s40.ToString());
 
@@ -190,28 +190,29 @@ public sealed class CustomizeViewStateTests
         await c.LockRows[1].PickColorCommand.ExecuteAsync(null);   // cancelled
         Assert.Equal(plot.SeriesById(0)!.Color, c.LockRows[1].Color);
 
-        ChannelItem ch = c.SnrStreams[0].LeftReceivers[0].Channels[0];
+        ReceiverGroup r1 = c.SnrStreams[0].LeftReceivers[0];
+        ChannelItem ch = r1.Channels[0];
         ch.IsChecked = false;
         var chSaid = new List<string?>();
+        var rSaid = new List<string?>();
         ch.PropertyChanged += (_, e) => chSaid.Add(e.PropertyName);
-        prompts.Answers.Enqueue("renamed");
-        await ch.RenameCommand.ExecuteAsync(null);
-        Assert.Equal("renamed", ch.ToolTip);
-        Assert.Contains(nameof(ChannelItem.ToolTip), chSaid);
+        r1.PropertyChanged += (_, e) => rSaid.Add(e.PropertyName);
         prompts.Answers.Enqueue(Colors.Olive);
-        await ch.RecolorCommand.ExecuteAsync(null);
-        Assert.Equal(Colors.Olive, ch.Color);
-        Assert.Contains(nameof(ChannelItem.Color), chSaid);   // the name repaints
-        // A second rename is seeded with the first.
-        await ch.RenameCommand.ExecuteAsync(null);
-        Assert.Equal("renamed", prompts.LastText.Initial);
-        Assert.Equal(("Rename Series", "Series name:"), (prompts.LastText.Title, prompts.LastText.Label));
-        await ch.RecolorCommand.ExecuteAsync(null);
+        await r1.PickColorCommand.ExecuteAsync(null);
+        Assert.Equal(plot.SeriesById(10)!.Color, prompts.LastColor);   // the dialog opens on the receiver's colour, its C's
+        Assert.Equal(Colors.Olive, r1.Color);
+        Assert.Contains(nameof(ReceiverGroup.Color), rSaid);   // the swatch and the receiver's name repaint
+        Assert.Contains(nameof(ChannelItem.Color), chSaid);    // and the channel's
+        await r1.PickColorCommand.ExecuteAsync(null);          // cancelled: the colour chosen stays
         Assert.Equal(Colors.Olive, prompts.LastColor);
+        Assert.Equal(Colors.Olive, r1.Color);
+        c.SnrStreams[0].Name = "  Aircraft A  ";
 
         // Nothing reaches the plot before OK.
         Assert.Equal("Ch 5", plot.SeriesById(2)!.Name);
         Assert.True(plot.SeriesById(ch.SeriesId)!.Visible);
+        Assert.NotEqual(Colors.Olive, plot.SeriesById(10)!.Color);
+        Assert.Equal(Snr(0, 40, 0, 1, 2).Name, plot.SeriesById(10)!.Name);
 
         int refreshes = 0;
         plot.SeriesChanged += (_, _) => refreshes++;
@@ -226,13 +227,81 @@ public sealed class CustomizeViewStateTests
         Assert.Equal(Colors.Teal, plot.SeriesById(3)!.Color);
         PlotSeries s = plot.SeriesById(ch.SeriesId)!;
         Assert.False(s.Visible);
-        Assert.Equal("renamed", s.Name);
-        Assert.Equal(Colors.Olive, s.Color);
-        // A channel left alone keeps its name and colour.
-        ChannelItem other = c.SnrStreams[0].LeftReceivers[0].Channels[1];
-        Assert.Equal(Snr(0, 40, 0, 1, 1).Name, plot.SeriesById(other.SeriesId)!.Name);
-        Assert.Null(other.PendingName);
-        Assert.Null(other.PendingColor);
+        // The receiver's colour: C takes it, L and R its lighter shades, as a receiver is first coloured.
+        Assert.Equal(new[] { Colors.Olive, PlotColors.Shade(Colors.Olive, 1), PlotColors.Shade(Colors.Olive, 2) },
+                     new[] { 10, 11, 12 }.Select(id => plot.SeriesById(id)!.Color));
+        // The stream's name, trimmed, in every series of the stream, between its channel id and its channel name.
+        Assert.Equal(new[] { "40 - Aircraft A C_RCVR1", "40 - Aircraft A L_RCVR1", "40 - Aircraft A R_RCVR1" },
+                     new[] { 10, 11, 12 }.Select(id => plot.SeriesById(id)!.Name));
+        Assert.All(plot.Series.Where(x => x.StreamOrder == 40), x => Assert.Contains("Aircraft A", x.Name, System.StringComparison.Ordinal));
+        // A receiver left alone keeps its colours, and another stream its name.
+        ReceiverGroup r2 = c.SnrStreams[0].LeftReceivers[1];
+        Assert.Null(r2.PendingColor);
+        Assert.Equal(Snr(0, 41, 0, 1, 0).Name, plot.Series.Single(x => x.StreamOrder == 41).Name);
+    }
+
+    [Fact]
+    public void AStreamNamedByATemplateIsShownByThatName()
+    {
+        // A template puts each series' name back with RenameSeries: a name whose stream is not the one the series was made with is
+        // a renamed stream, in the legend and the dialog alike.
+        PlotViewModel plot = Mixed();
+        Assert.Equal("CH40 C_RCVR1", PlotViewModel.LegendLabel(plot.SeriesById(10)!));
+        plot.RenameSeries(10, "40 - Pod C_RCVR1");
+        Assert.Equal("Pod C_RCVR1", PlotViewModel.LegendLabel(plot.SeriesById(10)!));
+        Assert.Equal("CH40 L_RCVR1", PlotViewModel.LegendLabel(plot.SeriesById(11)!));   // its neighbour, left alone
+        Assert.Equal("CH 40 — Pod", new CustomizeViewModel(plot, new FakePrompts()).SnrStreams[0].Label);
+
+        // A name without the shape (a hand-made one, an antenna's) renames nothing and reads as it did.
+        PlotSeries odd = PlotFixtures.Snr(0, "long", 7, 0, 2, 0, X3, X3);
+        Assert.Equal("CH7 L_RCVR2", PlotViewModel.LegendLabel(odd));
+        plot.SetSeries(new[] { odd });
+        plot.RenameSnrStream(0, 7, "New");
+        Assert.Equal("long", plot.Series[0].Name);
+    }
+
+    [Fact]
+    public void AStreamLeftAloneOrGivenAnEmptyNameIsNotRenamed()
+    {
+        PlotViewModel plot = Mixed();
+        string[] before = plot.Series.Select(s => s.Name).ToArray();
+        var c = new CustomizeViewModel(plot, new FakePrompts());
+        Assert.Equal("CH-01 2250.5MHZ AGC", c.SnrStreams[0].Name);   // its TMATS title, as the name box shows it
+        Assert.True(c.SnrStreams[0].CanRename);
+        Assert.False(c.SnrStreams[0].IsRenamed);
+        c.SnrStreams[0].Name = "   ";
+        Assert.False(c.SnrStreams[0].IsRenamed);
+        c.SnrStreams[1].Name = " CH-01 2250.5MHZ AGC ";   // the same name, with spaces
+        Assert.False(c.SnrStreams[1].IsRenamed);
+
+        c.Apply();
+
+        Assert.Equal(before, plot.Series.Select(s => s.Name));
+    }
+
+    [Fact]
+    public void ARenamedStreamIsShownByItsNameAndKeepsItsPlace()
+    {
+        // Two streams renamed so their names sort the other way round: nothing is put in name order, not the plot's series, the
+        // legend or the dialog's groups.
+        PlotViewModel plot = Mixed();
+        int[] ids = plot.Series.Select(s => s.Id).ToArray();
+        var c = new CustomizeViewModel(plot, new FakePrompts());
+        c.SnrStreams[0].Name = "Zulu";
+        c.SnrStreams[1].Name = "Alpha";
+        c.Apply();
+
+        Assert.Equal(ids, plot.Series.Select(s => s.Id));
+        List<LegendEntry> legend = plot.LegendEntries().Where(e => e.IsSnr).ToList();
+        Assert.Equal(legend.Select(e => e.Id).OrderBy(id => System.Array.IndexOf(ids, id)), legend.Select(e => e.Id));
+        Assert.Equal("Zulu C_RCVR1", legend[0].Label);
+        Assert.Equal("Alpha L_RCVR1", legend[^1].Label);
+        Assert.Equal("40 - Zulu C_RCVR1", legend[0].FullName);
+
+        var again = new CustomizeViewModel(plot, new FakePrompts());
+        Assert.Equal(new[] { "CH 40 — Zulu", "CH 41 — Alpha" }, again.SnrStreams.Select(s => s.Label));
+        Assert.Equal("Zulu", again.SnrStreams[0].Name);
+        Assert.False(again.SnrStreams[0].IsRenamed);
     }
 
     /// <summary>Two recordings of the same streams, as Open on a plot that shows something, or a batch, leaves them: each has CH 5 (its lock series shown,
@@ -315,15 +384,15 @@ public sealed class CustomizeViewStateTests
         PlotViewModel plot = Mixed();
         var prompts = new FakePrompts();
         var c = new CustomizeViewModel(plot, prompts);
-        ChannelItem ch = c.SnrStreams[0].LeftReceivers[0].Channels[0];
         plot.SetSeries(LockStream(50, "Ch 9", 9, 0));   // every series replaced
 
-        await ch.RenameCommand.ExecuteAsync(null);
-        await ch.RecolorCommand.ExecuteAsync(null);
-        Assert.Empty(prompts.Asked);
+        prompts.Answers.Enqueue(Colors.Olive);
+        await c.SnrStreams[0].LeftReceivers[0].PickColorCommand.ExecuteAsync(null);
+        c.SnrStreams[0].Name = "Gone";
         c.LockRows[0].IsChecked = false;
         c.Apply();
         Assert.True(plot.Series[0].Visible);
         Assert.Equal("Ch 9", plot.Series[0].Name);
+        Assert.NotEqual(Colors.Olive, plot.Series[0].Color);
     }
 }
