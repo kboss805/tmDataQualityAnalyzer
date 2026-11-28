@@ -12,6 +12,16 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### CI's GitHub actions on Node 24
+
+`ci.yml`'s actions were on their v4 majors, which run on Node 20, which GitHub is retiring for actions:
+`actions/checkout` v4 to **v7**, `actions/setup-dotnet` v4 to **v6** and `actions/upload-artifact` v4 to **v7**, each the
+latest major. Their release notes since v4 were read for breaking changes: Node 24 (the hosted runner has it), checkout's
+credentials persisted to a separate file (CI sets `persist-credentials: false`) and refusing fork checkouts for
+`pull_request_target` (not used), ESM inside the actions, and upload-artifact's optional unzipped upload (off by default).
+**Checked:** both jobs green on this PR. The two `upload-artifact` steps run only when a build fails, so this PR's green run
+does not exercise them.
+
 #### Auto-Color Visible Series and Reset Colors, on the plot's context menu (US4.0)
 
 **Auto-Color Visible Series** recolours what is drawn so its streams are as easy to tell apart as the palette allows.
