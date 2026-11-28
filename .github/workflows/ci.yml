@@ -52,7 +52,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # No later step uses git with the token, so it is not left in .git\config for the steps that follow.
           persist-credentials: false
@@ -77,7 +77,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Set up .NET 10
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -150,7 +150,7 @@ jobs:
       - name: Build logs (on failure)
         # The MSBuild logs of the native steps, which hold what the console shows only in part. Kept for a week.
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-logs
           path: out/*.log
@@ -165,7 +165,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # No later step uses git with the token, so it is not left in .git\config for the steps that follow.
           persist-credentials: false
@@ -181,7 +181,7 @@ jobs:
 
       - name: Build logs (on failure)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-logs-debug
           path: out/*.log
