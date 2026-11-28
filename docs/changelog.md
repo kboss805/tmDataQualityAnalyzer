@@ -12,6 +12,32 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### Auto-Color Visible Series and Reset Colors, on the plot's context menu (US4.0)
+
+**Auto-Color Visible Series** recolours what is drawn so its streams are as easy to tell apart as the palette allows.
+`PlotViewModel.AutoColorVisible` groups the series into the units Customize View colours as one (a recording's Frame Sync
+Lock stream with both its metrics; a Receiver SNR receiver or antenna channel), and each unit with a series drawn
+(`EffectiveVisible`, so Plot File's choice counts) takes the next of `PlotColors.AutoColorHues` in plot order: its combined
+channel the hue, its others `Shade`'s tints of it, solid and dotted as before. A unit with nothing drawn keeps its colours,
+and two recordings' streams of one number, which are first given one colour (it goes by stream number), become two units.
+The hues are the palette's 15 less the gold, ordered farthest first: the red, then each time the hue whose least OKLab
+distance to those taken is the greatest (red, sky, forest, purple, lime, orange, ...), so a plot of a few streams gets the
+most different of them; the 15th unit takes the first again. The gold is left out because it is 1.8 to 1 on the light
+theme's white, under the 2.0 `ChartPalette.MinSeriesContrast` holds a series to, and would be drawn darker than given; every
+other hue is at least 2.0 on both themes' backgrounds, so a theme switch never needs it run again. The user chose the
+palette over computed colours, visible series only, and both themes. **Reset Colors…** asks (`ChooseAsync`, one entry,
+chosen) and gives every series, shown or not, the colour `PlotColors.Assign` gives a plot of those series, replacing what
+Customize View, a template or Auto-Color set. Both items sit under Customize View…; Auto-Color asks nothing and is
+available while a series is drawn. `PlotSeries.Dotted`'s summary still described the dotted second 15 of v2.x and now says
+what is dotted.
+
+Checked: `AutoColorTests` (new, 10 cases: the order, each hue the farthest from those before it checked from the
+definition, contrast on both themes, units, Plot File, stacked recordings, nothing drawn, the commands, Reset and its
+Cancel) and `ChartViewTests`' menu cases. The mutation check: 18 new mutants in `eng\mutants\series-colours.json`
+(A1-A18), all 18 caught. A17 (Auto-Color left out of the commands told when the plot changes) first survived: the menu
+asks a command again when it opens, so no menu case saw it; the commands test now holds both new commands to being told. The manual's context-menu section and the Main Context Menu figure, the README and US4.0/US4.1
+say it. App baseline: 925 to 935 passed (`Total: 969`, 34 not run).
+
 #### The v3.5.1 plan file deleted, as `docs/future_plans/` asks
 
 The v3.5.1 release PR (#417) left `docs/future_plans/v3.5.1.md` in place and listed as an open item, though that folder's

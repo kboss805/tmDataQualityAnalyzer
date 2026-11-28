@@ -941,6 +941,58 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
                 if (IsSibling(s, sibling)) sibling.Color = color;
     }
 
+    /// <summary>Whether Auto-Color has anything to colour: a series drawn now.</summary>
+    public bool CanAutoColor => _series.Any(EffectiveVisible);
+
+    /// <summary>
+    /// Auto-Color Visible Series: gives each unit of colour that has a series drawn now (<see cref="EffectiveVisible"/>) the
+    /// next hue of <see cref="PlotColors.AutoColorHues"/>, in plot order, so the units shown are as different as the palette
+    /// allows. A unit is what Customize View colours as one: a recording's Frame Sync Lock stream (its lock and missed-frames
+    /// series, the one not shown too) or a Receiver SNR receiver or antenna channel (its combined channel the hue, its others
+    /// the lighter shades of it, <see cref="PlotColors.Shade"/>). Solid and dotted stay as they are, and a unit with nothing
+    /// drawn keeps its colours. One refresh; nothing when nothing is drawn.
+    /// </summary>
+    public void AutoColorVisible()
+    {
+        var units = new Dictionary<(bool Lock, int Source, int Stream, string Label, int Receiver), List<PlotSeries>>();
+        var order = new List<List<PlotSeries>>();
+        foreach (PlotSeries s in _series)
+        {
+            var key = s.IsLeftAxis
+                ? (true, s.SourceId, s.StreamOrder, s.StreamLabel, 0)
+                : (false, s.SourceId, s.StreamOrder, string.Empty, s.ReceiverIndex);
+            if (!units.TryGetValue(key, out List<PlotSeries>? unit))
+            {
+                unit = new List<PlotSeries>();
+                units[key] = unit;
+                order.Add(unit);
+            }
+            unit.Add(s);
+        }
+        int next = 0;
+        foreach (List<PlotSeries> unit in order)
+        {
+            if (!unit.Any(EffectiveVisible)) continue;
+            Color hue = PlotColors.AutoHue(next++);
+            foreach (PlotSeries s in unit)
+                s.Color = s.IsLeftAxis ? hue : PlotColors.Shade(hue, PlotColors.Weakness(s.ChannelIndex));
+        }
+        if (next > 0) CommitAppearance();
+    }
+
+    /// <summary>
+    /// Reset Colors: every series, shown or not, takes the colour a plot of these series is first given
+    /// (<see cref="PlotColors.Assign(IEnumerable{PlotSeries})"/>, in plot order), whatever the user, Customize View, a template
+    /// or Auto-Color gave it; a stream added after takes the next colour from there. One refresh.
+    /// </summary>
+    public void ResetColors()
+    {
+        if (_series.Count == 0) return;
+        _lockColours.Clear();
+        PlotColors.Assign(_series, _lockColours);
+        CommitAppearance();
+    }
+
     /// <summary>Shows or hides a series without telling the chart: Customize View sets many at once, then calls
     /// <see cref="CommitAppearance"/>.</summary>
     public void SetSeriesVisibleQuiet(int id, bool visible)

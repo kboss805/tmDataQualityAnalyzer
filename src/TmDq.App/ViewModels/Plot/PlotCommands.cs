@@ -51,6 +51,8 @@ public sealed class PlotCommands : ObservableObject, IDisposable
         ZoomOutCommand = new RelayCommand(() => _plot.ZoomWindow(1.0 / PlotViewModel.KeyZoomFactor), hasData);
         RemoveFileCommand = new AsyncRelayCommand(RemoveFileAsync, hasData);
         ClearPlotCommand = new AsyncRelayCommand(ClearPlotAsync, hasData);
+        AutoColorCommand = new RelayCommand(_plot.AutoColorVisible, () => _plot.CanAutoColor);
+        ResetColorsCommand = new AsyncRelayCommand(ResetColorsAsync, hasData);
         ShowSourceCommand = new RelayCommand<int>(_plot.SetVisibleSource);
         PinReadoutCommand = new RelayCommand<int?>(id => _plot.ReadoutSeriesId = id);
         _all = new IRelayCommand[]
@@ -58,7 +60,7 @@ public sealed class PlotCommands : ObservableObject, IDisposable
             SetTitleCommand, CustomizeCommand, SetTimeWindowCommand, SetLeftMinCommand, SetLeftMaxCommand, SetRightMinCommand,
             SetRightMaxCommand, ToggleLegendCommand, ToggleViewModeCommand, ShowLockPercentCommand, ShowMissedFramesCommand,
             ZoomBackCommand, ResetSpanCommand, ResetYCommand, ResetViewCommand, PanEarlierCommand, PanLaterCommand,
-            ZoomInCommand, ZoomOutCommand, RemoveFileCommand, ClearPlotCommand,
+            ZoomInCommand, ZoomOutCommand, RemoveFileCommand, ClearPlotCommand, AutoColorCommand, ResetColorsCommand,
         };
         SyncChoices();
         _plot.SeriesChanged += OnSeriesChanged;
@@ -158,6 +160,13 @@ public sealed class PlotCommands : ObservableObject, IDisposable
     /// imported CSV, the title and the view with them (<see cref="ClearPlotAsync"/>).</summary>
     public IAsyncRelayCommand ClearPlotCommand { get; }
 
+    /// <summary>Auto-Color Visible Series: the units drawn now take the most different hues of the palette
+    /// (<see cref="PlotViewModel.AutoColorVisible"/>). Available while a series is drawn; it asks nothing.</summary>
+    public IRelayCommand AutoColorCommand { get; }
+
+    /// <summary>Reset Colors...: asks, and on OK every series takes its first colour again (<see cref="ResetColorsAsync"/>).</summary>
+    public IAsyncRelayCommand ResetColorsCommand { get; }
+
     /// <summary>Readout's entries: a series' id, or null for the nearest.</summary>
     public IRelayCommand<int?> PinReadoutCommand { get; }
 
@@ -195,6 +204,20 @@ public sealed class PlotCommands : ObservableObject, IDisposable
             : string.Create(CultureInfo.InvariantCulture, $"Clear the plot? All {sources.Count} files are removed, with the title and the view. Process or import them again to bring them back.");
         int? chosen = await _prompts.ChooseAsync("Clear Plot", label, ClearPlotChoices, -1);
         if (chosen is 0) _plot.RemoveSources(sources.Select(s => s.Id));
+    }
+
+    private static readonly string[] ResetColorsChoices = { "Every series on the plot" };
+
+    /// <summary>Reset Colors...: asks as Remove File does, its one entry chosen (a colour is set again in a moment, so Enter may
+    /// confirm), since it replaces colours the user, Customize View, a template or Auto-Color set; on OK every series, shown or
+    /// not, takes the colour it was first given (<see cref="PlotViewModel.ResetColors"/>). Cancel changes nothing.</summary>
+    public async Task ResetColorsAsync()
+    {
+        if (!_plot.HasData) return;
+        int? chosen = await _prompts.ChooseAsync("Reset Colors",
+            "Give every series its first colour again? Colours set in Customize View, by a template or by Auto-Color are replaced.",
+            ResetColorsChoices, 0);
+        if (chosen is 0) _plot.ResetColors();
     }
 
     public async Task SetTitleAsync()

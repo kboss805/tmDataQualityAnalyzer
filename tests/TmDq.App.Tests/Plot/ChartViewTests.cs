@@ -712,9 +712,11 @@ public sealed class ChartViewTests
         ContextMenu menu = Menus.Open(s.View);
         Assert.Equal(new[]
         {
-            "Set Plot Title...", "-", "Plot File", "Remove File...", "Clear Plot...", "View Mode  (V)", "-", "Customize View...", "Show Legend", "Readout", "-",
-            "X Axis", "Y Axes", "Reset View",
+            "Set Plot Title...", "-", "Plot File", "Remove File...", "Clear Plot...", "View Mode  (V)", "-", "Customize View...",
+            "Auto-Color Visible Series", "Reset Colors...", "Show Legend", "Readout", "-", "X Axis", "Y Axes", "Reset View",
         }, Headers(menu));
+        Assert.Same(s.View.Commands!.AutoColorCommand, Item(menu, "Auto-Color Visible Series").Command);
+        Assert.Same(s.View.Commands!.ResetColorsCommand, Item(menu, "Reset Colors...").Command);
         Assert.Equal(new[] { "Set Time Window...", "Zoom Back", "Reset Span" }, Headers(Item(menu, "X Axis")));
         Assert.Equal(new[] { "Set Left Min...", "Set Left Max...", "-", "Set Right Min...", "Set Right Max...", "-", "Reset" },
                      Headers(Item(menu, "Y Axes")));
@@ -762,13 +764,13 @@ public sealed class ChartViewTests
         var plot = new PlotViewModel();
         Shown s = Show(plot, prompts: new FakePrompts());
         ContextMenu empty = Menus.Open(s.View);
-        foreach (string h in new[] { "Set Plot Title...", "Plot File", "View Mode  (V)", "Customize View...", "Show Legend", "Readout", "X Axis", "Y Axes", "Reset View" })
+        foreach (string h in new[] { "Set Plot Title...", "Plot File", "View Mode  (V)", "Customize View...", "Auto-Color Visible Series", "Reset Colors...", "Show Legend", "Readout", "X Axis", "Y Axes", "Reset View" })
             Assert.False(Item(empty, h).IsEffectivelyEnabled, h + " is enabled without data");
         Assert.Empty(Item(empty, "Readout").Items);
 
         plot.SetSeries(LockStream(0, "Ch 5", 5, 0));
         ContextMenu menu = Menus.Open(s.View);
-        foreach (string h in new[] { "Set Plot Title...", "View Mode  (V)", "Customize View...", "Show Legend", "Readout", "X Axis", "Y Axes", "Reset View" })
+        foreach (string h in new[] { "Set Plot Title...", "View Mode  (V)", "Customize View...", "Auto-Color Visible Series", "Reset Colors...", "Show Legend", "Readout", "X Axis", "Y Axes", "Reset View" })
             Assert.True(Item(menu, h).IsEffectivelyEnabled, h + " is disabled with data");
         // One metric only: nothing to switch to.
         plot.SetSeries(SnrOnly().Series.ToArray());

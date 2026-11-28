@@ -197,6 +197,8 @@ The stories below follow the workflow a first-time user takes through the applic
 - [x] Within a stream the combined channel (C) is the strongest: the stream's full hue and a little thicker; its other two channels (L and R, or H and V) are two lighter tints of that hue, so the three read as one stream. The legend's swatch is dotted and as thick as its line.
 - [x] When a plot opens, only the combined channel (C) of each Receiver SNR stream is shown, so a recording of many receivers stays readable; the other channels are one click away in Customize View. A receiver with no combined channel (set up with fewer than three) shows all of its channels. Frame Sync Lock curves are not affected.
 - [x] Frame Sync Lock streams beyond the three primaries, and Receiver SNR channels beyond a stream's first four, use progressively lighter shades of their color so related series stay visually grouped.
+- [x] The context menu's **Auto-Color Visible Series** recolours the units of colour that have a series drawn now (a recording's Frame Sync Lock stream with both its metrics, or a Receiver SNR receiver or antenna channel with its tints), in plot order, from the 15 hues less the gold, each next unit taking the hue farthest (in OKLab) from those already given, so a plot of few streams gets the most different hues; the 15th unit takes the first hue again. Every hue it gives is at least 2.0 to 1 against both themes' plot backgrounds; the gold is not on white, so it is left out. Solid and dotted lines, the tints and the combined channel's weight stay as they are; a unit with nothing drawn (hidden, or of a recording Plot File does not show) keeps its colours; two recordings' streams of one number are two units. It asks nothing, is available while a series is drawn, and refreshes once (`AutoColorTests`).
+- [x] The context menu's **Reset Colors…** asks (one entry, chosen), and on OK gives every series, shown or not, the colour a plot of those series is first given, replacing colours set in Customize View, by a template or by Auto-Color; Cancel changes nothing (`AutoColorTests`).
 
 ### US4.1: Distraction-free plot window — controls on the plot, not around it — Complete
 
@@ -208,7 +210,7 @@ The stories below follow the workflow a first-time user takes through the applic
 
 - [x] The plot window has no external control rows: the chart fills the entire plot area.
 - [x] Every plot control is reached from a right-click context menu on the chart, or from a control overlaid on the chart itself.
-- [x] The context menu leads with **Set Plot Title…**, then **Plot File**, **Remove File…**, **Clear Plot…**, **View Mode**, **Customize View…**, **Show Legend**, **Readout**, **X Axis**, **Y Axes** and **Reset View**; entries are disabled until data is loaded. Every entry is a plot control — the menu holds nothing that acts on files.
+- [x] The context menu leads with **Set Plot Title…**, then **Plot File**, **Remove File…**, **Clear Plot…**, **View Mode**, **Customize View…**, **Auto-Color Visible Series**, **Reset Colors…**, **Show Legend**, **Readout**, **X Axis**, **Y Axes** and **Reset View**; entries are disabled until data is loaded. Every entry is a plot control — the menu holds nothing that acts on files.
 - [x] The legends can be shown or hidden from the context menu (or `L`), and the choice persists across sessions.
 - [x] The persistent on-chart controls are gathered into a single chip bar at the chart's top-left (View Mode chip, Reset view chip) rather than scattered around the plot; each chip hides itself when it would be meaningless, and with neither showing the bar collapses to nothing - so it costs no chart space at rest.
 - [x] Frequent actions have chrome-free gestures: Ctrl+drag / middle-drag rubber-bands a time range to zoom, double-click restores the full span, and a crosshair follows the cursor for reading several series at one instant.
@@ -1283,7 +1285,8 @@ allocating beside one (xunit runs classes in parallel) is counted as its leak.
   released when the chart leaves the window), and five classes around the chart, which share `Support\AroundTheChartSupport`:
   `ChartPlotStateTests` (the plot's state the legend, chips and menu read, and which notifications repaint the data
   layer), `ChartMenuCommandTests` (the right-click menu's commands, asked through a fake of the prompts),
-  `CustomizeViewStateTests` (Customize View's rows and what a choice in it does, each recording's streams on their own), `ChartViewTests` (the legends and what
+  `CustomizeViewStateTests` (Customize View's rows and what a choice in it does, each recording's streams on their own), `AutoColorTests` (Auto-Color's
+  hues, their order and contrast on both themes, what it colours as one, and Reset Colors), `ChartViewTests` (the legends and what
   rebuilds them, the zoom rule, chips, menu, keys, read from the controls and from rendered frames) and
   `ChartPromptWindowTests` (each prompt's window: OK answers, Cancel does not), `PlotSourcesTests` (the recordings' names, the one shown, the list and the next id, and what removing some does, on their own), and `RemoveFileTests` (Remove File: a recording's series, name and CSV columns go and the others stay, what is refitted, the notice that keeps Save Template honest, the title that follows, and what the dialog starts on).
 - **Files:** `ExportImportTests` (seven runs' CSVs byte for byte against recorded exports, v2.14.2's cells on the sample grid, the image pixel by pixel, Import
