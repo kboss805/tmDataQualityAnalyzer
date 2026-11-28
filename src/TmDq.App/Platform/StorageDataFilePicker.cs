@@ -10,7 +10,6 @@ namespace TmDq.App.Platform;
 /// <summary>The platform's file dialogs, owned by a window, with v2.x's titles and filters.</summary>
 public sealed class StorageDataFilePicker : IDataFilePicker
 {
-    private static readonly FilePickerFileType CsvFiles = new("CSV Files") { Patterns = new[] { "*.csv" } };
     private static readonly FilePickerFileType Csv = new("CSV Files") { Patterns = new[] { "*.csv" } };
     private static readonly FilePickerFileType Png = new("PNG Files") { Patterns = new[] { "*.png" } };
     private static readonly FilePickerFileType Pdf = new("PDF Files") { Patterns = new[] { "*.pdf" } };
@@ -27,7 +26,7 @@ public sealed class StorageDataFilePicker : IDataFilePicker
     {
         Title = "Import from CSV",
         AllowMultiple = false,
-        FileTypeFilter = new[] { CsvFiles },
+        FileTypeFilter = new[] { Csv },
         SuggestedStartLocation = start,
     };
 

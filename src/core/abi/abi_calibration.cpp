@@ -21,8 +21,8 @@
 #include "calibrationprofile.h"
 #include "calibrationreport.h"
 #include "calibrationrequest.h"
-#include "stepdetector.h"
 #include "stepconfigfile.h"
+#include "stepdetector.h"
 
 namespace {
 

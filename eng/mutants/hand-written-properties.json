@@ -247,7 +247,7 @@
     {
       "id": "SA7",
       "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
-      "old": "        foreach (ChannelItem ch in Channels) ch.SetColor(PlotColors.Shade(color, PlotColors.Weakness(ch.ChannelIndex)));",
+      "old": "        foreach (ChannelItem ch in Channels) ch.SetColor(PlotColors.ChannelColor(color, ch.ChannelIndex));",
       "new": "        foreach (ChannelItem ch in Channels) ch.SetColor(color);",
       "expect": "caught",
       "note": "a receiver's L and R take its colour itself, not lighter shades of it"
@@ -276,6 +276,30 @@
       "expect": "caught",
       "note": "an antenna's stream offers a rename its series cannot take",
       "args": ["-class", "TmDq.App.Tests.PhasedArrayImportTests", "-class", "TmDq.App.Tests.CustomizeViewStateTests"]
+    },
+    {
+      "id": "SA11",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "                if (name.Length > 0) _plot.RenameSeries(id, name);",
+      "new": "                _plot.RenameSeries(id, name);",
+      "args": [
+        "-class",
+        "TmDq.App.Tests.CustomizeViewStateTests"
+      ],
+      "expect": "caught",
+      "note": "an emptied Frame Sync name box gives the stream's series an empty name"
+    },
+    {
+      "id": "SA12",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "            string name = row.Name.Trim();",
+      "new": "            string name = row.Name;",
+      "args": [
+        "-class",
+        "TmDq.App.Tests.CustomizeViewStateTests"
+      ],
+      "expect": "caught",
+      "note": "a Frame Sync stream's name is given with its spaces, and one of spaces only renames it"
     }
   ]
 }

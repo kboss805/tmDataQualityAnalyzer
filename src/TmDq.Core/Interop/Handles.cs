@@ -6,7 +6,9 @@ namespace TmDq.Core;
 
 // One class for each kind of native handle, so that a handle of one kind cannot be passed to a function of another,
 // and so that each is released exactly once: when it is disposed (or finalized) and the last hold on it has gone.
-// Native.cs takes these in place of IntPtr, and the marshaller holds the handle open for the length of the call, so a
+// Native.cs takes these in place of IntPtr for every handle that outlives the call that made it (a handle opened and freed
+// inside one method - a file being read, a step list, a frame-sync file, a match, a CSV, a geometry - stays an IntPtr,
+// freed in that method's finally, and never escapes), and the marshaller holds the handle open for the length of the call, so a
 // call that races a Dispose never passes a freed handle, and a call after it throws ObjectDisposedException instead.
 // That hold ends when the call returns, though, and several calls return pointers into the native object (a label, a
 // result's samples) that are read only afterwards: a Dispose on another thread in between would free them under the
@@ -110,13 +112,10 @@ internal sealed class CalibrationRunHandle : CallbackRunHandle
     protected override void Free(IntPtr native) => Native.tmdq_calibration_free(native);
 }
 
-/// <summary>A stream's processed data.</summary>
+/// <summary>A stream's processed data. No function returns one (a callback hands it over as a pointer), so it has no
+/// parameterless constructor for the marshaller.</summary>
 internal sealed class StreamResultHandle : NativeHandle
 {
-    public StreamResultHandle()
-    {
-    }
-
     public StreamResultHandle(IntPtr handle) : base(handle)
     {
     }

@@ -10,8 +10,8 @@
 
 #include "constants.h"
 #include "framesetup.h"
-#include "receiverparamsfile.h"
 #include "framesync.h"
+#include "receiverparamsfile.h"
 
 bool buildStreamJob(const StreamJobConfig& cfg, const ProcessingParams& base, const StreamJobContext& context,
                     StreamJob& out_job, StreamJobReport& report)

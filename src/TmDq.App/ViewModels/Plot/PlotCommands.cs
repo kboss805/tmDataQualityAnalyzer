@@ -13,8 +13,8 @@ namespace TmDq.App.ViewModels.Plot;
 /// <summary>
 /// What the controls around the chart bind to (plan step 4.4, US4.0): the right-click menu, the chips and the keys.
 /// Each command does nothing without data, as in v2.x, and says so (its CanExecute), which disables its menu item
-/// and lets its key go on unhandled. The items that ask the user (Set Plot Title, Set Time Window, the four axis
-/// limits and Customize View) ask through <see cref="IPlotPrompts"/>. It follows the plot's notices until
+/// and lets its key go on unhandled. The items that ask the user (Set Plot Title, Remove File, Clear Plot, Set Time Window,
+/// the four axis limits, Customize View and Reset Colors) ask through <see cref="IPlotPrompts"/>. It follows the plot's notices until
 /// <see cref="Dispose"/>.
 /// </summary>
 public sealed class PlotCommands : ObservableObject, IDisposable

@@ -16,7 +16,7 @@
     {
       "id": "C2",
       "file": "src/core/src/ch10packetreader.cpp",
-      "old": "if (!channel_info.contains(iTrackNumber))",
+      "old": "if (!channel_info.contains(trackNumber))",
       "new": "if (true)",
       "args": [
         "-tc=Ch10PacketReader*"

@@ -28,11 +28,11 @@
 #include "containerutil.h"
 #include "doctest.h"
 #include "framesetup.h"
-#include "receivernames.h"
 #include "framesync.h"
 #include "packetqueue.h"
-#include "stepdetector.h"
+#include "receivernames.h"
 #include "stepconfigfile.h"
+#include "stepdetector.h"
 #include "streamjobbuilder.h"
 #include "test_support.h"
 

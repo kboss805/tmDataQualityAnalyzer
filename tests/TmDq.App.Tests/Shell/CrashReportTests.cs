@@ -109,6 +109,26 @@ public class CrashReportTests : IDisposable
     }
 
     [Fact]
+    public void AnObjectWhoseTextThrowsIsNamedByItsTypeAndTheReportIsStillWritten()
+    {
+        // The class promises that writing never throws: a ToString override that throws must not escape the crash handler.
+        Assert.True(Reporter().TryWrite("x", new UnprintableError(), out string? path));
+
+        Assert.NotNull(path);
+        string text = File.ReadAllText(path!);
+        Assert.Contains(typeof(UnprintableError).FullName!, text);
+        Assert.Contains("its text could not be read: InvalidOperationException", text);
+        Assert.Contains("no session log was attached", text);   // the rest of the report follows
+    }
+
+    // An object, not an exception: UnhandledException can hand over either, and an Exception subclass here would need the
+    // standard constructors for nothing.
+    private sealed class UnprintableError
+    {
+        public override string ToString() => throw new InvalidOperationException("no text");
+    }
+
+    [Fact]
     public void TheReportCarriesTheLastTwoHundredLinesOfTheSessionLogAndNoMore()
     {
         CrashReporter reporter = Reporter();

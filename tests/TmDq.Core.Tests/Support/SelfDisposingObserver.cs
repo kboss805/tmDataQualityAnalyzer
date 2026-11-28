@@ -19,7 +19,6 @@ internal sealed class SelfDisposingObserver : IRunObserver
     private readonly ManualResetEventSlim _finished = new();
     private IDisposable? _run;
     private int _disposals;
-    private int _finishedAfterDispose;
     private int _success = -1;
 
     /// <summary>The run this observer disposes. Assigned once the run has started, so a callback may have to wait for it.</summary>
@@ -32,9 +31,6 @@ internal sealed class SelfDisposingObserver : IRunObserver
         }
     }
 
-    /// <summary>1 when the end was reported after the run had been disposed, which the old release made a crash.</summary>
-    public int FinishedAfterDispose => Volatile.Read(ref _finishedAfterDispose);
-
     /// <summary>What the run's end said: null before it.</summary>
     public bool? Success => Volatile.Read(ref _success) switch { -1 => null, 0 => false, _ => true };
 
@@ -44,11 +40,6 @@ internal sealed class SelfDisposingObserver : IRunObserver
 
     public void OnFinished(bool success)
     {
-        if (Volatile.Read(ref _disposals) > 0)
-        {
-            Interlocked.Increment(ref _finishedAfterDispose);
-        }
-
         Volatile.Write(ref _success, success ? 1 : 0);
         _finished.Set();
         DisposeOnce();

@@ -114,16 +114,16 @@ EnI106Status Ch10PacketReader::assembleAttributesFromTMATS(SuTmatsInfo* tmats_in
         {
             return tmatswalk::Walk::Continue;
         }
-        const int iTrackNumber = *track;
-        if (iTrackNumber >= PCMConstants::kMaxChannelCount)
+        const int trackNumber = *track;
+        if (trackNumber >= PCMConstants::kMaxChannelCount)
         {
             status = I106_BUFFER_TOO_SMALL;
             return tmatswalk::Walk::Stop;
         }
 
-        if (!channel_info.contains(iTrackNumber))
+        if (!channel_info.contains(trackNumber))
         {
-            ChannelInfo& info = channel_info[iTrackNumber];
+            ChannelInfo& info = channel_info[trackNumber];
 
             // The decoder leaves a field the TMATS does not carry NULL, and Chapter10Reader lists such a channel
             // (a missing CHE-n counts as enabled), so the data type is checked before it is compared. A source with

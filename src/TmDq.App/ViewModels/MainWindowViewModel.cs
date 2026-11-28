@@ -245,7 +245,8 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     }
 
     /// <summary>The folder of the last recording opened, CSV imported or template used: where Import CSV and the
-    /// template dialogs start and Export proposes to write, remembered between sessions (v2.x's
+    /// template dialogs start, and where Export proposes to write until it has written somewhere this session
+    /// (<see cref="LastExportFolder"/>), remembered between sessions (v2.x's
     /// <c>LastCh10Directory</c>, which v3.1.0 no longer reads).</summary>
     public string? LastFolder
     {
@@ -360,7 +361,8 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         }
     }
 
-    /// <summary>The folder Export last wrote a file to in this session; null until it has. Not kept between sessions.</summary>
+    /// <summary>The folder Export last wrote a file to in this session; null until it has. Not kept between sessions. Public for
+    /// the tests, which have no other way to see it: Export reads the field.</summary>
     public string? LastExportFolder => _lastExportFolder;
 
     private async Task ExportAsync()

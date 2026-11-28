@@ -12,6 +12,49 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The pre-release sweep: three small fixes, duplication folded, dead code and stale text removed
+
+A read-only review of the whole tree before the release (the core, the binding, the app's models and views, the tests and
+tooling, and the docs against the code) found no dead product code, no layering breach and no event-handler leak; what it did
+find is here.
+
+**Fixed:**
+- **Customize View, a Frame Sync Lock stream given an empty name:** OK renamed its series to "" (a series with no name has no
+  CSV header). Its name is now trimmed and an empty one changes nothing, as #418 made a Receiver SNR stream's
+  (`CustomizeViewModel.Apply`; `CustomizeViewStateTests.AFrameSyncStreamGivenAnEmptyNameKeepsItsNameAndANameIsTrimmed`).
+- **Recent Files and a path's case:** the same recording opened as `C:\x.ch10` from a dialog and as `c:\X.ch10` from a drop
+  took two of the five slots. Paths are compared without case now (`RecentFiles.Add`). `PreferencesTests` pinned the old,
+  case-sensitive behaviour (v2.x's), and now holds the new one.
+- **The crash reporter's promise that writing never throws:** the report's text was built inside a `try` that caught only file
+  errors, so an object whose `ToString` throws escaped the crash handler. The text is built in `CrashReporter.Describe`, which
+  names such an object by its type (`CrashReportTests.AnObjectWhoseTextThrowsIsNamedByItsTypeAndTheReportIsStillWritten`).
+
+**Folded:** a receiver's channel colour, written three times (first drawn, Auto-Color, a receiver's swatch), is
+`PlotColors.ChannelColor`; the time shift of every series, written twice in `PlotViewModel`, is `ShiftTimes`; the CSV file
+type `StorageDataFilePicker` defined twice is one.
+
+**Removed or narrowed:** the unused `dataPath` in `test_abi_support.h`; `SelfDisposingObserver.FinishedAfterDispose`, which
+no test read (whether the end comes after the dispose depends on whether the run reported progress, so it cannot be asserted);
+`StreamResultHandle`'s parameterless constructor (no function returns one); `WithSnrStreamName` private; the Customize View
+group constructors internal, without the defaults nobody used. Native includes: `textfile.h` from `calibrationrequest.cpp`,
+`<string>` from `stepdetector.h`, `constants.h` from `framesetup.h` (checked by a `-Rebuild`) and unused ones from three test
+files; `<cstddef>` added to `abi_run.cpp` and `<utility>` to `frameprocessor.cpp`, which use them; the project headers of nine
+files in alphabetical order (`doctest.h` among them, as the guide says). `iTrackNumber` in `Ch10PacketReader::prepare` is
+`trackNumber`, and the series `buildEnabledParams` makes is moved, not copied.
+
+**Stale text corrected:** "a colour, a name" in Customize View (the rename prompt went in #418), "Help is the window's", the
+items `PlotCommands` says ask the user, `LastFolder` as where Export writes, the legend returning "to the top right", the CSV
+writer's "one row per distinct millisecond" (`CsvFile.Write`, `tmdq_abi.h`; each column has been on its own sample grid since
+#380), the handles comment (six scoped handles stay `IntPtr`), `Startup`'s exit codes and `TemplateFile.Read`'s exceptions.
+`docs/guide.md`: US4.0's menu list gains Auto-Color and Reset Colors, its "beyond the three primaries / first four" criterion
+says what `PlotColors.Weakness` does, US9.0's "primaries", the renamed SNR stream in the legend, and the test catalog's "six
+classes" around the chart. The `cut-release` skill no longer describes Inno Setup's "What's New" page, a soak held to bytes,
+or the first MSI release as still to come.
+
+**Checked:** the mutation check, four new mutants all CAUGHT (`hand-written-properties` SA11 and SA12 on the empty and untrimmed name, `processing-flow` RF1 on the case of a recent file, `crash-report` K17 on a text that throws; K17 first came back COMPILE, its `e is null` test making `e` nullable to the compiler, and was rewritten); the kept mutants this moved re-anchored (`antenna-overlay` O7/O8 on
+`ShiftTimes`, `series-colours` A8 and `hand-written-properties` SA7 on `ChannelColor`, `channel-info` C2 on `trackNumber`)
+and re-run: all five CAUGHT. Baselines: native 579 (1 skipped) and managed 439 / 0 / 1 unchanged; app **937 passed** / 0 failed, 34 not run, `Total: 971` (two new tests).
+
 #### Auto-Color Visible Series and Reset Colors, on the plot's context menu (US4.0)
 
 **Auto-Color Visible Series** recolours what is drawn so its streams are as easy to tell apart as the palette allows.

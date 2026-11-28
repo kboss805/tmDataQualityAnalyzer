@@ -20,9 +20,9 @@
 #include "csvseriesparser.h"
 #include "csvserieswriter.h"
 #include "framesetup.h"
-#include "receiverparamsfile.h"
 #include "framesyncfile.h"
 #include "phasedarraylogparser.h"
+#include "receiverparamsfile.h"
 #include "templatematcher.h"
 
 namespace {

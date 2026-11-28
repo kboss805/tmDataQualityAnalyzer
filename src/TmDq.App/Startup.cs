@@ -12,7 +12,7 @@ namespace TmDq.App;
 /// <summary>
 /// What the command line asks of the application at start. A recording path opens that recording, as a file
 /// association will. With TMDQ_SMOKE_REPORT set as well, the application writes one line saying how the recording
-/// went to that file and exits (0 when the stream was processed, 1 when not): the installer's clean-machine test
+/// went to that file and exits (0 when the stream was processed, 1 when not, 2 when the report could not be written): the installer's clean-machine test
 /// uses it to prove the whole path, native core included, on a machine that has never seen the app.
 /// </summary>
 public static class Startup

@@ -236,6 +236,18 @@
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.OpenStacksTests"],
       "expect": "caught",
       "note": "a plot emptied while Configure Streams is up is taken as one the recording is added to"
+    },
+    {
+      "id": "RF1",
+      "file": "src/TmDq.App/Models/Settings/Preferences.cs",
+      "old": "files.Where(f => !string.Equals(f, path, StringComparison.OrdinalIgnoreCase))",
+      "new": "files.Where(f => !string.Equals(f, path, StringComparison.Ordinal))",
+      "args": [
+        "-class",
+        "TmDq.App.Tests.PreferencesTests"
+      ],
+      "expect": "caught",
+      "note": "one file opened in two spellings of its path takes two Recent Files slots"
     }
   ]
 }
