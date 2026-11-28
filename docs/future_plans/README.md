@@ -15,8 +15,7 @@ what was built is worse than no plan at all.
 
 ## Open items
 
-- [**v3.5.1: a deep dive after v3.5.0**](v3.5.1.md): the whole codebase and the documents read for efficiencies, loose ends and
-  stale text, in three bundled pull requests and a release; includes how to make the test suites and the kept-mutant run faster.
+None.
 
 Add an entry here when something is scoped and not yet started, and give it its own file
 once it needs more than a paragraph. An empty list is the normal resting state, not a
@@ -33,6 +32,7 @@ were deleted in v3.
 
 | Initiative | Landed in | Documented in |
 | --- | --- | --- |
+| v3.5.1: a deep dive after v3.5.0 (the codebase and the documents read for efficiencies, loose ends and stale text; faster test suites and kept-mutant run) | PRs #414-#417; released in v3.5.1 | `docs/changelog.md` (v3.5.1: each PR's findings, verdicts and baselines), `eng\mutants_affected.ps1`, `docs/guide.md`. The plan file was deleted after the release, which had missed it |
 | Move off Qt to Avalonia 12 on .NET 10 (the hybrid: the native core behind a C ABI, the UI in C#) | PRs #170-#249; released in v3.0.0 | `docs/claude.md` (architecture), `docs/changelog.md` (v3.0.0 and every plan step), `docs/records/parity.md` and `docs/records/soak.md`. The plan and the assessment were deleted on landing, as this index asks |
 | Switch the toolchain from MinGW to MSVC | PR #40 | `CLAUDE.md`, `docs/claude.md`, `scripts/env.ps1`, `deploy/build_release.ps1` |
 | Move CI to a self-hosted runner | PR #41, #42 | [`docs/records/ci_runner.md`](../records/ci_runner.md), `.github/workflows/ci.yml` |
