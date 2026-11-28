@@ -12,6 +12,12 @@ recorded here; and the parity review and soak records moved from `docs/dotnet-mi
 
 ### Unreleased
 
+#### The v3.5.1 plan file deleted, as `docs/future_plans/` asks
+
+The v3.5.1 release PR (#417) left `docs/future_plans/v3.5.1.md` in place and listed as an open item, though that folder's
+rule is to delete a plan when it ships and add a row to its Shipped table. The file is deleted, the open item removed and
+the row added. Documentation only: no code, test or baseline changes, so no mutation check applies.
+
 #### Export remembers its folder; a Receiver SNR receiver is recoloured as one, and a stream can be renamed
 
 **Export's folder.** Export proposed the folder a recording, CSV or template was last opened from, so after exporting to
