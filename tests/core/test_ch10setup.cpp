@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "doctest.h"
 #include "ch10setup.h"
 #include "constants.h"
+#include "doctest.h"
 #include "irig106lock.h"
 #include "test_support.h"
 

@@ -139,7 +139,7 @@ public sealed class CustomizeViewModel : ObservableObject
         foreach (ReceiverGroup r in SelectedSnrStream.Receivers) r.IsExpanded = expand;   // each says ExpandText changed
     }
 
-    /// <summary>Asks the dialog's own questions (a colour, a name) through <paramref name="prompts"/>: the dialog's window
+    /// <summary>Asks the dialog's own question (a colour) through <paramref name="prompts"/>: the dialog's window
     /// sets this, so they sit over it rather than over the main window.</summary>
     public void AskThrough(IPlotPrompts prompts) => _prompts = prompts;
 
@@ -150,7 +150,7 @@ public sealed class CustomizeViewModel : ObservableObject
     /// <summary>
     /// OK: each Frame Sync Lock stream's box shows or hides its series, but only the metric of the view in use is made
     /// visible (the other is on another scale); each SNR channel's box its series; then each Frame Sync Lock stream's name and
-    /// colour, each SNR stream's new name and each receiver's new colour (its channels' shades of it); then one refresh. Series
+    /// colour (a name left empty changes nothing), each SNR stream's new name and each receiver's new colour (its channels' shades of it); then one refresh. Series
     /// gone since the dialog opened are skipped.
     /// </summary>
     public void Apply()
@@ -167,13 +167,17 @@ public sealed class CustomizeViewModel : ObservableObject
         foreach (ChannelItem ch in AllChannels())
             _plot.SetSeriesVisibleQuiet(ch.SeriesId, ch.IsChecked);
 
-        // Every series of the row, which are its recording's stream's only (its lock and its missed frames).
+        // Every series of the row, which are its recording's stream's only (its lock and its missed frames). The name trimmed,
+        // as an SNR stream's is, and an emptied box keeps the name it had: a series with no name has no CSV header.
         foreach (LockStreamRow row in LockRows)
+        {
+            string name = row.Name.Trim();
             foreach (int id in row.SeriesIds)
             {
-                _plot.RenameSeries(id, row.Name);
+                if (name.Length > 0) _plot.RenameSeries(id, name);
                 _plot.RecolorSeries(id, row.Color);
             }
+        }
         foreach (SnrStreamGroup stream in SnrStreams)
             if (stream.IsRenamed) _plot.RenameSnrStream(stream.SourceId, stream.StreamOrder, stream.Name);
         foreach (ReceiverGroup receiver in SnrStreams.SelectMany(s => s.Receivers))
@@ -198,7 +202,7 @@ public sealed class LockStreamRow : ObservableObject
     private string _name;
 
     internal LockStreamRow(CustomizeViewModel owner, int order, IReadOnlyList<int> seriesIds, bool isChecked, string name, Color color,
-                           string recording = "")
+                           string recording)
     {
         _owner = owner;
         Order = order;
@@ -238,8 +242,8 @@ public sealed class SnrStreamGroup : ObservableObject
     private readonly string _originalName;
     private string _name;
 
-    public SnrStreamGroup(string label, IReadOnlyList<ReceiverGroup> left, IReadOnlyList<ReceiverGroup> right,
-                          int sourceId = 0, int streamOrder = 0, string name = "", bool canRename = false)
+    internal SnrStreamGroup(string label, IReadOnlyList<ReceiverGroup> left, IReadOnlyList<ReceiverGroup> right,
+                            int sourceId, int streamOrder, string name, bool canRename)
     {
         Label = label;
         LeftReceivers = left;
@@ -280,7 +284,7 @@ public sealed class ReceiverGroup : ObservableObject
 
     private readonly bool _phasedArray;
 
-    public ReceiverGroup(int index, IReadOnlyList<ChannelItem> channels, bool phasedArray = false)
+    internal ReceiverGroup(int index, IReadOnlyList<ChannelItem> channels, bool phasedArray)
     {
         Index = index;
         Channels = channels;
@@ -309,12 +313,12 @@ public sealed class ReceiverGroup : ObservableObject
     public IAsyncRelayCommand PickColorCommand { get; }
 
     /// <summary>Makes <paramref name="color"/> the receiver's: its combined channel takes it, and each other channel the
-    /// lighter shade its place gives (<see cref="PlotColors.Shade"/>, <see cref="PlotColors.Weakness"/>), as a receiver's
-    /// colours are made when it is first drawn. Given to the series on OK.</summary>
+    /// lighter shade its place gives (<see cref="PlotColors.ChannelColor"/>), as a receiver's colours are made when it is first
+    /// drawn. Given to the series on OK.</summary>
     public void SetColor(Color color)
     {
         PendingColor = color;
-        foreach (ChannelItem ch in Channels) ch.SetColor(PlotColors.Shade(color, PlotColors.Weakness(ch.ChannelIndex)));
+        foreach (ChannelItem ch in Channels) ch.SetColor(PlotColors.ChannelColor(color, ch.ChannelIndex));
         OnPropertyChanged(nameof(Color));
     }
 

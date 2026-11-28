@@ -144,7 +144,7 @@ public static class PlotColors
             // Receiver SNR, of a recording or an antenna's log: always dotted, so it never reads as a lock curve of the same hue,
             // and in the hues from the last end, so receiver 1 is not the colour of PCM channel 1 either.
             int stream = Math.Max(0, s.ReceiverIndex - 1);
-            s.Color = Shade(SnrHue(stream), Weakness(s.ChannelIndex));
+            s.Color = ChannelColor(SnrHue(stream), s.ChannelIndex);
             s.Dotted = true;
             s.Strong = s.ChannelIndex == CombinedChannelIndex;
         }
@@ -165,6 +165,11 @@ public static class PlotColors
         1 => 2,
         _ => Math.Max(0, channelIndex),
     };
+
+    /// <summary>The colour of a receiver's channel when the receiver's colour is <paramref name="receiverHue"/>: the combined
+    /// channel the hue itself, the others its lighter shades (<see cref="Weakness"/>). First drawn, Auto-Color and a receiver's
+    /// swatch in Customize View all colour a receiver by it.</summary>
+    public static Color ChannelColor(Color receiverHue, int channelIndex) => Shade(receiverHue, Weakness(channelIndex));
 
     /// <summary><paramref name="color"/> made lighter <paramref name="level"/> times: per level the saturation
     /// falls by 60 (not below 40) and the value rises by 20 (not above 255). Level 0 or below is the colour itself.</summary>

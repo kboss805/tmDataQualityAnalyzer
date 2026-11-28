@@ -3,18 +3,14 @@
 // is fuzzy() below. The step file is test_stepconfigfile.cpp's.
 
 #include <algorithm>
-#include <bit>
 #include <cmath>
 #include <cstdint>
-#include <random>
-#include <sstream>
 #include <string>
 #include <vector>
 
 #include "doctest.h"
 #include "stepdetector.h"
 #include "test_support.h"
-#include "textfile.h"
 #include "textparse.h"
 
 using namespace tmdq_test;

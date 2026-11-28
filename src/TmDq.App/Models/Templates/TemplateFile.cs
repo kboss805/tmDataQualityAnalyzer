@@ -193,6 +193,7 @@ public static class TemplateFile
 
     /// <summary>Reads the template at <paramref name="path"/>.</summary>
     /// <exception cref="IOException">The file cannot be read.</exception>
+    /// <exception cref="UnauthorizedAccessException">The file may not be read.</exception>
     public static TemplateLoad Read(string path, out ProcessingTemplate? template, out string error) =>
         Parse(File.ReadAllText(path, Encoding.UTF8), out template, out error);
 

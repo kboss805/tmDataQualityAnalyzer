@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstdint>
 #include <format>
+#include <utility>
 #include <vector>
 
 #include "irig106ch10.h"       // IWYU pragma: keep
@@ -734,7 +735,7 @@ std::vector<const ParameterInfo*> FrameProcessor::buildEnabledParams(const Frame
         ProcessedChannelSeries series;
         series.name = param->name;
         series.word = param->word;
-        m_result.channels.push_back(series);
+        m_result.channels.push_back(std::move(series));
     }
     return enabled_params;
 }

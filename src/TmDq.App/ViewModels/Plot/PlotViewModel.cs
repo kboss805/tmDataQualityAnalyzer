@@ -150,9 +150,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         double shift = _timeBase.Adopt(times[0], hadSeries);
         if (shift > 0.0)
         {
-            foreach (double[] xs in _series.Select(s => s.X).Distinct())
-                for (int i = 0; i < xs.Length; i++) xs[i] += shift;
-            foreach (PlotSeries s in _series) s.Version++;
+            ShiftTimes(shift);
             // The history holds views in the old elapsed seconds, now `shift` too early: Zoom Back would land off by that much.
             _window.ClearHistory();
         }
@@ -323,9 +321,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
             }
             if (start < 0.0)
             {
-                foreach (double[] xs in _series.Select(s => s.X).Distinct())
-                    for (int i = 0; i < xs.Length; i++) xs[i] -= start;
-                foreach (PlotSeries s in _series) s.Version++;
+                ShiftTimes(-start);
                 // The base moves earlier by the same seconds, so a recording added next is placed against the log's clock.
                 if (!_clockOnly) _timeBase.Adopt(_timeBase.Info.BaseAbsSeconds + start, hasSeries: true);
                 _timeBase.SetClock(data.BaseDay, data.BaseTimeOffset);
@@ -864,7 +860,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     /// <summary><paramref name="seriesName"/>, a recording's SNR series name, with its stream's name made
     /// <paramref name="streamName"/>: the channel id before it and the channel name after it kept, so the column still reads
     /// back as SNR, of its receiver. Null when the name has not that shape.</summary>
-    internal static string? WithSnrStreamName(string seriesName, string streamName) =>
+    private static string? WithSnrStreamName(string seriesName, string streamName) =>
         SplitSnrName(seriesName) is { } parts ? parts.Lead + streamName + parts.Channel : null;
 
     // "<digits> - <stream> <channel>" split as the core's import splits it: the lead "<digits> - ", the stream, and " <channel>"
@@ -975,7 +971,7 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
             if (!unit.Any(EffectiveVisible)) continue;
             Color hue = PlotColors.AutoHue(next++);
             foreach (PlotSeries s in unit)
-                s.Color = s.IsLeftAxis ? hue : PlotColors.Shade(hue, PlotColors.Weakness(s.ChannelIndex));
+                s.Color = s.IsLeftAxis ? hue : PlotColors.ChannelColor(hue, s.ChannelIndex);
         }
         if (next > 0) CommitAppearance();
     }
@@ -1010,6 +1006,14 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
     }
 
     public PlotSeries? SeriesById(int id) => _series.Find(x => x.Id == id);
+
+    // Every series moved by `by` seconds, each sample array once (series can share one), and the chart told.
+    private void ShiftTimes(double by)
+    {
+        foreach (double[] xs in _series.Select(s => s.X).Distinct())
+            for (int i = 0; i < xs.Length; i++) xs[i] += by;
+        foreach (PlotSeries s in _series) s.Version++;   // the samples moved: the chart redraws its geometry
+    }
 
     private static bool IsSibling(PlotSeries of, PlotSeries candidate) =>
         candidate.IsLeftAxis && candidate.StreamLabel == of.StreamLabel && candidate.StreamOrder == of.StreamOrder &&

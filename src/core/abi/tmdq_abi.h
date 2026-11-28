@@ -620,7 +620,7 @@ TMDQ_API int32_t tmdq_csv_info_get(const tmdq_csv* csv, tmdq_csv_info* out);
 TMDQ_API int32_t tmdq_csv_series_get(const tmdq_csv* csv, int32_t index, tmdq_csv_series_info* out);
 TMDQ_API void    tmdq_csv_free(tmdq_csv* csv);   ///< Safe on NULL.
 /// Writes @p count columns as the CSV the parser reads (CR LF, UTF-8 without a BOM, six decimals, one row per
-/// distinct millisecond). @p columns is @p count pointers to structs that carry their own struct_size; the time
+/// distinct time, each column on the grid of its own sample period). @p columns is @p count pointers to structs that carry their own struct_size; the time
 /// column reads as a day and time of day from @p base_day and @p base_time_offset.
 /// @return TMDQ_OK; TMDQ_ERR_BADARG for no columns, a NULL or short struct, a bad metric or counts that do not
 /// match their arrays; TMDQ_ERR_IO when the file cannot be created or fully written.

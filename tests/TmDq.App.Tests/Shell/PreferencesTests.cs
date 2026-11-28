@@ -37,7 +37,9 @@ public sealed class PreferencesTests : IDisposable
         foreach (string f in new[] { "a", "b", "c", "d", "e", "f" }) files = RecentFiles.Add(files, f);
         Assert.Equal(new[] { "f", "e", "d", "c", "b" }, files);
         Assert.Equal(new[] { "c", "f", "e", "d", "b" }, RecentFiles.Add(files, "c"));
-        Assert.Equal(new[] { "C", "f", "e", "d", "c" }, RecentFiles.Add(files, "C"));   // case-sensitive
+        // Windows paths are not case-sensitive: "C" is the entry "c", moved first in its new spelling (v2.x kept both).
+        Assert.Equal(new[] { "C", "f", "e", "d", "b" }, RecentFiles.Add(files, "C"));
+        Assert.Equal(new[] { @"c:\X.ch10", @"C:\y.ch10" }, RecentFiles.Add(new[] { @"C:\x.ch10", @"C:\y.ch10" }, @"c:\X.ch10"));
         Assert.Equal(new[] { "b", "d" }, RecentFiles.Prune(new[] { "", "b", "x", "d" }, f => f != "x"));
         Assert.Equal(5, RecentFiles.Prune(new[] { "1", "2", "3", "4", "5", "6" }, _ => true).Count);
     }

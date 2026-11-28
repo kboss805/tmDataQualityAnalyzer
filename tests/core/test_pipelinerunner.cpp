@@ -26,9 +26,9 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#include "doctest.h"
 #include "ch10packetreader.h"
 #include "chapter10reader.h"
+#include "doctest.h"
 #include "frameprocessor.h"
 #include "packetqueue.h"
 #include "pipelinerunner.h"

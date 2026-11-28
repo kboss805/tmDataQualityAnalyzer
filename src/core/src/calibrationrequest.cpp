@@ -11,7 +11,6 @@
 #include "constants.h"
 #include "framesync.h"
 #include "receiverparamsfile.h"
-#include "textfile.h"
 
 bool buildCalibrationRequest(const CalibrationInputs& setup, const std::string& appRoot,
                              CalibrationExtractor::Request& out, std::string& error)

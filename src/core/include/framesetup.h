@@ -15,7 +15,6 @@
 #include <vector>
 
 #include "calibrationprofile.h"
-#include "constants.h"
 #include "tomldocument.h"
 
 /**

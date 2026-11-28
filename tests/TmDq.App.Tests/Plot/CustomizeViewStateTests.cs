@@ -280,6 +280,22 @@ public sealed class CustomizeViewStateTests
     }
 
     [Fact]
+    public void AFrameSyncStreamGivenAnEmptyNameKeepsItsNameAndANameIsTrimmed()
+    {
+        // As an SNR stream's: a name box emptied (or only spaces) changes nothing, since a series with no name has no CSV header,
+        // and a name is given trimmed.
+        PlotViewModel plot = Mixed();
+        var c = new CustomizeViewModel(plot, new FakePrompts());
+        c.LockRows[0].Name = "   ";        // Ch 5: series 2 and 3
+        c.LockRows[1].Name = "  Six  ";    // Ch 6: series 0 and 1
+
+        c.Apply();
+
+        Assert.Equal(new[] { "Ch 5", "Ch 5" }, new[] { plot.SeriesById(2)!.Name, plot.SeriesById(3)!.Name });
+        Assert.Equal(new[] { "Six", "Six" }, new[] { plot.SeriesById(0)!.Name, plot.SeriesById(1)!.Name });
+    }
+
+    [Fact]
     public void ARenamedStreamIsShownByItsNameAndKeepsItsPlace()
     {
         // Two streams renamed so their names sort the other way round: nothing is put in name order, not the plot's series, the

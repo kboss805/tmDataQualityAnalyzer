@@ -212,7 +212,7 @@
     {
       "id": "A8",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "s.Color = s.IsLeftAxis ? hue : PlotColors.Shade(hue, PlotColors.Weakness(s.ChannelIndex));",
+      "old": "s.Color = s.IsLeftAxis ? hue : PlotColors.ChannelColor(hue, s.ChannelIndex);",
       "new": "s.Color = hue;",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AutoColorTests"],
       "expect": "caught",

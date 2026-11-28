@@ -9,6 +9,7 @@
 
 #include "tmdq_abi.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>

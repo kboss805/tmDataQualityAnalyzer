@@ -111,7 +111,7 @@ public static unsafe class CsvFile
 
     /// <summary>
     /// Writes columns as the CSV <see cref="Parse"/> reads: CR LF, UTF-8 without a byte-order mark, six decimals, one
-    /// row per distinct millisecond. The time column reads as a day and time of day from
+    /// row per distinct time, each column on the grid of its own sample period. The time column reads as a day and time of day from
     /// <paramref name="baseDay"/> and <paramref name="baseTimeOffset"/>.
     /// </summary>
     /// <exception cref="TmdqException"><see cref="Status.BadArgument"/> for no columns or a bad metric; <see cref="Status.Io"/> when the file cannot be written.</exception>

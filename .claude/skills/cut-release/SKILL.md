@@ -53,8 +53,9 @@ the voice of the existing entries (they reference concrete classes/methods). The
 
 ## Step 4 — Update the user-facing "What's New"
 
-Rewrite `deploy/RELEASENOTES.txt` for the new version — this is shown as the installer's "What's New"
-page (`InfoBeforeFile`), so it is **end-user language**, not developer changelog. Lead with the
+Rewrite `deploy/RELEASENOTES.txt` for the new version — the MSI installs it beside the application with a
+"Release notes" Start menu entry, and its top section is the GitHub release's body, so it is **end-user language**,
+not developer changelog. Lead with the
 version header line (`tmDataQualityAnalyzer vX.Y.Z - What's New`) and group bullets as
 New / Improved / Fixed. No class names or file paths — describe what the user can now do.
 
@@ -103,7 +104,7 @@ Run every suite, each against the baseline in `.claude/CLAUDE.md`: the native co
 (`eng\test_native.ps1`, after `eng\build_core_dll.ps1`), the managed library
 (`eng\test_dotnet.ps1`) and the app (`eng\test_app.ps1`), all with zero warnings. After a change
 to processing, the plot's series or the CSV writer, also run the soak (`eng\run_soak.ps1`), which
-holds the app to the bytes v2.14.2 exported. Then run the throughput guard:
+holds the app's CSV exports to v2.14.2's values on each column's sample grid (since 3.4.0). Then run the throughput guard:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File eng\run_throughput_bench.ps1
@@ -181,7 +182,7 @@ app on the PRN sample → the portable ZIP and the MSI (`deploy\tmDataQualityAna
   deletes it (an elevated silent install would otherwise be per-user, into SYSTEM's profile): a build that fails on that
   check is not a build to ship. It does **not** upgrade a copy
   that an Inno Setup installer put there (every release before the MSI): it refuses, says to uninstall that one first
-  (Settings, Apps), and the settings and preferences are kept. Say so in the release notes of the first MSI release. An
+  (Settings, Apps), and the settings and preferences are kept (v3.5.0, the first MSI release, said so in its notes). An
   MSI over an older MSI is an upgrade that keeps `settings\` (never overwritten, never removed); the older MSI over a
   newer one is refused. An administrator's switches are public properties (`ASSOCIATE_CH10=0`, `FULLMANUAL=0`,
   `DESKTOPSHORTCUT=1`, `APPLICATIONFOLDER=...`): they are in the header of the `.wxs` and in `docs/guide.md`.

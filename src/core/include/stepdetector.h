@@ -17,7 +17,6 @@
 #ifndef STEPDETECTOR_H
 #define STEPDETECTOR_H
 
-#include <string>
 #include <vector>
 
 #include "calibrationprofile.h"

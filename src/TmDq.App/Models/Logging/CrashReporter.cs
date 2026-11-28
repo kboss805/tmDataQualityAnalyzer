@@ -103,11 +103,26 @@ public sealed class CrashReporter
         text.Append("Windows:    ").Append(RuntimeInformation.OSDescription).Append('\n');
         text.Append(".NET:       ").Append(RuntimeInformation.FrameworkDescription).Append(" (")
             .Append(RuntimeInformation.ProcessArchitecture).Append(")\n\n");
-        text.Append(error.ToString()).Append("\n\n");
-        text.Append(Offsets(error));
+        text.Append(Describe(error));
         text.Append("Session log (last ").Append(LogLinesKept.ToString(CultureInfo.InvariantCulture)).Append(" lines):\n");
         text.Append(LogTail()).Append('\n');
         return text.ToString().Replace("\n", "\r\n", StringComparison.Ordinal);
+    }
+
+    /// <summary>The object's own text, then its frames (<see cref="Offsets"/>). An object whose text cannot be made (a type's
+    /// <c>ToString</c> override can throw) is named by its type instead: the report is still written, as the class promises.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A crash report must be written whatever the failing object does; its type is named in the report instead.")]
+    private static string Describe(object error)
+    {
+        try
+        {
+            return error.ToString() + "\n\n" + Offsets(error);
+        }
+        catch (Exception e)
+        {
+            return error.GetType().FullName + " (its text could not be read: " + e.GetType().Name + ")\n\n";
+        }
     }
 
     /// <summary>Each frame of the exception and of its inner ones with the IL offset it was at. The release has no symbols (they

@@ -20,9 +20,9 @@
 #include <windows.h>
 #include <psapi.h>
 
-#include "doctest.h"
 #include "ch10packetreader.h"
 #include "chapter10reader.h"
+#include "doctest.h"
 #include "irig106lock.h"
 #include "packetqueue.h"
 #include "processingparams.h"

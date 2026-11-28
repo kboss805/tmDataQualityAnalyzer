@@ -188,6 +188,14 @@
       ],
       "expect": "caught",
       "note": "the handling Compose is given is ignored in favour of the process-wide one"
+    },
+    {
+      "id": "K17",
+      "file": "src/TmDq.App/Models/Logging/CrashReporter.cs",
+      "old": "            return error.GetType().FullName + \" (its text could not be read: \"",
+      "new": "            return (e is InvalidCastException ? \"\" : throw new InvalidOperationException(\"mutant\", e)) + error.GetType().FullName + \" (its text could not be read: \"",
+      "expect": "caught",
+      "note": "an object whose ToString throws takes the crash report down with it"
     }
   ]
 }

@@ -45,8 +45,8 @@
 #include "pipelinerunner.h"
 #include "processedstreamdata.h"
 #include "seriesbuilder.h"
-#include "stepdetector.h"
 #include "stepconfigfile.h"
+#include "stepdetector.h"
 #include "streamjobbuilder.h"
 #include "templatematcher.h"
 #include "test_support.h"
@@ -79,10 +79,6 @@ inline std::string tempUtf8()
         temp.pop_back();
     return temp;
 }
-
-/// A file under tests/data. The recordings there are committed and required; the CSV exports are not committed, so a
-/// caller asks whether one exists.
-inline std::string dataPath(const std::string& name) { return rootUtf8() + "/tests/data/" + name; }
 
 /// A committed recording under tests/data/test files, required to exist.
 inline std::string recording(const char* name) { return utf8Of(recordingFile(name)); }

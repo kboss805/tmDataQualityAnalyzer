@@ -49,9 +49,10 @@ public static class RecentFiles
 {
     public const int Limit = 5;
 
-    /// <summary><paramref name="path"/> first, any earlier entry for it removed, at most <see cref="Limit"/>.</summary>
+    /// <summary><paramref name="path"/> first, any earlier entry for it removed, at most <see cref="Limit"/>. Windows paths are
+    /// not case-sensitive: the file opened as "C:\x.ch10" from a dialog and as "c:\X.ch10" from a drop is one entry.</summary>
     public static IReadOnlyList<string> Add(IReadOnlyList<string> files, string path) =>
-        new[] { path }.Concat(files.Where(f => f != path)).Take(Limit).ToList();
+        new[] { path }.Concat(files.Where(f => !string.Equals(f, path, StringComparison.OrdinalIgnoreCase))).Take(Limit).ToList();
 
     /// <summary>The files that still exist, in order, at most <see cref="Limit"/>: what the list holds at start-up.</summary>
     public static IReadOnlyList<string> Prune(IEnumerable<string> files, Func<string, bool> exists) =>

@@ -53,16 +53,16 @@
     {
       "id": "O7",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "for (int i = 0; i < xs.Length; i++) xs[i] -= start;",
-      "new": "for (int i = 0; i < xs.Length; i++) xs[i] += start;",
+      "old": "ShiftTimes(-start);",
+      "new": "ShiftTimes(start);",
       "expect": "caught",
       "note": "what was shown moves the wrong way for a log that starts earlier"
     },
     {
       "id": "O8",
       "file": "src/TmDq.App/ViewModels/Plot/PlotViewModel.cs",
-      "old": "                foreach (PlotSeries s in _series) s.Version++;\n                // The base moves earlier",
-      "new": "                // The base moves earlier",
+      "old": "        foreach (PlotSeries s in _series) s.Version++;   // the samples moved: the chart redraws its geometry",
+      "new": "        // the samples moved: the chart redraws its geometry",
       "expect": "caught",
       "note": "the samples moved and the chart is not told, so it draws its cached geometry"
     },

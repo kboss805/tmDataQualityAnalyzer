@@ -84,7 +84,7 @@ public sealed class PlotLegend : Border
 
     public ScrollViewer Scroll => _scroll;
 
-    /// <summary>Whether the user has dragged it (it no longer returns to the top right).</summary>
+    /// <summary>Whether the user has dragged it (it no longer returns to its corner).</summary>
     public bool UserMoved => _userMoved;
 
     public Point Position => new(Canvas.GetLeft(this), Canvas.GetTop(this));
