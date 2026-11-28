@@ -7,8 +7,25 @@ namespace TmDq.App.ViewModels.Plot;
 /// <summary>One plotted series: its identity, its samples on the shared elapsed axis, and how it is shown.</summary>
 public sealed class PlotSeries
 {
+    private string _name = string.Empty;
+    private string? _originalName;
+
     public required int Id { get; init; }
-    public required string Name { get; set; }
+
+    /// <summary>The series' name: a run's, a CSV column's, or the one the user (Customize View) or a template gave it.</summary>
+    public required string Name
+    {
+        get => _name;
+        set
+        {
+            _originalName ??= value;
+            _name = value;
+        }
+    }
+
+    /// <summary>The name the series was made with, before any rename: what tells a renamed SNR stream from one left alone.</summary>
+    public string OriginalName => _originalName ?? _name;
+
     public required string StreamLabel { get; init; }
     public required MetricType Metric { get; init; }
     public int ReceiverIndex { get; init; }

@@ -124,6 +124,11 @@ public sealed class AccessibleNamesTests
             snrWindow.FindControl<TabControl>("Tabs")!.SelectedIndex = 1;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(9, snrWindow.GetVisualDescendants().OfType<CheckBox>().Count(c => c.DataContext is ChannelItem));
+            // A receiver's open/close toggle says what it does: read from its header alone it would be "RCVR 1", a name unique
+            // and speakable, so the rules below would not miss it.
+            Assert.Equal(new[] { "Open or close RCVR 1", "Open or close RCVR 2", "Open or close RCVR 3" },
+                         snrWindow.GetVisualDescendants().OfType<ToggleButton>().Where(t => t.Name == "ExpanderHeader")
+                             .Select(t => ControlAutomationPeer.CreatePeerForElement(t).GetName()));
             problems.AddRange(Problems("CustomizeViewWindow, Receiver SNR tab", snrWindow));
         }
         finally

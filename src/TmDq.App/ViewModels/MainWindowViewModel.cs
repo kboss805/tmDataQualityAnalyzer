@@ -52,6 +52,8 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     // The recording the last run read, which a "does not overlap" warning names: set where every run goes (RunWithDialogAsync),
     // Open and a batch alike, so no caller has to remember it.
     private string _lastRunFile = string.Empty;
+    // The folder Export last wrote to, for this session only (not a preference): the next Export starts there.
+    private string? _lastExportFolder;
     private List<MenuChoice>? _recentMenu;
     private string _status = "Open a Chapter 10 recording.";
     private LogLevel _statusLevel = LogLevel.Info;
@@ -358,9 +360,12 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         }
     }
 
+    /// <summary>The folder Export last wrote a file to in this session; null until it has. Not kept between sessions.</summary>
+    public string? LastExportFolder => _lastExportFolder;
+
     private async Task ExportAsync()
     {
-        (string image, string data, string log) = ExportViewModel.DefaultPaths(LastFolder ?? _appRoot, Plot.Title);
+        (string image, string data, string log) = ExportViewModel.DefaultPaths(_lastExportFolder ?? LastFolder ?? _appRoot, Plot.Title);
         var choice = new ExportViewModel(image, data, log, _files, Plot.HasExportableData);
         await _exportDialog!.ShowAsync(choice);
         if (choice.Accepted) await ExportAsync(choice);
@@ -370,7 +375,8 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
     /// Writes what <paramref name="choice"/> asks for, in v2.x's order (the data, the image, then the log, which so
     /// carries the lines about the other two), each saying in the log where it went or that it failed; a failure does
     /// not stop the rest. Nothing without data. The data is written off the UI thread, with the window busy
-    /// meanwhile (nothing else may open, import or export); ignored while busy.
+    /// meanwhile (nothing else may open, import or export); ignored while busy. The folder of the first file written is where
+    /// the next Export starts, for the rest of the session.
     /// </summary>
     public async Task ExportAsync(ExportViewModel choice)
     {
@@ -378,7 +384,8 @@ public sealed class MainWindowViewModel : ObservableObject, IRunHost
         IsBusy = true;
         try
         {
-            await _export.WriteAsync(choice);
+            string? written = await _export.WriteAsync(choice);
+            if (written is not null) _lastExportFolder = Path.GetDirectoryName(Path.GetFullPath(written));
         }
         finally
         {

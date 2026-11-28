@@ -132,8 +132,8 @@
     {
       "id": "N16",
       "file": "src/TmDq.App/Views/Plot/CustomizeViewWindow.axaml",
-      "old": " AutomationProperties.Name=\"{Binding AccessibleName}\">",
-      "new": ">",
+      "old": " AutomationProperties.Name=\"{Binding AccessibleName}\" />",
+      "new": " />",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.AccessibleNamesTests"],
       "expect": "caught",
       "note": "the channel box is named by its text alone"

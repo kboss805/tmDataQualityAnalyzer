@@ -160,6 +160,16 @@ public sealed class PhasedArrayImportTests
         Assert.Equal("Stream 1 H", PlotViewModel.LegendLabel(vm.Plot.Series[0]));
         Assert.Equal("Stream 30 C", PlotViewModel.LegendLabel(vm.Plot.Series[^1]));
         Assert.Equal(new[] { "H", "V", "C", "4" }, Enumerable.Range(0, 4).Select(PlotViewModel.PolarizationLabel));
+
+        // An antenna's stream keeps its unit's name: the name box is shown but cannot be changed, and OK renames nothing even
+        // were it typed in.
+        Assert.False(unit.CanRename);
+        Assert.Equal("SCU1", unit.Name);
+        unit.Name = "Other";
+        Assert.False(unit.IsRenamed);
+        string[] before = vm.Plot.Series.Select(s => s.Name).ToArray();
+        customize.Apply();
+        Assert.Equal(before, vm.Plot.Series.Select(s => s.Name));
     }
 
     [Fact]

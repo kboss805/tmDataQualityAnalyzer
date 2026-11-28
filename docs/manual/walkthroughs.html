@@ -290,6 +290,14 @@ all are shown, empty when none are, and <strong>filled</strong> when only some a
 state is not an error &mdash; it is the tree telling you the receiver is partly selected.
 Clicking it selects or clears the whole group.</p>
 
+<p>The colour swatch beside a receiver changes its colour: its combined channel (C) takes the
+colour you pick, and its L and R take two lighter shades of it, so the three still read as one
+receiver. <strong>Stream name</strong>, under the stream list, renames the stream shown: the
+legend then shows the name in place of <code>CH26</code> (<code>Aircraft A C_RCVR1</code>), and an
+exported CSV uses it in each of the stream's column headers, which keep their channel number and
+receiver and stay in the recording's order, so the file still reads back as Receiver SNR. Nothing
+changes until you press OK.</p>
+
 <div class="note">Hiding a channel changes the <em>picture</em>, not the <em>data</em>. An
 exported image contains only what is visible, but an exported CSV contains every channel that
 was processed, hidden or not. See <a href="#import-export">Import &amp; export</a>.</div>

@@ -226,8 +226,8 @@
     {
       "id": "C3",
       "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
-      "old": "        RecolorCommand = new AsyncRelayCommand(RecolorAsync);",
-      "new": "        RecolorCommand = new AsyncRelayCommand(RenameAsync);",
+      "old": "        PickColorCommand = new AsyncRelayCommand(PickColorAsync, () => Channels.Count > 0);",
+      "new": "        PickColorCommand = new AsyncRelayCommand(() => Task.CompletedTask, () => Channels.Count > 0);",
       "args": [
         "-stopOnFail",
         "-class",
@@ -242,7 +242,40 @@
         "TmDq.App.Tests.ChartPromptWindowTests"
       ],
       "expect": "caught",
-      "note": "Change color renames"
+      "note": "a receiver's swatch picks nothing (was: Change color renames, before the receiver took the colour)"
+    },
+    {
+      "id": "SA7",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "        foreach (ChannelItem ch in Channels) ch.SetColor(PlotColors.Shade(color, PlotColors.Weakness(ch.ChannelIndex)));",
+      "new": "        foreach (ChannelItem ch in Channels) ch.SetColor(color);",
+      "expect": "caught",
+      "note": "a receiver's L and R take its colour itself, not lighter shades of it"
+    },
+    {
+      "id": "SA8",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "    public bool IsRenamed => CanRename && Name.Trim() is { Length: > 0 } n && n != _originalName;",
+      "new": "    public bool IsRenamed => CanRename && Name.Trim() is { } n && n != _originalName;",
+      "expect": "caught",
+      "note": "an emptied name box counts as a rename"
+    },
+    {
+      "id": "SA9",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "            if (stream.IsRenamed) _plot.RenameSnrStream(stream.SourceId, stream.StreamOrder, stream.Name);",
+      "new": "            if (stream.IsRenamed) _plot.RenameSnrStream(stream.SourceId, stream.StreamOrder + 1, stream.Name);",
+      "expect": "caught",
+      "note": "OK renames the wrong stream"
+    },
+    {
+      "id": "SA10",
+      "file": "src/TmDq.App/ViewModels/Plot/CustomizeViewModel.cs",
+      "old": "canRename: !phasedArray));",
+      "new": "canRename: true));",
+      "expect": "caught",
+      "note": "an antenna's stream offers a rename its series cannot take",
+      "args": ["-class", "TmDq.App.Tests.PhasedArrayImportTests", "-class", "TmDq.App.Tests.CustomizeViewStateTests"]
     }
   ]
 }

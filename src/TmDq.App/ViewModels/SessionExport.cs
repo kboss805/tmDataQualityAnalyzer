@@ -37,29 +37,36 @@ internal sealed class SessionExport
     /// Writes what <paramref name="choice"/> asks for, in v2.x's order (the data, the image, then the log, which so
     /// carries the lines about the other two); a failure does not stop the rest. Nothing without data.
     /// </summary>
-    public async Task WriteAsync(ExportViewModel choice)
+    /// <returns>The first file written, in that order (the data, the image, the log); null when nothing was.</returns>
+    public async Task<string?> WriteAsync(ExportViewModel choice)
     {
-        if (!_plot.HasData) return;
+        if (!_plot.HasData) return null;
         var done = new List<string>();
         var failed = new List<string>();
-        void Note(bool ok, string what) => (ok ? done : failed).Add(what);
+        string? first = null;
+        void Note(bool ok, string what, string path)
+        {
+            (ok ? done : failed).Add(what);
+            if (ok) first ??= path;
+        }
         if (choice.ExportData)
         {
             _report("Exporting data...", LogLevel.Info);
-            Note(await CsvAsync(choice.DataPath, -1, "Data exported to ", "Error: Failed to export data to "), "data");
+            Note(await CsvAsync(choice.DataPath, -1, "Data exported to ", "Error: Failed to export data to "), "data", choice.DataPath);
         }
-        if (choice.ExportImage) Note(await ImageAsync(choice.ImagePath), "plot image");
+        if (choice.ExportImage) Note(await ImageAsync(choice.ImagePath), "plot image", choice.ImagePath);
         if (choice.ExportLog)
         {
             bool ok = _log.WriteTo(choice.LogPath);
             if (ok) _log.Success("Log exported to " + choice.LogPath);
             else _log.Error("Error: Failed to export log to " + choice.LogPath);
-            Note(ok, "log file");
+            Note(ok, "log file", choice.LogPath);
         }
         // One sentence for the status bar (the log has each path): what was written, and what was not.
         if (failed.Count == 0) _report("Exported " + Sentence(done) + ".", LogLevel.Success);
         else if (done.Count == 0) _report("Could not export " + Sentence(failed) + ". See the log.", LogLevel.Error);
         else _report("Exported " + Sentence(done) + ". Could not export " + Sentence(failed) + ". See the log.", LogLevel.Warning);
+        return first;
     }
 
     /// <summary>"data", "data and log file", "data, plot image and log file".</summary>

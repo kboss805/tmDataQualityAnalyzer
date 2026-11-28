@@ -840,11 +840,47 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
 
     /// <summary>A series as the legend names it. An SNR series' name carries the whole TMATS stream title (the CSV
     /// columns need it), which crowds the legend, so its row is "CH&lt;channel&gt; &lt;L|R|C&gt;_RCVR&lt;n&gt;", made from the
-    /// series' own numbers rather than parsed out of its name.</summary>
+    /// series' own numbers; once its stream is renamed (<see cref="RenameSnrStream"/>), the stream's new name in place of
+    /// "CH&lt;channel&gt;".</summary>
     public static string LegendLabel(PlotSeries s)
     {
         if (s.Metric != MetricType.Snr || s.IsPhasedArray) return s.Name;   // an antenna's series are named for their stream and polarization
-        return string.Create(CultureInfo.InvariantCulture, $"CH{s.StreamOrder} {ChannelLabel(s.ChannelIndex)}_RCVR{s.ReceiverIndex}");
+        string lead = IsSnrStreamRenamed(s) ? SnrStreamName(s) : string.Create(CultureInfo.InvariantCulture, $"CH{s.StreamOrder}");
+        return string.Create(CultureInfo.InvariantCulture, $"{lead} {ChannelLabel(s.ChannelIndex)}_RCVR{s.ReceiverIndex}");
+    }
+
+    /// <summary>
+    /// The stream's name in a recording's SNR series name, "&lt;channel id&gt; - &lt;stream name&gt; &lt;channel name&gt;": the TMATS
+    /// title until the stream is renamed. Read as the core's CSV import reads a column (<c>SeriesColumnSchema::parseColumnHeader</c>):
+    /// the channel name is what follows the last space. <see cref="PlotSeries.StreamLabel"/> when the name has not that shape.
+    /// </summary>
+    public static string SnrStreamName(PlotSeries s) => SplitSnrName(s.Name) is { } parts ? parts.Stream : s.StreamLabel;
+
+    /// <summary>Whether <paramref name="s"/>'s stream was renamed (Customize View, or a template that renamed it): the stream's
+    /// name in its series name is not the one it was made with.</summary>
+    public static bool IsSnrStreamRenamed(PlotSeries s) =>
+        SplitSnrName(s.Name) is { } now && SplitSnrName(s.OriginalName) is { } made && now.Stream != made.Stream;
+
+    /// <summary><paramref name="seriesName"/>, a recording's SNR series name, with its stream's name made
+    /// <paramref name="streamName"/>: the channel id before it and the channel name after it kept, so the column still reads
+    /// back as SNR, of its receiver. Null when the name has not that shape.</summary>
+    internal static string? WithSnrStreamName(string seriesName, string streamName) =>
+        SplitSnrName(seriesName) is { } parts ? parts.Lead + streamName + parts.Channel : null;
+
+    // "<digits> - <stream> <channel>" split as the core's import splits it: the lead "<digits> - ", the stream, and " <channel>"
+    // (empty when there is no space after the lead).
+    private static (string Lead, string Stream, string Channel)? SplitSnrName(string name)
+    {
+        const string Separator = " - ";
+        int digits = 0;
+        while (digits < name.Length && char.IsAsciiDigit(name[digits])) digits++;
+        if (digits == 0 || !name.AsSpan(digits).StartsWith(Separator, StringComparison.Ordinal)) return null;
+        int start = digits + Separator.Length;
+        string rest = name[start..];
+        int space = rest.LastIndexOf(' ');
+        return space > 0
+            ? (name[..start], rest[..space], rest[space..])
+            : (name[..start], rest, string.Empty);
     }
 
     /// <summary>A phased array antenna's polarization letter as Customize View shows it: H, V or C (US10.0), the file's own
@@ -875,6 +911,23 @@ public sealed class PlotViewModel : ObservableObject, IDisposable
         if (s.IsLeftAxis)
             foreach (PlotSeries sibling in _series)
                 if (IsSibling(s, sibling)) sibling.Name = name;
+    }
+
+    /// <summary>
+    /// Renames a recording's Receiver SNR stream: every SNR series of <paramref name="sourceId"/>'s stream
+    /// <paramref name="streamOrder"/> keeps its channel id and channel name and takes <paramref name="name"/> (trimmed) as its
+    /// stream's, so the CSV columns and the legend carry it. The series keep their places: nothing is sorted by name. Nothing
+    /// for an empty name, an antenna's series, or a name without the shape (<see cref="WithSnrStreamName"/>).
+    /// </summary>
+    public void RenameSnrStream(int sourceId, int streamOrder, string name)
+    {
+        string trimmed = name.Trim();
+        if (trimmed.Length == 0) return;
+        foreach (PlotSeries s in _series)
+        {
+            if (s.Metric != MetricType.Snr || s.IsPhasedArray || s.SourceId != sourceId || s.StreamOrder != streamOrder) continue;
+            if (WithSnrStreamName(s.Name, trimmed) is string renamed) s.Name = renamed;
+        }
     }
 
     /// <summary>Recolours a series, and a Frame Sync Lock stream's other metric with it.</summary>

@@ -21,26 +21,25 @@
     </Style>
   </Window.Styles>
   <Window.Resources>
-    <!-- A receiver's group: its box, then its channels, each in its series' colour, with a menu to rename or recolour. -->
+    <!-- A receiver's group: its box and its colour (its channels follow it, lighter), then its channels, each in its series' colour. -->
     <DataTemplate x:Key="ReceiverTemplate" x:DataType="plot:ReceiverGroup">
       <Expander Classes="receiver" IsExpanded="{Binding IsExpanded}" HorizontalAlignment="Stretch" Padding="24,2,4,4">
         <Expander.Header>
-          <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" IsThreeState="False" Foreground="{Binding Color, Converter={x:Static cv:StatusBrushes.FromColor}}"
-                    AutomationProperties.Name="{Binding Label, StringFormat=All channels of {0}}" />
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" IsThreeState="False" Foreground="{Binding Color, Converter={x:Static cv:StatusBrushes.FromColor}}"
+                      AutomationProperties.Name="{Binding Label, StringFormat=All channels of {0}}" />
+            <Button Classes="swatch" Width="20" Height="14" Padding="0" MinWidth="0" MinHeight="0" Cursor="Hand"
+                    VerticalAlignment="Center" Background="{Binding Color, Converter={x:Static cv:StatusBrushes.FromColor}}" BorderBrush="#3C000000" BorderThickness="1"
+                    CornerRadius="0" Command="{Binding PickColorCommand}" ToolTip.Tip="Change the receiver's color (its channels follow, lighter)"
+                    AutomationProperties.Name="{Binding Label, StringFormat=Change the color of {0}}" />
+          </StackPanel>
         </Expander.Header>
         <ItemsControl ItemsSource="{Binding Channels}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="plot:ChannelItem">
               <!-- On screen a channel is "L", "R" or "C" under its receiver; aloud it says whose (a screen reader hears no tree). -->
               <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" Foreground="{Binding Color, Converter={x:Static cv:StatusBrushes.FromColor}}"
-                        ToolTip.Tip="{Binding ToolTip}" AutomationProperties.Name="{Binding AccessibleName}">
-                <CheckBox.ContextMenu>
-                  <ContextMenu>
-                    <MenuItem Header="Rename series…" Command="{Binding RenameCommand}" />
-                    <MenuItem Header="Change color…" Command="{Binding RecolorCommand}" />
-                  </ContextMenu>
-                </CheckBox.ContextMenu>
-              </CheckBox>
+                        AutomationProperties.Name="{Binding AccessibleName}" />
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
@@ -87,6 +86,14 @@
             <TextBlock Text="Telemetry Stream Group:" VerticalAlignment="Center" />
             <ComboBox x:Name="SnrStream" AutomationProperties.Name="Telemetry Stream Group" Grid.Column="1" HorizontalAlignment="Stretch" ItemsSource="{Binding SnrStreams}"
                       SelectedItem="{Binding SelectedSnrStream}" IsEnabled="{Binding HasSnrStreams}" />
+          </Grid>
+          <!-- The stream's name: its series' (the legend and the CSV columns carry it); an antenna's is its unit's and stays. -->
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,8,0,0">
+            <TextBlock Text="Stream name:" VerticalAlignment="Center" />
+            <TextBox x:Name="SnrStreamName" Grid.Column="1" Text="{Binding SelectedSnrStream.Name, FallbackValue=''}"
+                     IsEnabled="{Binding SelectedSnrStream.CanRename, FallbackValue=False}"
+                     ToolTip.Tip="Rename this stream's series (the legend and the exported CSV columns use the name)"
+                     AutomationProperties.Name="Stream name" />
           </Grid>
           <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,8">
             <Button x:Name="SnrExpand" Content="{Binding ExpandText}" MinWidth="90" HorizontalContentAlignment="Center"

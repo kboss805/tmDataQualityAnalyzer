@@ -32,8 +32,8 @@
     {
       "id": "S1",
       "file": "src/TmDq.App/ViewModels/MainWindowViewModel.cs",
-      "old": "ExportViewModel.DefaultPaths(LastFolder ?? _appRoot, Plot.Title);",
-      "new": "ExportViewModel.DefaultPaths(LastFolder ?? AppContext.BaseDirectory, Plot.Title);",
+      "old": "ExportViewModel.DefaultPaths(_lastExportFolder ?? LastFolder ?? _appRoot, Plot.Title);",
+      "new": "ExportViewModel.DefaultPaths(_lastExportFolder ?? LastFolder ?? AppContext.BaseDirectory, Plot.Title);",
       "args": ["-stopOnFail", "-class", "TmDq.App.Tests.ExportImportTests"],
       "expect": "caught",
       "note": "Export opens in the process's folder, not the root the application was handed"
